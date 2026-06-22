@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+
+# IDE
+.vscode/
+.idea/
+
+# Runtime storage
+storage/uploads/
+storage/outputs/
+storage/reports/
+
+# Models / large files
+*.pt
+*.pth
+*.onnx
+*.mp4
+*.avi
+*.mov
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
