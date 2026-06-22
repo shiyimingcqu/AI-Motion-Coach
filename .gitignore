@@ -15,9 +15,12 @@ dist/
 .idea/
 
 # Runtime storage
-storage/uploads/
-storage/outputs/
-storage/reports/
+storage/uploads/*
+storage/outputs/*
+storage/reports/*
+!storage/uploads/.gitkeep
+!storage/outputs/.gitkeep
+!storage/reports/.gitkeep
 
 # Models / large files
 *.pt
