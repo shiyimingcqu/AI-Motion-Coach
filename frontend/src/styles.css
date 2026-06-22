@@ -197,6 +197,20 @@ h2 {
   border: 1px solid #2b3c30;
 }
 
+.camera-panel {
+  min-height: 520px;
+}
+
+.camera-video {
+  width: 100%;
+  min-height: 520px;
+  display: block;
+  object-fit: cover;
+  background: #101713;
+  border: 1px solid #2b3c30;
+  border-radius: 6px;
+}
+
 .camera-grid {
   position: absolute;
   inset: 0;
@@ -250,6 +264,11 @@ h2 {
   padding: 14px;
   background: #fff2d6;
   border-left: 4px solid var(--signal);
+}
+
+.alert-line.danger {
+  background: #ffe7e2;
+  border-left-color: var(--danger);
 }
 
 .upload-zone {

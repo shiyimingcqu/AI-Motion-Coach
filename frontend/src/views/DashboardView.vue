@@ -5,7 +5,7 @@
         <p class="eyebrow">Engineering Console</p>
         <h1>运动姿态评估与纠错系统</h1>
       </div>
-      <button class="primary-button">启动检测</button>
+      <button class="primary-button" @click="startDetection">启动检测</button>
     </header>
 
     <section class="metrics-grid">
@@ -32,6 +32,14 @@
 </template>
 
 <script setup lang="ts">
+import { useRouter } from "vue-router";
+
 import MetricTile from "../components/MetricTile.vue";
 import SkeletonCanvas from "../components/SkeletonCanvas.vue";
+
+const router = useRouter();
+
+function startDetection() {
+  router.push("/realtime");
+}
 </script>
