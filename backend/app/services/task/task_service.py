@@ -10,6 +10,7 @@ class AnalysisTask:
     source_uri: str
     status: str
     created_at: str
+    output_uri: str | None = None
     error_message: str | None = None
 
     def to_dict(self):
@@ -20,13 +21,20 @@ class TaskService:
     def __init__(self):
         self._tasks: dict[str, AnalysisTask] = {}
 
-    def create_task(self, exercise: str, source_uri: str) -> AnalysisTask:
+    def create_task(
+        self,
+        exercise: str,
+        source_uri: str,
+        status: str = "pending",
+        output_uri: str | None = None,
+    ) -> AnalysisTask:
         task = AnalysisTask(
             task_id=str(uuid4()),
             exercise=exercise,
             source_uri=source_uri,
-            status="pending",
+            status=status,
             created_at=datetime.now(timezone.utc).isoformat(),
+            output_uri=output_uri,
         )
         self._tasks[task.task_id] = task
         return task
