@@ -111,7 +111,8 @@ const localPreviewUrl = ref("");
 
 const resultVideoUrl = computed(() => {
   if (latestTask.value?.output_uri) {
-    return `${API_BASE}/files/${encodeURIComponent(latestTask.value.output_uri)}`;
+    const path = latestTask.value.output_uri.split("/").map(encodeURIComponent).join("/");
+    return `${API_BASE}/files/${path}`;
   }
   return localPreviewUrl.value;
 });

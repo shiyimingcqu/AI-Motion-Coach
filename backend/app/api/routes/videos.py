@@ -1,5 +1,6 @@
 from app.services.storage.local_storage import local_storage
 from app.services.task.task_service import task_service
+from app.services.video.video_analysis_service import video_analysis_service
 
 try:
     from fastapi import APIRouter, File, Form, UploadFile
@@ -16,10 +17,11 @@ if router:
     @router.post("/upload", status_code=201)
     async def upload_video(exercise: str = Form(...), file: UploadFile = File(...)):
         source_uri = await local_storage.save_upload(file)
+        output_uri = video_analysis_service.analyze_video(source_uri, exercise)
         task = task_service.create_task(
             exercise=exercise,
             source_uri=source_uri,
             status="success",
-            output_uri=source_uri,
+            output_uri=output_uri,
         )
         return {"file_uri": source_uri, "task": task.to_dict()}
