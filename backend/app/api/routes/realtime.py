@@ -1,11 +1,17 @@
 from app.services.analysis.exercise_analyzer import ExerciseAnalyzer
 from app.services.analysis.models import NormalizedKeypoint
+from app.services.storage.local_storage import local_storage
 from app.services.session.session_service import session_service
+from app.services.video.video_analysis_service import video_analysis_service
 
 try:
-    from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+    from fastapi import APIRouter, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 except ModuleNotFoundError:
     APIRouter = None
+    File = None
+    Form = None
+    HTTPException = Exception
+    UploadFile = None
     WebSocket = None
     WebSocketDisconnect = Exception
 
@@ -24,6 +30,22 @@ def _parse_keypoints(raw_keypoints):
 
 
 if router:
+    @router.post("/video-test", status_code=201)
+    async def realtime_video_test(
+        exercise: str = Form("squat"),
+        max_frames: int = Form(120),
+        file: UploadFile = File(...),
+    ):
+        source_uri = await local_storage.save_upload(file)
+        try:
+            return video_analysis_service.run_realtime_video_test(
+                source_uri=source_uri,
+                exercise=exercise,
+                max_frames=max_frames,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @router.websocket("/pose")
     async def realtime_pose(websocket: WebSocket):
         await websocket.accept()

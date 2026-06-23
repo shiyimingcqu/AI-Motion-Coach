@@ -6,6 +6,7 @@ except ModuleNotFoundError:
     TestClient = None
 
 from app.main import app
+from app.api.routes import realtime
 
 
 @unittest.skipIf(TestClient is None, "FastAPI is not installed")
@@ -86,6 +87,40 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(summary["type"], "summary")
         self.assertEqual(summary["session"]["total_count"], 1)
         self.assertEqual(len(after), before + 1)
+
+    def test_realtime_video_test_endpoint_accepts_uploaded_video(self):
+        original = realtime.video_analysis_service.run_realtime_video_test
+        captured = {}
+
+        def fake_video_test(source_uri, exercise, max_frames=120):
+            captured["source_uri"] = source_uri
+            captured["exercise"] = exercise
+            captured["max_frames"] = max_frames
+            return {
+                "exercise": exercise,
+                "source_uri": source_uri,
+                "processed_frames": 1,
+                "frames": [{"frame_index": 0, "stage": "invalid", "count": 0}],
+                "summary": {"exercise": exercise, "total_count": 0},
+            }
+
+        realtime.video_analysis_service.run_realtime_video_test = fake_video_test
+        try:
+            response = self.client.post(
+                "/api/realtime/video-test",
+                data={"exercise": "squat", "max_frames": "12"},
+                files={"file": ("sample.mp4", b"video-bytes", "video/mp4")},
+            )
+        finally:
+            realtime.video_analysis_service.run_realtime_video_test = original
+
+        self.assertEqual(response.status_code, 201)
+        payload = response.json()
+        self.assertEqual(payload["exercise"], "squat")
+        self.assertEqual(payload["processed_frames"], 1)
+        self.assertEqual(captured["exercise"], "squat")
+        self.assertEqual(captured["max_frames"], 12)
+        self.assertIn("storage", captured["source_uri"])
 
 
 if __name__ == "__main__":

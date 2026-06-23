@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">Realtime Training</p>
         <h1>{{ store.currentExerciseMeta.name }}实时检测</h1>
-        <p class="subtle">摄像头画面实时叠加人体骨架，并同步返回阶段、次数、评分与纠错提示。</p>
+        <p class="subtle">摄像头或测试视频画面实时叠加人体骨架，并同步返回阶段、次数、评分与纠错提示。</p>
       </div>
       <div class="header-actions">
         <span class="status-pill" :class="connectionClass">{{ statusLabel }}</span>
@@ -12,6 +12,17 @@
           <Camera :size="18" />
           {{ cameraActive ? "摄像头已连接" : "连接摄像头" }}
         </button>
+        <button class="secondary-button" type="button" :disabled="videoTestLoading" @click="openVideoTestPicker">
+          <UploadCloud :size="18" />
+          {{ videoTestLoading ? "视频检测中..." : "视频测试" }}
+        </button>
+        <input
+          ref="videoTestInput"
+          class="hidden-input"
+          type="file"
+          accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov"
+          @change="handleVideoTestFile"
+        />
       </div>
     </header>
 
@@ -79,9 +90,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from "vue";
 import { useRouter } from "vue-router";
-import { Camera, FileSearch, Pause, Play, RefreshCcw, Save } from "lucide-vue-next";
+import { Camera, FileSearch, Pause, Play, RefreshCcw, Save, UploadCloud } from "lucide-vue-next";
 
-import { apiWebSocketUrl } from "../api/client";
+import { apiUpload, apiWebSocketUrl } from "../api/client";
 import MetricTile from "../components/MetricTile.vue";
 import SkeletonCanvas from "../components/SkeletonCanvas.vue";
 import {
@@ -89,6 +100,8 @@ import {
   createPoseLandmarker,
   detectPose,
   drawPose,
+  drawPoseFromKeypoints,
+  type BackendKeypoints,
   toBackendKeypoints,
 } from "../services/poseLandmarker";
 import { useTrainingStore } from "../stores/training";
@@ -96,31 +109,60 @@ import { useTrainingStore } from "../stores/training";
 type TrainingState = "idle" | "connecting" | "running" | "paused" | "finished" | "error";
 type PoseLandmarkerInstance = Awaited<ReturnType<typeof createPoseLandmarker>>;
 
+type VideoTestFrame = {
+  frame_index: number;
+  stage: string;
+  count: number;
+  valid_count: number;
+  score: number;
+  errors: string[];
+  keypoints?: BackendKeypoints;
+};
+
+type VideoTestResponse = {
+  exercise: string;
+  processed_frames: number;
+  video_width: number;
+  video_height: number;
+  frames: VideoTestFrame[];
+  summary: {
+    total_count: number;
+    valid_count: number;
+    error_count: number;
+    average_score: number;
+  };
+};
+
 const SEND_INTERVAL_MS = 100;
+const VIDEO_TEST_PLAYBACK_MS = 100;
 
 const router = useRouter();
 const store = useTrainingStore();
 const videoRef = ref<HTMLVideoElement | null>(null);
 const overlayRef = ref<HTMLCanvasElement | null>(null);
+const videoTestInput = ref<HTMLInputElement | null>(null);
 const cameraActive = ref(false);
 const cameraError = ref("");
 const poseStatus = ref("");
 const savedMessage = ref("");
+const videoTestLoading = ref(false);
 const trainingState = ref<TrainingState>("idle");
 const lastSessionId = ref("");
 
 let socket: WebSocket | null = null;
 let poseLandmarker: PoseLandmarkerInstance | null = null;
 let animationFrameId: number | null = null;
+let videoTestTimer: ReturnType<typeof setInterval> | null = null;
+let videoTestUrl = "";
 let lastSentAt = 0;
 
 const statusLabel = computed(() => {
   const labels: Record<TrainingState, string> = {
-    idle: cameraActive.value ? "摄像头就绪" : "等待摄像头",
+    idle: cameraActive.value ? "视频源就绪" : "等待视频源",
     connecting: "正在连接",
     running: "训练中",
     paused: "已暂停",
-    finished: "已保存",
+    finished: "已完成",
     error: "连接异常",
   };
   return labels[trainingState.value];
@@ -153,7 +195,10 @@ async function connectCamera() {
     });
 
     if (videoRef.value) {
+      revokeVideoTestUrl();
+      videoRef.value.removeAttribute("src");
       videoRef.value.srcObject = stream;
+      videoRef.value.loop = false;
       cameraActive.value = true;
     }
 
@@ -173,6 +218,7 @@ async function startTraining() {
   poseStatus.value = "";
   store.resetLiveMetrics();
   clearPoseCanvas(overlayRef.value);
+  stopVideoTestPlayback();
 
   if (!cameraActive.value || !poseLandmarker) {
     await connectCamera();
@@ -202,6 +248,7 @@ function togglePause() {
 
 function resetTraining() {
   stopPoseLoop();
+  stopVideoTestPlayback();
   lastSentAt = 0;
   savedMessage.value = "";
   lastSessionId.value = "";
@@ -221,6 +268,7 @@ function finishTraining() {
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
 
   stopPoseLoop();
+  stopVideoTestPlayback();
   socket.send(JSON.stringify({ type: "finish" }));
 }
 
@@ -256,9 +304,13 @@ function openRealtimeSocket(): Promise<void> {
 }
 
 function handleRealtimeMessage(message: Record<string, any>) {
+  console.log("收到消息:", message);
+
   if (message.type === "status") {
+    console.log("状态消息:", message.state);
     if (message.state === "running") {
       trainingState.value = "running";
+      poseStatus.value = "开始检测...";
       startPoseLoop();
     } else if (message.state === "paused") {
       trainingState.value = "paused";
@@ -268,19 +320,14 @@ function handleRealtimeMessage(message: Record<string, any>) {
   }
 
   if (message.type === "analysis") {
-    store.updateLiveMetrics({
-      stage: String(message.stage),
-      count: Number(message.count ?? 0),
-      valid_count: Number(message.valid_count ?? 0),
-      score: Number(message.score ?? 0),
-      errors: Array.isArray(message.errors) ? message.errors : [],
-    });
+    updateMetricsFromFrame(message as VideoTestFrame);
     return;
   }
 
   if (message.type === "summary") {
     trainingState.value = "finished";
     stopPoseLoop();
+    poseStatus.value = "";
     const session = message.session as { session_id?: string; total_count?: number } | undefined;
     lastSessionId.value = session?.session_id ?? "";
     savedMessage.value = session?.session_id
@@ -290,6 +337,7 @@ function handleRealtimeMessage(message: Record<string, any>) {
 }
 
 function startPoseLoop() {
+  stopVideoTestPlayback();
   stopPoseLoop();
   lastSentAt = 0;
   animationFrameId = window.requestAnimationFrame(runPoseFrame);
@@ -331,7 +379,123 @@ function runPoseFrame(timestamp: number) {
     }
   }
 
+  if (videoTestUrl && video.duration > 0 && video.currentTime >= video.duration) {
+    finishTraining();
+    return;
+  }
+
   animationFrameId = window.requestAnimationFrame(runPoseFrame);
+}
+
+function openVideoTestPicker() {
+  videoTestInput.value?.click();
+}
+
+async function handleVideoTestFile(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+
+  stopPoseLoop();
+  stopVideoTestPlayback();
+  closeSocket();
+  clearPoseCanvas(overlayRef.value);
+  store.resetLiveMetrics();
+  savedMessage.value = "";
+  lastSessionId.value = "";
+  cameraError.value = "";
+  poseStatus.value = "正在加载姿态识别模型...";
+  videoTestLoading.value = true;
+  trainingState.value = "connecting";
+
+  try {
+    if (!poseLandmarker) {
+      poseLandmarker = await createPoseLandmarker();
+      poseStatus.value = "模型已就绪，正在连接实时检测通道...";
+    }
+
+    await openRealtimeSocket();
+
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      throw new Error("无法连接到实时检测通道");
+    }
+
+    poseStatus.value = "连接成功，正在加载视频...";
+    showVideoTestPreview(file);
+
+    socket.send(JSON.stringify({ type: "start", exercise: store.currentExercise }));
+  } catch (error) {
+    console.error("视频测试失败:", error);
+    cameraError.value = "视频测试失败，请确认后端服务已启动且视频格式可读。";
+    poseStatus.value = "";
+    trainingState.value = "error";
+  } finally {
+    videoTestLoading.value = false;
+  }
+}
+
+function showVideoTestPreview(file: File) {
+  revokeVideoTestUrl();
+  videoTestUrl = URL.createObjectURL(file);
+
+  if (videoRef.value) {
+    const stream = videoRef.value.srcObject as MediaStream | null;
+    stream?.getTracks().forEach((track) => track.stop());
+    videoRef.value.srcObject = null;
+    videoRef.value.src = videoTestUrl;
+    videoRef.value.loop = false;
+    videoRef.value.currentTime = 0;
+    videoRef.value.play().catch(() => undefined);
+  }
+
+  cameraActive.value = true;
+}
+
+function playVideoTestResult(result: VideoTestResponse) {
+  if (result.frames.length === 0) {
+    poseStatus.value = "视频没有产生可用的实时监测帧";
+    trainingState.value = "finished";
+    return;
+  }
+
+  let frameIndex = 0;
+  trainingState.value = "running";
+  poseStatus.value = "正在按实时节奏播放视频检测结果...";
+
+  videoTestTimer = setInterval(() => {
+    const frame = result.frames[frameIndex];
+    updateMetricsFromFrame(frame);
+
+    if (overlayRef.value && frame.keypoints) {
+      drawPoseFromKeypoints(overlayRef.value, frame.keypoints, result.video_width, result.video_height);
+    }
+
+    frameIndex += 1;
+    if (frameIndex >= result.frames.length) {
+      stopVideoTestPlayback();
+      trainingState.value = "finished";
+      poseStatus.value = "";
+      savedMessage.value = `视频测试完成，共检测 ${result.processed_frames} 帧，计数 ${result.summary.total_count} 次。`;
+    }
+  }, VIDEO_TEST_PLAYBACK_MS);
+}
+
+function updateMetricsFromFrame(frame: VideoTestFrame) {
+  store.updateLiveMetrics({
+    stage: String(frame.stage),
+    count: Number(frame.count ?? 0),
+    valid_count: Number(frame.valid_count ?? 0),
+    score: Number(frame.score ?? 0),
+    errors: Array.isArray(frame.errors) ? frame.errors : [],
+  });
+}
+
+function stopVideoTestPlayback() {
+  if (videoTestTimer) {
+    clearInterval(videoTestTimer);
+    videoTestTimer = null;
+  }
 }
 
 function closeSocket() {
@@ -343,10 +507,19 @@ function closeSocket() {
   }
 }
 
+function revokeVideoTestUrl() {
+  if (videoTestUrl) {
+    URL.revokeObjectURL(videoTestUrl);
+    videoTestUrl = "";
+  }
+}
+
 onBeforeUnmount(() => {
   closeSocket();
+  stopVideoTestPlayback();
   clearPoseCanvas(overlayRef.value);
   const stream = videoRef.value?.srcObject as MediaStream | null;
   stream?.getTracks().forEach((track) => track.stop());
+  revokeVideoTestUrl();
 });
 </script>

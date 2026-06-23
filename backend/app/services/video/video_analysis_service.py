@@ -1,9 +1,14 @@
+from dataclasses import asdict
 from pathlib import Path
 from uuid import uuid4
+import time
 
 import cv2
 
 from app.core.config import settings
+from app.services.analysis.exercise_analyzer import ExerciseAnalyzer
+from app.services.analysis.models import NormalizedKeypoint
+from app.services.session.session_service import session_service
 
 
 class VideoAnalysisService:
@@ -20,16 +25,20 @@ class VideoAnalysisService:
             raise ValueError(f"Cannot open video: {source_uri}")
 
         fps = capture.get(cv2.CAP_PROP_FPS) or 24
-        width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640
-        height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 480
+        width = self._even_dimension(int(capture.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640)
+        height = self._even_dimension(int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 480)
         writer = cv2.VideoWriter(
             str(output_path),
-            cv2.VideoWriter_fourcc(*"mp4v"),
+            cv2.VideoWriter_fourcc(*"VP80"),
             fps,
             (width, height),
         )
+        if not writer.isOpened():
+            capture.release()
+            raise ValueError("Cannot open browser-compatible video writer")
 
         pose = self._create_pose()
+        analyzer = ExerciseAnalyzer(exercise=exercise)
         frame_index = 0
 
         while True:
@@ -38,6 +47,12 @@ class VideoAnalysisService:
                 break
 
             annotated = self._annotate_frame(frame, pose, exercise, frame_index)
+            
+            if pose is not None:
+                self._analyze_frame(annotated, pose, analyzer)
+            
+            if annotated.shape[1] != width or annotated.shape[0] != height:
+                annotated = cv2.resize(annotated, (width, height))
             writer.write(annotated)
             frame_index += 1
 
@@ -47,7 +62,109 @@ class VideoAnalysisService:
         if pose is not None:
             pose.close()
 
+        session_summary = analyzer.get_session_summary()
+        if session_summary["total_count"] > 0:
+            session_service.create_session(
+                exercise=session_summary["exercise"],
+                duration_seconds=session_summary["duration_seconds"],
+                total_count=session_summary["total_count"],
+                valid_count=session_summary["valid_count"],
+                error_count=session_summary["error_count"],
+                average_score=session_summary["average_score"],
+            )
+
         return str(output_path).replace("\\", "/")
+
+    def run_realtime_video_test(
+        self,
+        source_uri: str,
+        exercise: str,
+        max_frames: int = 120,
+        keypoint_extractor=None,
+    ) -> dict:
+        source_path = self._resolve_source(source_uri)
+        capture = cv2.VideoCapture(str(source_path))
+        if not capture.isOpened():
+            raise ValueError(f"Cannot open video: {source_uri}")
+
+        video_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+        video_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        analyzer = ExerciseAnalyzer(exercise=exercise)
+        pose = self._create_pose()
+        frame_results = []
+        frame_index = 0
+        limit = max(1, min(int(max_frames), 600))
+
+        try:
+            while frame_index < limit:
+                ok, frame = capture.read()
+                if not ok:
+                    break
+
+                if keypoint_extractor is not None:
+                    keypoints = keypoint_extractor(frame, pose)
+                elif pose is not None:
+                    keypoints = self._extract_keypoints_from_frame(frame, pose)
+                else:
+                    keypoints = {}
+
+                result = analyzer.analyze(keypoints)
+                payload = result.to_dict()
+                payload["frame_index"] = frame_index
+                payload["keypoints"] = {k: asdict(v) for k, v in keypoints.items()}
+                frame_results.append(payload)
+                frame_index += 1
+        finally:
+            capture.release()
+            if pose is not None:
+                pose.close()
+
+        return {
+            "exercise": exercise,
+            "source_uri": str(source_path).replace("\\", "/"),
+            "processed_frames": len(frame_results),
+            "video_width": video_width,
+            "video_height": video_height,
+            "frames": frame_results,
+            "summary": analyzer.get_session_summary(),
+        }
+
+    def _analyze_frame(self, frame, pose, analyzer):
+        keypoints = self._extract_keypoints_from_frame(frame, pose)
+        if keypoints:
+            analyzer.analyze(keypoints)
+
+    def _extract_keypoints_from_frame(self, frame, pose):
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        result = pose.process(rgb)
+
+        if not result.pose_landmarks:
+            return {}
+
+        keypoints = {}
+        landmark_names = [
+            "nose", "left_eye_inner", "left_eye", "left_eye_outer",
+            "right_eye_inner", "right_eye", "right_eye_outer",
+            "left_ear", "right_ear", "mouth_left", "mouth_right",
+            "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+            "left_wrist", "right_wrist", "left_pinky", "right_pinky",
+            "left_index", "right_index", "left_thumb", "right_thumb",
+            "left_hip", "right_hip", "left_knee", "right_knee",
+            "left_ankle", "right_ankle", "left_heel", "right_heel",
+            "left_foot_index", "right_foot_index"
+        ]
+
+        for i, name in enumerate(landmark_names):
+            if i < len(result.pose_landmarks.landmark):
+                landmark = result.pose_landmarks.landmark[i]
+                keypoints[name] = NormalizedKeypoint(
+                    x=landmark.x,
+                    y=landmark.y,
+                    visibility=landmark.visibility
+                )
+
+        return keypoints
 
     def _resolve_source(self, source_uri: str) -> Path:
         source = Path(source_uri)
@@ -56,8 +173,11 @@ class VideoAnalysisService:
         return (Path.cwd() / source).resolve()
 
     def _make_output_path(self, source_path: Path) -> Path:
-        suffix = source_path.suffix if source_path.suffix else ".mp4"
-        return self.storage_root / "outputs" / f"{source_path.stem}-{uuid4().hex[:8]}{suffix}"
+        return self.storage_root / "outputs" / f"{source_path.stem}-{uuid4().hex[:8]}.webm"
+
+    @staticmethod
+    def _even_dimension(value: int) -> int:
+        return value if value % 2 == 0 else value - 1
 
     @staticmethod
     def _create_pose():
