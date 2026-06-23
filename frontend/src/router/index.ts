@@ -9,6 +9,8 @@ import ExerciseRulesView from "../views/ExerciseRulesView.vue";
 import ProfileView from "../views/ProfileView.vue";
 import SettingsView from "../views/SettingsView.vue";
 
+const STANDALONE_PATHS = ["/profile", "/settings"];
+
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -21,4 +23,19 @@ export const router = createRouter({
     { path: "/profile", component: ProfileView },
     { path: "/settings", component: SettingsView }
   ]
+});
+
+router.beforeEach((to, from, next) => {
+  const toStandalone = STANDALONE_PATHS.includes(to.path);
+  const fromStandalone = STANDALONE_PATHS.includes(from.path);
+
+  if (toStandalone && !fromStandalone) {
+    to.meta.layoutTransition = "page-soft-forward";
+  } else if (!toStandalone && fromStandalone) {
+    to.meta.layoutTransition = "page-soft-back";
+  } else {
+    to.meta.layoutTransition = undefined;
+  }
+
+  next();
 });

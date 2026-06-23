@@ -1,9 +1,16 @@
 <template>
-  <main v-if="isStandaloneProfile" class="standalone-content">
-    <RouterView />
-  </main>
+  <div class="layout-stage">
+    <Transition
+      :name="layoutTransitionName"
+      mode="out-in"
+      @before-leave="lockPageScroll"
+      @after-enter="unlockPageScroll"
+    >
+      <main v-if="isStandalonePage" key="standalone" class="standalone-content">
+        <RouterView />
+      </main>
 
-  <div v-else class="shell">
+      <div v-else key="shell" class="shell">
     <aside class="sidebar">
       <div class="brand">
         <span class="brand-mark">P</span>
@@ -32,7 +39,7 @@
           <input type="search" placeholder="搜索动作、训练记录或报告" />
         </label>
         <div class="topbar-actions">
-          <div class="action-menu">
+          <div v-if="settings.notificationsEnabled" class="action-menu">
             <button class="icon-button" type="button" aria-label="通知" @click="toggleNotifications">
               <Bell :size="18" />
               <span class="notification-dot" aria-hidden="true"></span>
@@ -44,16 +51,12 @@
               <p>本周平均分较上周提升 6 分，继续保持。</p>
             </div>
           </div>
-          <div class="action-menu">
-            <button class="avatar" type="button" aria-label="个人菜单" @click="toggleProfile">林</button>
-            <div v-if="showProfile" class="dropdown-panel profile-panel">
-              <strong>林同学</strong>
-              <p>学生训练端 · 今日 3 次训练</p>
-              <button type="button" @click="goToProfile">个人资料</button>
-              <button type="button" @click="goToSettings">系统设置</button>
-              <button type="button" @click="logout">退出登录</button>
-            </div>
-          </div>
+          <button class="icon-button" type="button" aria-label="系统设置" @click="goToSettings">
+            <Settings :size="18" />
+          </button>
+          <button class="avatar avatar-button" type="button" aria-label="个人资料" @click="goToProfile">
+            <UserAvatar size="sm" />
+          </button>
         </div>
       </header>
 
@@ -61,11 +64,14 @@
         <RouterView />
       </main>
     </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onUnmounted, ref } from "vue";
+import { storeToRefs } from "pinia";
 import { useRoute, useRouter } from "vue-router";
 import {
   Activity,
@@ -75,12 +81,31 @@ import {
   Dumbbell,
   Gauge,
   Search,
+  Settings,
   UploadCloud
 } from "lucide-vue-next";
 
+import UserAvatar from "./components/UserAvatar.vue";
+import { useSettingsStore } from "./stores/settings";
+
 const route = useRoute();
 const router = useRouter();
-const isStandaloneProfile = computed(() => route.path === "/profile");
+const { settings } = storeToRefs(useSettingsStore());
+const standalonePaths = ["/profile", "/settings"];
+const isStandalonePage = computed(() => standalonePaths.includes(route.path));
+const layoutTransitionName = computed(() => route.meta.layoutTransition ?? "layout-instant");
+
+function lockPageScroll() {
+  if (layoutTransitionName.value !== "layout-instant") {
+    document.documentElement.classList.add("page-transition-lock");
+  }
+}
+
+function unlockPageScroll() {
+  document.documentElement.classList.remove("page-transition-lock");
+}
+
+onUnmounted(unlockPageScroll);
 
 const navItems = [
   { path: "/", label: "首页总览", icon: Gauge },
@@ -92,21 +117,13 @@ const navItems = [
 ];
 
 const showNotifications = ref(false);
-const showProfile = ref(false);
 
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value;
-  showProfile.value = false;
-}
-
-function toggleProfile() {
-  showProfile.value = !showProfile.value;
-  showNotifications.value = false;
 }
 
 function closeMenus() {
   showNotifications.value = false;
-  showProfile.value = false;
 }
 
 function goToProfile() {
@@ -117,12 +134,5 @@ function goToProfile() {
 function goToSettings() {
   closeMenus();
   router.push("/settings");
-}
-
-function logout() {
-  closeMenus();
-  localStorage.removeItem("pose-evaluation-auth");
-  window.alert("已退出登录");
-  router.push("/");
 }
 </script>
