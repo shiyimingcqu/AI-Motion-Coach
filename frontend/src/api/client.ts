@@ -1,5 +1,16 @@
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
+export function apiWebSocketUrl(path: string): string {
+  const base = API_BASE.endsWith("/") ? API_BASE.slice(0, -1) : API_BASE;
+
+  if (base.startsWith("http://") || base.startsWith("https://")) {
+    return `${base.replace(/^http/, "ws")}${path}`;
+  }
+
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}${base}${path}`;
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`);
   if (!response.ok) {
