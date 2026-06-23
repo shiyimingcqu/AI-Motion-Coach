@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">Realtime Training</p>
         <h1>{{ store.currentExerciseMeta.name }}实时检测</h1>
-        <p class="subtle">训练中实时接收关键点、阶段、次数、评分与错误提示。</p>
+        <p class="subtle">摄像头画面实时叠加人体骨架，并同步返回阶段、次数、评分与纠错提示。</p>
       </div>
       <div class="header-actions">
         <span class="status-pill" :class="connectionClass">{{ statusLabel }}</span>
@@ -25,6 +25,8 @@
           playsinline
           class="camera-video"
         ></video>
+        <canvas v-show="cameraActive" ref="overlayRef" class="pose-overlay" aria-label="实时人体骨架"></canvas>
+        <div v-if="cameraActive && poseStatus" class="pose-status">{{ poseStatus }}</div>
         <SkeletonCanvas v-if="!cameraActive" />
       </div>
 
@@ -82,24 +84,35 @@ import { Camera, FileSearch, Pause, Play, RefreshCcw, Save } from "lucide-vue-ne
 import { apiWebSocketUrl } from "../api/client";
 import MetricTile from "../components/MetricTile.vue";
 import SkeletonCanvas from "../components/SkeletonCanvas.vue";
+import {
+  clearPoseCanvas,
+  createPoseLandmarker,
+  detectPose,
+  drawPose,
+  toBackendKeypoints,
+} from "../services/poseLandmarker";
 import { useTrainingStore } from "../stores/training";
 
 type TrainingState = "idle" | "connecting" | "running" | "paused" | "finished" | "error";
-type Keypoint = { x: number; y: number; visibility: number };
-type Keypoints = Record<string, Keypoint>;
+type PoseLandmarkerInstance = Awaited<ReturnType<typeof createPoseLandmarker>>;
+
+const SEND_INTERVAL_MS = 100;
 
 const router = useRouter();
 const store = useTrainingStore();
 const videoRef = ref<HTMLVideoElement | null>(null);
+const overlayRef = ref<HTMLCanvasElement | null>(null);
 const cameraActive = ref(false);
 const cameraError = ref("");
+const poseStatus = ref("");
 const savedMessage = ref("");
 const trainingState = ref<TrainingState>("idle");
 const lastSessionId = ref("");
 
 let socket: WebSocket | null = null;
-let frameTimer: ReturnType<typeof setInterval> | null = null;
-let sampleStep = 0;
+let poseLandmarker: PoseLandmarkerInstance | null = null;
+let animationFrameId: number | null = null;
+let lastSentAt = 0;
 
 const statusLabel = computed(() => {
   const labels: Record<TrainingState, string> = {
@@ -108,7 +121,7 @@ const statusLabel = computed(() => {
     running: "训练中",
     paused: "已暂停",
     finished: "已保存",
-    error: "连接异常"
+    error: "连接异常",
   };
   return labels[trainingState.value];
 });
@@ -124,9 +137,11 @@ const canSave = computed(() => trainingState.value === "running" || trainingStat
 
 async function connectCamera() {
   cameraError.value = "";
+  poseStatus.value = "正在加载姿态识别模型...";
 
   if (!navigator.mediaDevices?.getUserMedia) {
     cameraError.value = "当前浏览器不支持摄像头访问。";
+    poseStatus.value = "";
     trainingState.value = "error";
     return;
   }
@@ -134,7 +149,7 @@ async function connectCamera() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { width: 1280, height: 720 },
-      audio: false
+      audio: false,
     });
 
     if (videoRef.value) {
@@ -142,9 +157,12 @@ async function connectCamera() {
       cameraActive.value = true;
     }
 
+    poseLandmarker = await createPoseLandmarker();
+    poseStatus.value = "模型已就绪，请站入画面后开始训练";
     await openRealtimeSocket();
   } catch {
-    cameraError.value = "摄像头或实时通道连接失败，请检查浏览器权限和后端服务。";
+    cameraError.value = "摄像头、姿态识别模型或实时通道连接失败，请检查浏览器权限和后端服务。";
+    poseStatus.value = "";
     trainingState.value = "error";
   }
 }
@@ -152,9 +170,11 @@ async function connectCamera() {
 async function startTraining() {
   savedMessage.value = "";
   lastSessionId.value = "";
+  poseStatus.value = "";
   store.resetLiveMetrics();
+  clearPoseCanvas(overlayRef.value);
 
-  if (!cameraActive.value) {
+  if (!cameraActive.value || !poseLandmarker) {
     await connectCamera();
   } else {
     await openRealtimeSocket();
@@ -170,7 +190,7 @@ function togglePause() {
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
 
   if (trainingState.value === "running") {
-    stopFrameLoop();
+    stopPoseLoop();
     socket.send(JSON.stringify({ type: "pause" }));
     return;
   }
@@ -181,24 +201,26 @@ function togglePause() {
 }
 
 function resetTraining() {
-  stopFrameLoop();
-  sampleStep = 0;
+  stopPoseLoop();
+  lastSentAt = 0;
   savedMessage.value = "";
   lastSessionId.value = "";
+  poseStatus.value = "";
   store.resetLiveMetrics();
+  clearPoseCanvas(overlayRef.value);
 
   if (socket?.readyState === WebSocket.OPEN) {
     trainingState.value = "connecting";
     socket.send(JSON.stringify({ type: "start", exercise: store.currentExercise }));
   } else {
-    trainingState.value = cameraActive.value ? "idle" : "idle";
+    trainingState.value = "idle";
   }
 }
 
 function finishTraining() {
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
 
-  stopFrameLoop();
+  stopPoseLoop();
   socket.send(JSON.stringify({ type: "finish" }));
 }
 
@@ -224,7 +246,7 @@ function openRealtimeSocket(): Promise<void> {
       reject(new Error("WebSocket connection failed"));
     };
     socket.onclose = () => {
-      stopFrameLoop();
+      stopPoseLoop();
       if (trainingState.value === "running" || trainingState.value === "connecting") {
         trainingState.value = "error";
       }
@@ -237,10 +259,10 @@ function handleRealtimeMessage(message: Record<string, any>) {
   if (message.type === "status") {
     if (message.state === "running") {
       trainingState.value = "running";
-      startFrameLoop();
+      startPoseLoop();
     } else if (message.state === "paused") {
       trainingState.value = "paused";
-      stopFrameLoop();
+      stopPoseLoop();
     }
     return;
   }
@@ -251,14 +273,14 @@ function handleRealtimeMessage(message: Record<string, any>) {
       count: Number(message.count ?? 0),
       valid_count: Number(message.valid_count ?? 0),
       score: Number(message.score ?? 0),
-      errors: Array.isArray(message.errors) ? message.errors : []
+      errors: Array.isArray(message.errors) ? message.errors : [],
     });
     return;
   }
 
   if (message.type === "summary") {
     trainingState.value = "finished";
-    stopFrameLoop();
+    stopPoseLoop();
     const session = message.session as { session_id?: string; total_count?: number } | undefined;
     lastSessionId.value = session?.session_id ?? "";
     savedMessage.value = session?.session_id
@@ -267,47 +289,53 @@ function handleRealtimeMessage(message: Record<string, any>) {
   }
 }
 
-function startFrameLoop() {
-  stopFrameLoop();
-  sendFrame();
-  frameTimer = setInterval(sendFrame, 520);
+function startPoseLoop() {
+  stopPoseLoop();
+  lastSentAt = 0;
+  animationFrameId = window.requestAnimationFrame(runPoseFrame);
 }
 
-function stopFrameLoop() {
-  if (frameTimer) {
-    clearInterval(frameTimer);
-    frameTimer = null;
+function stopPoseLoop() {
+  if (animationFrameId !== null) {
+    window.cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
   }
 }
 
-function sendFrame() {
-  if (!socket || socket.readyState !== WebSocket.OPEN || trainingState.value !== "running") return;
+function runPoseFrame(timestamp: number) {
+  if (trainingState.value !== "running") return;
 
-  socket.send(JSON.stringify({
-    type: "frame",
-    exercise: store.currentExercise,
-    timestamp: Date.now(),
-    keypoints: createSquatSampleKeypoints(sampleStep++)
-  }));
-}
+  const video = videoRef.value;
+  const canvas = overlayRef.value;
 
-function createSquatSampleKeypoints(step: number): Keypoints {
-  const down = step % 2 === 0;
-  const hipY = down ? 0.72 : 0.24;
-  const kneeY = down ? 0.66 : 0.58;
+  if (!video || !canvas || !poseLandmarker || !socket || socket.readyState !== WebSocket.OPEN) {
+    animationFrameId = window.requestAnimationFrame(runPoseFrame);
+    return;
+  }
 
-  return {
-    left_hip: { x: 0.45, y: hipY, visibility: 0.99 },
-    left_knee: { x: 0.47, y: kneeY, visibility: 0.99 },
-    left_ankle: { x: 0.47, y: 0.82, visibility: 0.99 },
-    right_hip: { x: 0.55, y: hipY, visibility: 0.99 },
-    right_knee: { x: 0.53, y: kneeY, visibility: 0.99 },
-    right_ankle: { x: 0.53, y: 0.82, visibility: 0.99 }
-  };
+  const landmarks = detectPose(poseLandmarker, video, timestamp);
+  drawPose(canvas, landmarks);
+
+  if (!landmarks) {
+    poseStatus.value = "未检测到人体，请站入画面";
+  } else {
+    poseStatus.value = "";
+    if (timestamp - lastSentAt >= SEND_INTERVAL_MS) {
+      lastSentAt = timestamp;
+      socket.send(JSON.stringify({
+        type: "frame",
+        exercise: store.currentExercise,
+        timestamp: Date.now(),
+        keypoints: toBackendKeypoints(landmarks),
+      }));
+    }
+  }
+
+  animationFrameId = window.requestAnimationFrame(runPoseFrame);
 }
 
 function closeSocket() {
-  stopFrameLoop();
+  stopPoseLoop();
   if (socket) {
     socket.onclose = null;
     socket.close();
@@ -317,6 +345,7 @@ function closeSocket() {
 
 onBeforeUnmount(() => {
   closeSocket();
+  clearPoseCanvas(overlayRef.value);
   const stream = videoRef.value?.srcObject as MediaStream | null;
   stream?.getTracks().forEach((track) => track.stop());
 });
