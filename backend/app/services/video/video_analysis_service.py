@@ -7,6 +7,9 @@ import cv2
 
 from app.core.config import settings
 from app.services.analysis.exercise_analyzer import ExerciseAnalyzer
+from app.services.analysis.angle_feature_service import extract_squat_features
+from app.services.analysis.template_service import TemplateService
+from app.services.analysis.feedback_service import FeedbackService
 from app.services.analysis.models import NormalizedKeypoint
 from app.services.session.session_service import session_service
 
@@ -91,6 +94,8 @@ class VideoAnalysisService:
         video_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         analyzer = ExerciseAnalyzer(exercise=exercise)
+        template_service = TemplateService()
+        feedback_service = FeedbackService()
         pose = self._create_pose()
         frame_results = []
         frame_index = 0
@@ -113,12 +118,47 @@ class VideoAnalysisService:
                 payload = result.to_dict()
                 payload["frame_index"] = frame_index
                 payload["keypoints"] = {k: asdict(v) for k, v in keypoints.items()}
+
+                # 如果是深蹲动作，添加角度指标
+                if exercise == "squat" and keypoints:
+                    try:
+                        metrics = extract_squat_features(keypoints)
+                        payload["metrics"] = metrics
+                    except ValueError:
+                        pass
+
                 frame_results.append(payload)
                 frame_index += 1
         finally:
             capture.release()
             if pose is not None:
                 pose.close()
+
+        # 计算模板评分
+        template_score = None
+        if exercise == "squat" and frame_results:
+            try:
+                # 提取所有帧的 metrics
+                frames_with_metrics = [
+                    frame.get("metrics", {}) for frame in frame_results
+                    if frame.get("metrics")
+                ]
+
+                if frames_with_metrics:
+                    score_result = template_service.score_by_template(exercise, frames_with_metrics)
+                    feedback = feedback_service.generate_template_feedback(score_result)
+
+                    template_score = {
+                        "score": score_result["score"],
+                        "level": score_result["level"],
+                        "detail_scores": score_result["detail_scores"],
+                        "differences": score_result["differences"],
+                        "errors": feedback["errors"],
+                        "suggestions": feedback["suggestions"]
+                    }
+            except Exception:
+                # 模板评分失败不影响整体流程
+                pass
 
         return {
             "exercise": exercise,
@@ -128,6 +168,7 @@ class VideoAnalysisService:
             "video_height": video_height,
             "frames": frame_results,
             "summary": analyzer.get_session_summary(),
+            "template_score": template_score,
         }
 
     def _analyze_frame(self, frame, pose, analyzer):

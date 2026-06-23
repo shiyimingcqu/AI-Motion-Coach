@@ -27,6 +27,71 @@ class ApiTests(unittest.TestCase):
         names = {item["key"] for item in response.json()["items"]}
         self.assertTrue({"squat", "push_up", "jumping_jack", "plank"}.issubset(names))
 
+    def test_exercise_templates_endpoint_includes_builtin_template(self):
+        response = self.client.get("/api/exercises/squat/templates")
+
+        self.assertEqual(response.status_code, 200)
+        template_ids = {item["template_id"] for item in response.json()["items"]}
+        self.assertIn("squat_template", template_ids)
+
+    def test_score_action_accepts_selected_template(self):
+        frames = [
+            {
+                "knee_angle": 170,
+                "hip_angle": 150,
+                "trunk_angle": 2,
+                "knee_symmetry_diff": 5,
+            }
+        ] * 10
+
+        response = self.client.post(
+            "/api/realtime/score-action",
+            json={"action": "squat", "template_id": "squat_template_side_v1", "frames": frames},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["template_id"], "squat_template_side_v1")
+        self.assertTrue(payload["is_partial"])
+        self.assertIn("score", payload)
+        self.assertIn("knee_angle", payload["detail_scores"])
+        self.assertIn("knee_angle", payload["differences"])
+
+    def test_score_action_rejects_unknown_template(self):
+        frames = [
+            {
+                "knee_angle": 170,
+                "hip_angle": 150,
+                "trunk_angle": 2,
+                "knee_symmetry_diff": 5,
+            }
+        ] * 10
+
+        response = self.client.post(
+            "/api/realtime/score-action",
+            json={"action": "squat", "template_id": "missing_template", "frames": frames},
+        )
+
+        self.assertIn(response.status_code, {400, 404})
+
+    def test_score_action_rejects_single_frame(self):
+        response = self.client.post(
+            "/api/realtime/score-action",
+            json={
+                "action": "squat",
+                "frames": [
+                    {
+                        "knee_angle": 170,
+                        "hip_angle": 150,
+                        "trunk_angle": 2,
+                        "knee_symmetry_diff": 5,
+                    }
+                ],
+            },
+        )
+
+        self.assertEqual(response.status_code, 400)
+
     def test_create_analysis_task_returns_pending_task(self):
         response = self.client.post(
             "/api/analysis/tasks",

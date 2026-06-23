@@ -52,12 +52,137 @@
         <MetricTile label="有效次数" :value="store.validCount" hint="valid count" />
         <MetricTile label="评分" :value="store.score" hint="score" />
 
+        <div class="live-data-panel">
+          <div class="live-data-header">
+            <strong>参考模板</strong>
+            <span>{{ selectedTemplate?.source === "builtin" ? "内置" : "自定义" }}</span>
+          </div>
+          <select v-model="selectedTemplateId" class="template-select" @change="handleTemplateChange">
+            <option value="" disabled>请选择参考模板</option>
+            <option
+              v-for="template in templateOptions"
+              :key="template.template_id"
+              :value="template.template_id"
+            >
+              {{ template.name }} · {{ template.view }} · {{ template.version }}
+            </option>
+          </select>
+          <small v-if="selectedTemplate">
+            {{ selectedTemplate.valid_frames || "默认" }} 帧参考曲线
+          </small>
+        </div>
+
+        <div class="live-data-panel">
+          <div class="live-data-header">
+            <strong>实时角度</strong>
+            <span>{{ currentMetrics ? "更新中" : "等待帧数据" }}</span>
+          </div>
+          <div class="angle-grid">
+            <div>
+              <span>膝角</span>
+              <strong>{{ formatAngle(currentMetrics?.knee_angle) }}</strong>
+            </div>
+            <div>
+              <span>髋角</span>
+              <strong>{{ formatAngle(currentMetrics?.hip_angle) }}</strong>
+            </div>
+            <div>
+              <span>躯干</span>
+              <strong>{{ formatAngle(currentMetrics?.trunk_angle) }}</strong>
+            </div>
+            <div>
+              <span>对称差</span>
+              <strong>{{ formatAngle(currentMetrics?.knee_symmetry_diff) }}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="live-data-panel">
+          <div class="live-data-header">
+            <strong>模板相似度</strong>
+            <span>{{ displayTemplateScore?.is_partial ? "动态参考" : "完整评分" }}</span>
+          </div>
+          <div class="live-score-row">
+            <span>动态总分</span>
+            <strong>{{ formatScore(displayTemplateScore?.score) }}</strong>
+          </div>
+          <div class="angle-diff-list">
+            <div>
+              <span>膝角</span>
+              <b>{{ formatAngle(currentMetrics?.knee_angle) }}</b>
+              <b>{{ formatAngle(displayTemplateScore?.differences.knee_angle) }}</b>
+              <b>{{ formatScore(displayTemplateScore?.detail_scores.knee_angle) }}</b>
+            </div>
+            <div>
+              <span>髋角</span>
+              <b>{{ formatAngle(currentMetrics?.hip_angle) }}</b>
+              <b>{{ formatAngle(displayTemplateScore?.differences.hip_angle) }}</b>
+              <b>{{ formatScore(displayTemplateScore?.detail_scores.hip_angle) }}</b>
+            </div>
+            <div>
+              <span>躯干</span>
+              <b>{{ formatAngle(currentMetrics?.trunk_angle) }}</b>
+              <b>{{ formatAngle(displayTemplateScore?.differences.trunk_angle) }}</b>
+              <b>{{ formatScore(displayTemplateScore?.detail_scores.trunk_angle) }}</b>
+            </div>
+            <div>
+              <span>对称差</span>
+              <b>{{ formatAngle(currentMetrics?.knee_symmetry_diff) }}</b>
+              <b>{{ formatAngle(displayTemplateScore?.differences.knee_symmetry_diff) }}</b>
+              <b>{{ formatScore(displayTemplateScore?.detail_scores.knee_symmetry_diff) }}</b>
+            </div>
+          </div>
+          <div class="angle-diff-legend">
+            <span>当前</span>
+            <span>误差</span>
+            <span>细项分</span>
+          </div>
+        </div>
+
         <div v-if="cameraError" class="alert-line danger">{{ cameraError }}</div>
         <div v-if="savedMessage" class="alert-line">{{ savedMessage }}</div>
         <div class="error-stack">
           <strong>错误提示</strong>
           <span v-if="store.errors.length === 0">暂无错误</span>
           <span v-for="error in store.errors" :key="error">{{ error }}</span>
+        </div>
+
+        <!-- 模板评分结果 -->
+        <div v-if="templateScore" class="template-score-panel">
+          <div class="template-score-header">
+            <strong>模板评分</strong>
+            <span class="template-score-level" :class="templateScore.level">{{ templateScore.level }}</span>
+          </div>
+          <div class="template-score-total">
+            <span class="template-score-value">{{ templateScore.score.toFixed(1) }}</span>
+            <span class="template-score-label">总分</span>
+          </div>
+          <div class="template-score-details">
+            <div class="detail-item">
+              <span class="detail-label">膝关节角度</span>
+              <span class="detail-value">{{ templateScore.detail_scores.knee_angle.toFixed(1) }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">髋关节角度</span>
+              <span class="detail-value">{{ templateScore.detail_scores.hip_angle.toFixed(1) }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">躯干角度</span>
+              <span class="detail-value">{{ templateScore.detail_scores.trunk_angle.toFixed(1) }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">左右对称性</span>
+              <span class="detail-value">{{ templateScore.detail_scores.knee_symmetry_diff.toFixed(1) }}</span>
+            </div>
+          </div>
+          <div v-if="templateScore.errors.length > 0" class="template-errors">
+            <strong>主要问题：</strong>
+            <span v-for="error in templateScore.errors" :key="error" class="error-item">{{ error }}</span>
+          </div>
+          <div v-if="templateScore.suggestions.length > 0" class="template-suggestions">
+            <strong>改进建议：</strong>
+            <span v-for="suggestion in templateScore.suggestions" :key="suggestion" class="suggestion-item">{{ suggestion }}</span>
+          </div>
         </div>
       </aside>
     </section>
@@ -88,11 +213,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { Camera, FileSearch, Pause, Play, RefreshCcw, Save, UploadCloud } from "lucide-vue-next";
 
-import { apiUpload, apiWebSocketUrl } from "../api/client";
+import { apiGet, apiUpload, apiWebSocketUrl, apiPost } from "../api/client";
 import MetricTile from "../components/MetricTile.vue";
 import SkeletonCanvas from "../components/SkeletonCanvas.vue";
 import {
@@ -109,6 +234,35 @@ import { useTrainingStore } from "../stores/training";
 type TrainingState = "idle" | "connecting" | "running" | "paused" | "finished" | "error";
 type PoseLandmarkerInstance = Awaited<ReturnType<typeof createPoseLandmarker>>;
 
+type SquatMetrics = {
+  knee_angle: number;
+  hip_angle: number;
+  trunk_angle: number;
+  knee_symmetry_diff: number;
+};
+
+type TemplateScore = {
+  action?: string;
+  template_id?: string;
+  is_partial?: boolean;
+  score: number;
+  level: string;
+  detail_scores: SquatMetrics;
+  differences: SquatMetrics;
+  errors: string[];
+  suggestions: string[];
+};
+
+type TemplateOption = {
+  template_id: string;
+  name: string;
+  action: string;
+  view: string;
+  version: string;
+  valid_frames: number;
+  source?: string;
+};
+
 type VideoTestFrame = {
   frame_index: number;
   stage: string;
@@ -117,6 +271,7 @@ type VideoTestFrame = {
   score: number;
   errors: string[];
   keypoints?: BackendKeypoints;
+  metrics?: SquatMetrics;
 };
 
 type VideoTestResponse = {
@@ -131,10 +286,13 @@ type VideoTestResponse = {
     error_count: number;
     average_score: number;
   };
+  template_score?: TemplateScore;
 };
 
 const SEND_INTERVAL_MS = 100;
 const VIDEO_TEST_PLAYBACK_MS = 100;
+const DYNAMIC_SCORE_MIN_FRAMES = 10;
+const DYNAMIC_SCORE_INTERVAL_MS = 500;
 
 const router = useRouter();
 const store = useTrainingStore();
@@ -148,6 +306,13 @@ const savedMessage = ref("");
 const videoTestLoading = ref(false);
 const trainingState = ref<TrainingState>("idle");
 const lastSessionId = ref("");
+const currentMetrics = ref<SquatMetrics | null>(null);
+const liveTemplateScore = ref<TemplateScore | null>(null);
+const templateScore = ref<TemplateScore | null>(null);
+const templateOptions = ref<TemplateOption[]>([]);
+const selectedTemplateId = ref("");
+const lastDynamicScoreAt = ref(0);
+const dynamicScoreInFlight = ref(false);
 
 let socket: WebSocket | null = null;
 let poseLandmarker: PoseLandmarkerInstance | null = null;
@@ -155,6 +320,7 @@ let animationFrameId: number | null = null;
 let videoTestTimer: ReturnType<typeof setInterval> | null = null;
 let videoTestUrl = "";
 let lastSentAt = 0;
+let motionFrames: SquatMetrics[] = [];
 
 const statusLabel = computed(() => {
   const labels: Record<TrainingState, string> = {
@@ -176,6 +342,36 @@ const connectionClass = computed(() => {
 
 const canPause = computed(() => trainingState.value === "running" || trainingState.value === "paused");
 const canSave = computed(() => trainingState.value === "running" || trainingState.value === "paused");
+const displayTemplateScore = computed(() => liveTemplateScore.value ?? templateScore.value);
+const selectedTemplate = computed(() =>
+  templateOptions.value.find((template) => template.template_id === selectedTemplateId.value)
+);
+
+function formatAngle(value?: number) {
+  return typeof value === "number" && Number.isFinite(value) ? `${value.toFixed(1)}°` : "--";
+}
+
+function formatScore(value?: number) {
+  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(1) : "--";
+}
+
+async function loadTemplateOptions() {
+  if (store.currentExercise !== "squat") return;
+
+  try {
+    const response = await apiGet<{ items: TemplateOption[] }>(`/exercises/${store.currentExercise}/templates`);
+    templateOptions.value = response.items;
+    if (!selectedTemplateId.value && response.items.length > 0) {
+      selectedTemplateId.value = response.items[0].template_id;
+    }
+  } catch (error) {
+    console.error("加载模板列表失败:", error);
+  }
+}
+
+function handleTemplateChange() {
+  resetDynamicTemplateState();
+}
 
 async function connectCamera() {
   cameraError.value = "";
@@ -217,6 +413,7 @@ async function startTraining() {
   lastSessionId.value = "";
   poseStatus.value = "";
   store.resetLiveMetrics();
+  resetDynamicTemplateState(true);
   clearPoseCanvas(overlayRef.value);
   stopVideoTestPlayback();
 
@@ -254,6 +451,7 @@ function resetTraining() {
   lastSessionId.value = "";
   poseStatus.value = "";
   store.resetLiveMetrics();
+  resetDynamicTemplateState(true);
   clearPoseCanvas(overlayRef.value);
 
   if (socket?.readyState === WebSocket.OPEN) {
@@ -311,6 +509,7 @@ function handleRealtimeMessage(message: Record<string, any>) {
     if (message.state === "running") {
       trainingState.value = "running";
       poseStatus.value = "开始检测...";
+      resetDynamicTemplateState(true);
       startPoseLoop();
     } else if (message.state === "paused") {
       trainingState.value = "paused";
@@ -320,7 +519,7 @@ function handleRealtimeMessage(message: Record<string, any>) {
   }
 
   if (message.type === "analysis") {
-    updateMetricsFromFrame(message as VideoTestFrame);
+    handleAnalysisFrame(message as VideoTestFrame);
     return;
   }
 
@@ -328,6 +527,12 @@ function handleRealtimeMessage(message: Record<string, any>) {
     trainingState.value = "finished";
     stopPoseLoop();
     poseStatus.value = "";
+
+    // 调用模板评分
+    if (motionFrames.length > 0 && store.currentExercise === "squat") {
+      scoreByTemplate();
+    }
+
     const session = message.session as { session_id?: string; total_count?: number } | undefined;
     lastSessionId.value = session?.session_id ?? "";
     savedMessage.value = session?.session_id
@@ -402,6 +607,7 @@ async function handleVideoTestFile(event: Event) {
   closeSocket();
   clearPoseCanvas(overlayRef.value);
   store.resetLiveMetrics();
+  resetDynamicTemplateState(true);
   savedMessage.value = "";
   lastSessionId.value = "";
   cameraError.value = "";
@@ -465,7 +671,7 @@ function playVideoTestResult(result: VideoTestResponse) {
 
   videoTestTimer = setInterval(() => {
     const frame = result.frames[frameIndex];
-    updateMetricsFromFrame(frame);
+    handleAnalysisFrame(frame);
 
     if (overlayRef.value && frame.keypoints) {
       drawPoseFromKeypoints(overlayRef.value, frame.keypoints, result.video_width, result.video_height);
@@ -476,9 +682,95 @@ function playVideoTestResult(result: VideoTestResponse) {
       stopVideoTestPlayback();
       trainingState.value = "finished";
       poseStatus.value = "";
+      void scoreByTemplate("final");
       savedMessage.value = `视频测试完成，共检测 ${result.processed_frames} 帧，计数 ${result.summary.total_count} 次。`;
     }
   }, VIDEO_TEST_PLAYBACK_MS);
+}
+
+function resetDynamicTemplateState(clearMetrics = false) {
+  motionFrames = [];
+  liveTemplateScore.value = null;
+  templateScore.value = null;
+  lastDynamicScoreAt.value = 0;
+  dynamicScoreInFlight.value = false;
+
+  if (clearMetrics) {
+    currentMetrics.value = null;
+  }
+}
+
+function handleAnalysisFrame(frame: VideoTestFrame) {
+  updateMetricsFromFrame(frame);
+
+  if (!frame.metrics || store.currentExercise !== "squat") return;
+
+  const metrics: SquatMetrics = {
+    knee_angle: Number(frame.metrics.knee_angle),
+    hip_angle: Number(frame.metrics.hip_angle),
+    trunk_angle: Number(frame.metrics.trunk_angle),
+    knee_symmetry_diff: Number(frame.metrics.knee_symmetry_diff),
+  };
+
+  currentMetrics.value = metrics;
+  motionFrames.push(metrics);
+  requestDynamicTemplateScore();
+}
+
+function requestDynamicTemplateScore() {
+  if (motionFrames.length < DYNAMIC_SCORE_MIN_FRAMES) return;
+  if (dynamicScoreInFlight.value) return;
+
+  const now = Date.now();
+  if (now - lastDynamicScoreAt.value < DYNAMIC_SCORE_INTERVAL_MS) return;
+
+  lastDynamicScoreAt.value = now;
+  void scoreByTemplate("live");
+}
+
+async function scoreByTemplate(mode: "live" | "final" = "final") {
+  if (motionFrames.length < 2 || store.currentExercise !== "squat") return;
+
+  if (mode === "live") {
+    dynamicScoreInFlight.value = true;
+  }
+
+  try {
+    const response = await apiPost<TemplateScore>("/realtime/score-action", {
+      action: "squat",
+      template_id: selectedTemplateId.value || undefined,
+      frames: motionFrames,
+    });
+
+    if (mode === "live") {
+      liveTemplateScore.value = response;
+    } else {
+      templateScore.value = response;
+      liveTemplateScore.value = response;
+    }
+    console.log("模板评分结果:", response);
+  } catch (error) {
+    console.error("模板评分失败:", error);
+  } finally {
+    if (mode === "live") {
+      dynamicScoreInFlight.value = false;
+    }
+  }
+}
+
+async function scoreByTemplateLegacy() {
+  try {
+    const response = await apiPost<TemplateScore>("/realtime/score-action", {
+      action: "squat",
+      template_id: selectedTemplateId.value || undefined,
+      frames: motionFrames,
+    });
+
+    templateScore.value = response;
+    console.log("模板评分结果:", templateScore.value);
+  } catch (error) {
+    console.error("模板评分失败:", error);
+  }
 }
 
 function updateMetricsFromFrame(frame: VideoTestFrame) {
@@ -513,6 +805,10 @@ function revokeVideoTestUrl() {
     videoTestUrl = "";
   }
 }
+
+onMounted(() => {
+  void loadTemplateOptions();
+});
 
 onBeforeUnmount(() => {
   closeSocket();
