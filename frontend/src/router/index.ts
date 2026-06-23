@@ -6,6 +6,8 @@ import VideoUploadView from "../views/VideoUploadView.vue";
 import SessionsView from "../views/SessionsView.vue";
 import ReportsView from "../views/ReportsView.vue";
 import ExerciseRulesView from "../views/ExerciseRulesView.vue";
+import ProfileView from "../views/ProfileView.vue";
+import SettingsView from "../views/SettingsView.vue";
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -15,6 +17,8 @@ export const router = createRouter({
     { path: "/upload", component: VideoUploadView },
     { path: "/sessions", component: SessionsView },
     { path: "/reports", component: ReportsView },
-    { path: "/rules", component: ExerciseRulesView }
+    { path: "/rules", component: ExerciseRulesView },
+    { path: "/profile", component: ProfileView },
+    { path: "/settings", component: SettingsView }
   ]
 });
