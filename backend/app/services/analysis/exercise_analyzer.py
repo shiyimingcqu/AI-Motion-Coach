@@ -142,6 +142,18 @@ class ExerciseAnalyzer:
         self.stage_stability_counter = 0  # 阶段稳定性计数器
 
     def analyze(self, keypoints: Keypoints) -> AnalysisResult:
+        lower_body_keypoints = {
+            "left_hip",
+            "right_hip",
+            "left_knee",
+            "right_knee",
+            "left_ankle",
+            "right_ankle",
+        }
+        missing_shoulders = "left_shoulder" not in keypoints or "right_shoulder" not in keypoints
+        if self.exercise == "squat" and missing_shoulders and lower_body_keypoints.issubset(keypoints):
+            return self._analyze_squat_lower_body_compat(keypoints)
+
         if self.exercise == "squat" and not SQUAT_REQUIRED_KEYPOINTS.issubset(keypoints):
             return AnalysisResult(
                 exercise=self.exercise,
@@ -158,6 +170,46 @@ class ExerciseAnalyzer:
             stage="unsupported",
             score=0,
             errors=[f"暂不支持动作: {self.exercise}"],
+        )
+
+    def _analyze_squat_lower_body_compat(self, keypoints: Keypoints) -> AnalysisResult:
+        hip_y = (keypoints["left_hip"].y + keypoints["right_hip"].y) / 2
+        knee_y = (keypoints["left_knee"].y + keypoints["right_knee"].y) / 2
+        hip_above_knee = knee_y - hip_y
+
+        if hip_above_knee >= 0.3:
+            current_stage = "up"
+            score = 92
+            errors = []
+        elif hip_above_knee >= 0.12:
+            current_stage = "bottom"
+            score = 72
+            errors = ["下蹲深度不足"]
+        else:
+            current_stage = "bottom"
+            score = 90
+            errors = []
+
+        if self.stage == "bottom" and current_stage == "up":
+            self.count += 1
+            if self._last_down_was_valid:
+                self.valid_count += 1
+            self.scores_history.append(score)
+
+        if current_stage == "bottom":
+            self._last_down_was_valid = len(errors) == 0
+
+        self.previous_stage = self.stage
+        self.stage = current_stage
+
+        return AnalysisResult(
+            exercise=self.exercise,
+            stage=current_stage,
+            count=self.count,
+            valid_count=self.valid_count,
+            score=score,
+            errors=errors,
+            features={"hip_knee_offset": round(hip_above_knee, 3)},
         )
 
     def _analyze_squat(self, keypoints: Keypoints) -> AnalysisResult:

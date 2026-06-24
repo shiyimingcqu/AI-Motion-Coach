@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="page realtime-page">
     <header class="page-header">
       <div>
@@ -64,12 +64,11 @@
               :key="template.template_id"
               :value="template.template_id"
             >
-              {{ template.name }} · {{ template.view }} · {{ template.version }}
+              {{ template.name }} 路 {{ template.view }} 路 {{ template.version }}
             </option>
           </select>
           <small v-if="selectedTemplate">
-            {{ selectedTemplate.valid_frames || "默认" }} 帧参考曲线
-          </small>
+            {{ selectedTemplate.valid_frames || "榛樿" }} 甯у弬鑰冩洸绾?          </small>
         </div>
 
         <div class="live-data-panel">
@@ -103,7 +102,7 @@
             <span>{{ displayTemplateScore?.is_partial ? "动态参考" : "完整评分" }}</span>
           </div>
           <div class="live-score-row">
-            <span>动态总分</span>
+            <span>鍔ㄦ€佹€诲垎</span>
             <strong>{{ formatScore(displayTemplateScore?.score) }}</strong>
           </div>
           <div class="angle-diff-list">
@@ -142,7 +141,7 @@
         <div v-if="cameraError" class="alert-line danger">{{ cameraError }}</div>
         <div v-if="savedMessage" class="alert-line">{{ savedMessage }}</div>
         <div class="error-stack">
-          <strong>错误提示</strong>
+          <strong>閿欒鎻愮ず</strong>
           <span v-if="store.errors.length === 0">暂无错误</span>
           <span v-for="error in store.errors" :key="error">{{ error }}</span>
         </div>
@@ -502,10 +501,10 @@ function openRealtimeSocket(): Promise<void> {
 }
 
 function handleRealtimeMessage(message: Record<string, any>) {
-  console.log("收到消息:", message);
+  console.log("鏀跺埌娑堟伅:", message);
 
   if (message.type === "status") {
-    console.log("状态消息:", message.state);
+    console.log("鐘舵€佹秷鎭?", message.state);
     if (message.state === "running") {
       trainingState.value = "running";
       poseStatus.value = "开始检测...";
@@ -570,7 +569,7 @@ function runPoseFrame(timestamp: number) {
   drawPose(canvas, landmarks);
 
   if (!landmarks) {
-    poseStatus.value = "未检测到人体，请站入画面";
+    poseStatus.value = "鏈娴嬪埌浜轰綋锛岃绔欏叆鐢婚潰";
   } else {
     poseStatus.value = "";
     if (timestamp - lastSentAt >= SEND_INTERVAL_MS) {
@@ -611,7 +610,7 @@ async function handleVideoTestFile(event: Event) {
   savedMessage.value = "";
   lastSessionId.value = "";
   cameraError.value = "";
-  poseStatus.value = "正在加载姿态识别模型...";
+  poseStatus.value = "姝ｅ湪鍔犺浇濮挎€佽瘑鍒ā鍨?..";
   videoTestLoading.value = true;
   trainingState.value = "connecting";
 
@@ -660,14 +659,14 @@ function showVideoTestPreview(file: File) {
 
 function playVideoTestResult(result: VideoTestResponse) {
   if (result.frames.length === 0) {
-    poseStatus.value = "视频没有产生可用的实时监测帧";
+    poseStatus.value = "视频没有产生可用的实时检测帧";
     trainingState.value = "finished";
     return;
   }
 
   let frameIndex = 0;
   trainingState.value = "running";
-  poseStatus.value = "正在按实时节奏播放视频检测结果...";
+  poseStatus.value = "姝ｅ湪鎸夊疄鏃惰妭濂忔挱鏀捐棰戞娴嬬粨鏋?..";
 
   videoTestTimer = setInterval(() => {
     const frame = result.frames[frameIndex];
@@ -683,7 +682,7 @@ function playVideoTestResult(result: VideoTestResponse) {
       trainingState.value = "finished";
       poseStatus.value = "";
       void scoreByTemplate("final");
-      savedMessage.value = `视频测试完成，共检测 ${result.processed_frames} 帧，计数 ${result.summary.total_count} 次。`;
+      savedMessage.value = "视频测试完成，共检测 " + result.processed_frames + " 帧，计数 " + result.summary.total_count + " 次。";
     }
   }, VIDEO_TEST_PLAYBACK_MS);
 }
@@ -755,21 +754,6 @@ async function scoreByTemplate(mode: "live" | "final" = "final") {
     if (mode === "live") {
       dynamicScoreInFlight.value = false;
     }
-  }
-}
-
-async function scoreByTemplateLegacy() {
-  try {
-    const response = await apiPost<TemplateScore>("/realtime/score-action", {
-      action: "squat",
-      template_id: selectedTemplateId.value || undefined,
-      frames: motionFrames,
-    });
-
-    templateScore.value = response;
-    console.log("模板评分结果:", templateScore.value);
-  } catch (error) {
-    console.error("模板评分失败:", error);
   }
 }
 
