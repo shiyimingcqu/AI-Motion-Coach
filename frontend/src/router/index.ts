@@ -6,7 +6,15 @@ import RealtimeDetectView from "../views/RealtimeDetectView.vue";
 import VideoUploadView from "../views/VideoUploadView.vue";
 import SessionsView from "../views/SessionsView.vue";
 import ReportsView from "../views/ReportsView.vue";
+import PersonalProgressView from "../views/PersonalProgressView.vue";
+import ScoreTrendsView from "../views/ScoreTrendsView.vue";
+import MotionQualityView from "../views/MotionQualityView.vue";
 import ExerciseRulesView from "../views/ExerciseRulesView.vue";
+import SettingsView from "../views/SettingsView.vue";
+import UserManagementView from "../views/UserManagementView.vue";
+import ExportReportsView from "../views/ExportReportsView.vue";
+import ExerciseLibraryView from "../views/ExerciseLibraryView.vue";
+import ErrorFeedbackView from "../views/ErrorFeedbackView.vue";
 import LoginView from "../views/LoginView.vue";
 
 export const router = createRouter({
@@ -16,9 +24,17 @@ export const router = createRouter({
     { path: "/", component: DashboardView },
     { path: "/realtime", component: RealtimeDetectView },
     { path: "/upload", component: VideoUploadView },
+    { path: "/feedback", component: ErrorFeedbackView },
     { path: "/sessions", component: SessionsView },
+    { path: "/exercises", component: ExerciseLibraryView },
+    { path: "/progress", component: PersonalProgressView },
     { path: "/reports", component: ReportsView },
-    { path: "/rules", component: ExerciseRulesView, meta: { adminOnly: true } }
+    { path: "/score-trends", component: ScoreTrendsView },
+    { path: "/motion-quality", component: MotionQualityView },
+    { path: "/export", component: ExportReportsView },
+    { path: "/rules", component: ExerciseRulesView, meta: { adminOnly: true } },
+    { path: "/users", component: UserManagementView, meta: { adminOnly: true } },
+    { path: "/settings", component: SettingsView, meta: { adminOnly: true } }
   ]
 });
 
