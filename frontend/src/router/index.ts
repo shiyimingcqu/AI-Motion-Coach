@@ -50,7 +50,11 @@ router.beforeEach(async (to, from, next) => {
   const isAdmin = authStore.isAdmin;
 
   if (to.meta.public) {
-    next(isAuthenticated ? (isAdmin ? "/rules" : "/") : undefined);
+    if (isAuthenticated) {
+      next(isAdmin ? "/rules" : "/");
+    } else {
+      next();
+    }
     return;
   }
 
