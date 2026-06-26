@@ -3,6 +3,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from app.services.analysis.models import NormalizedKeypoint
 from app.services.video.video_analysis_service import video_analysis_service
 
 
@@ -32,6 +33,7 @@ def test_video_analysis_generates_readable_output_video(tmp_path):
     output = Path(output_uri)
     assert output.exists()
     assert output != source
+    assert output.suffix == ".webm"
 
     capture = cv2.VideoCapture(str(output))
     ok, frame = capture.read()
@@ -39,3 +41,41 @@ def test_video_analysis_generates_readable_output_video(tmp_path):
 
     assert ok
     assert frame is not None
+
+
+def test_realtime_video_test_returns_frame_results_and_summary(tmp_path):
+    source = tmp_path / "source.mp4"
+    _make_test_video(source)
+    frames = [
+        {
+            "left_hip": NormalizedKeypoint(x=0.45, y=0.72, visibility=0.99),
+            "left_knee": NormalizedKeypoint(x=0.47, y=0.66, visibility=0.99),
+            "left_ankle": NormalizedKeypoint(x=0.47, y=0.82, visibility=0.99),
+            "right_hip": NormalizedKeypoint(x=0.55, y=0.72, visibility=0.99),
+            "right_knee": NormalizedKeypoint(x=0.53, y=0.66, visibility=0.99),
+            "right_ankle": NormalizedKeypoint(x=0.53, y=0.82, visibility=0.99),
+        },
+        {
+            "left_hip": NormalizedKeypoint(x=0.45, y=0.24, visibility=0.99),
+            "left_knee": NormalizedKeypoint(x=0.47, y=0.58, visibility=0.99),
+            "left_ankle": NormalizedKeypoint(x=0.47, y=0.82, visibility=0.99),
+            "right_hip": NormalizedKeypoint(x=0.55, y=0.24, visibility=0.99),
+            "right_knee": NormalizedKeypoint(x=0.53, y=0.58, visibility=0.99),
+            "right_ankle": NormalizedKeypoint(x=0.53, y=0.82, visibility=0.99),
+        },
+    ]
+
+    def keypoint_extractor(frame, pose):
+        return frames.pop(0) if frames else {}
+
+    result = video_analysis_service.run_realtime_video_test(
+        source_uri=str(source),
+        exercise="squat",
+        max_frames=2,
+        keypoint_extractor=keypoint_extractor,
+    )
+
+    assert result["exercise"] == "squat"
+    assert result["processed_frames"] == 2
+    assert result["frames"][1]["count"] == 1
+    assert result["summary"]["total_count"] == 1

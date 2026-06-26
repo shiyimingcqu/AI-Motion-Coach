@@ -16,3 +16,22 @@ if router:
     @router.get("/{session_id}")
     def get_session(session_id: str):
         return session_service.get_session(session_id).to_dict()
+
+    @router.post("", status_code=201)
+    def create_session(
+        exercise: str,
+        duration_seconds: int,
+        total_count: int,
+        valid_count: int,
+        error_count: int,
+        average_score: int,
+    ):
+        session = session_service.create_session(
+            exercise=exercise,
+            duration_seconds=duration_seconds,
+            total_count=total_count,
+            valid_count=valid_count,
+            error_count=error_count,
+            average_score=average_score,
+        )
+        return session.to_dict()

@@ -69,6 +69,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 
+import { apiGet } from "../api/client";
 import { demoSessions, exercises, type Session } from "../stores/training";
 
 type ApiSession = Session & { created_at?: string };
@@ -80,8 +81,7 @@ const visibleSessions = computed(() => (sessions.value.length > 0 ? sessions.val
 
 async function loadSessions() {
   try {
-    const response = await fetch("http://localhost:8000/sessions");
-    const data = await response.json();
+    const data = await apiGet<{ items: ApiSession[] }>("/sessions");
     sessions.value = data.items || [];
   } catch (error) {
     console.warn("加载训练记录失败，使用本地演示数据。", error);
