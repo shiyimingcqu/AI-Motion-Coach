@@ -11,7 +11,6 @@
         <h1>系统设置</h1>
         <p class="subtle">以下选项会保存在当前浏览器中。部分功能仍在开发中，可先配置并预览。</p>
       </div>
-      <button class="secondary-button" type="button" @click="resetSettings">恢复默认</button>
     </header>
 
     <div class="settings-stack">
@@ -134,23 +133,23 @@
         <p v-if="dataMessage" class="settings-status-message">{{ dataMessage }}</p>
       </section>
 
-      <section class="panel settings-danger-panel">
+      <section class="panel">
         <div class="section-title">
           <div>
-            <p class="eyebrow">Danger Zone</p>
-            <h2>危险操作</h2>
+            <p class="eyebrow">Reset</p>
+            <h2>恢复默认设置</h2>
           </div>
         </div>
 
-        <p class="settings-note danger">
-          清除后将删除本浏览器中的系统设置、个人资料、头像与登录状态，此操作不可撤销（功能开发中）。
+        <p class="settings-note">
+          将系统设置恢复为默认值，不会退出登录，也不会清除个人资料、头像或训练偏好。
         </p>
 
-        <button class="danger-button" type="button" @click="handleClearCache">
+        <button class="secondary-button" type="button" @click="handleResetDefaults">
           <Trash2 :size="18" />
-          清除本地缓存
+          恢复默认设置
         </button>
-        <p v-if="dangerMessage" class="settings-status-message">{{ dangerMessage }}</p>
+        <p v-if="resetMessage" class="settings-status-message">{{ resetMessage }}</p>
       </section>
     </div>
   </div>
@@ -177,18 +176,12 @@ const cameraResolutionOptions = CAMERA_RESOLUTION_OPTIONS;
 
 const importInputRef = ref<HTMLInputElement | null>(null);
 const dataMessage = ref("");
-const dangerMessage = ref("");
+const resetMessage = ref("");
 
 const settingsPreview = computed(() => settingsStore.exportSettingsJson());
 
 function goHome() {
   router.push("/");
-}
-
-function resetSettings() {
-  settingsStore.resetSettings();
-  dataMessage.value = "已恢复默认设置。";
-  dangerMessage.value = "";
 }
 
 function handleExport() {
@@ -223,12 +216,13 @@ function handleImportFile(event: Event) {
   reader.readAsText(file);
 }
 
-function handleClearCache() {
-  if (!window.confirm("确定要清除本地缓存吗？此操作开发中，当前不会真正删除数据。")) {
+function handleResetDefaults() {
+  if (!window.confirm("确定要恢复默认设置吗？此操作不会退出登录。")) {
     return;
   }
 
-  const result = settingsStore.clearLocalCache();
-  dangerMessage.value = result.message;
+  const result = settingsStore.resetToDefaults();
+  resetMessage.value = result.message;
+  dataMessage.value = "";
 }
 </script>

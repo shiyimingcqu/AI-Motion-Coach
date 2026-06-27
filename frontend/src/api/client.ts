@@ -22,13 +22,18 @@ function getAuthHeaders(): Record<string, string> {
   return headers;
 }
 
-function handleUnauthorized(response: Response): never {
+function handleUnauthorized(response: Response) {
   if (response.status === 401) {
     const authStore = useAuthStore();
     authStore.logout();
     window.location.href = "/login";
   }
-  throw new Error(`Request failed: ${response.status}`);
+}
+
+async function throwRequestError(response: Response): Promise<never> {
+  handleUnauthorized(response);
+  const data = await response.json().catch(() => ({}));
+  throw new Error(data.detail || `Request failed: ${response.status}`);
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
@@ -36,7 +41,7 @@ export async function apiGet<T>(path: string): Promise<T> {
     headers: getAuthHeaders(),
   });
   if (!response.ok) {
-    handleUnauthorized(response);
+    await throwRequestError(response);
   }
   return response.json();
 }
@@ -51,9 +56,34 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   if (!response.ok) {
-    handleUnauthorized(response);
+    await throwRequestError(response);
   }
   return response.json();
+}
+
+export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    await throwRequestError(response);
+  }
+  return response.json();
+}
+
+export async function apiDelete(path: string): Promise<void> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    await throwRequestError(response);
+  }
 }
 
 export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
@@ -63,7 +93,7 @@ export async function apiUpload<T>(path: string, formData: FormData): Promise<T>
     body: formData,
   });
   if (!response.ok) {
-    handleUnauthorized(response);
+    await throwRequestError(response);
   }
   return response.json();
 }

@@ -26,6 +26,7 @@
               <span>{{ item.label }}</span>
             </RouterLink>
           </nav>
+
         </aside>
 
         <div class="workspace">
@@ -33,11 +34,11 @@
             <div>
               <strong>{{ pageTitle }}</strong>
               <span v-if="!authStore.isAdmin">今天 3 次训练 · 平均分 86</span>
-              <span v-else>管理后台 · 动作规则与模板管理</span>
+              <span v-else>用户、训练、报告与规则管理</span>
             </div>
             <label class="search-box">
               <Search :size="16" />
-              <input type="search" placeholder="搜索动作、训练记录或报告" />
+              <input type="search" :placeholder="searchPlaceholder" />
             </label>
             <div class="topbar-actions">
               <div v-if="settings.notificationsEnabled" class="action-menu">
@@ -52,13 +53,25 @@
                   <p>本周平均分较上周提升 6 分，继续保持。</p>
                 </div>
               </div>
-              <button class="icon-button" type="button" aria-label="系统设置" @click="goToSettings">
+              <button
+                v-if="!authStore.isAdmin"
+                class="icon-button"
+                type="button"
+                aria-label="系统设置"
+                @click="goToSettings"
+              >
                 <Settings :size="18" />
               </button>
-              <button class="avatar avatar-button" type="button" aria-label="个人资料" @click="goToProfile">
+              <button
+                v-if="!authStore.isAdmin"
+                class="avatar avatar-button"
+                type="button"
+                aria-label="个人资料"
+                @click="goToProfile"
+              >
                 <UserAvatar size="sm" />
               </button>
-              <div class="user-info">
+              <div v-if="authStore.isAdmin" class="user-info">
                 <span class="avatar">{{ userInitial }}</span>
                 <div class="user-meta">
                   <span class="username">{{ authStore.username }}</span>
@@ -90,10 +103,16 @@ import {
   Bell,
   ClipboardList,
   Dumbbell,
+  FileText,
   Gauge,
+  Layers,
+  Shield,
   Search,
   Settings,
-  UploadCloud
+  ShieldCheck,
+  SlidersHorizontal,
+  UploadCloud,
+  Users
 } from "lucide-vue-next";
 
 import UserAvatar from "./components/UserAvatar.vue";
@@ -141,12 +160,22 @@ const baseNavItems = [
 ];
 
 const adminNavItems = [
-  ...baseNavItems,
-  { path: "/rules", label: "动作规则", icon: Dumbbell }
+  { path: "/admin", label: "管理首页", icon: ShieldCheck },
+  { path: "/admin/users", label: "用户管理", icon: Users },
+  { path: "/admin/admins", label: "管理员管理", icon: Shield },
+  { path: "/admin/sessions", label: "训练记录", icon: ClipboardList },
+  { path: "/admin/reports", label: "评估报告", icon: FileText },
+  { path: "/admin/rules", label: "动作规则", icon: Dumbbell },
+  { path: "/admin/templates", label: "模板管理", icon: Layers },
+  { path: "/admin/settings", label: "系统设置", icon: SlidersHorizontal }
 ];
 
 const navItems = computed(() =>
   authStore.isAdmin ? adminNavItems : baseNavItems
+);
+
+const searchPlaceholder = computed(() =>
+  authStore.isAdmin ? "搜索用户、报告或规则" : "搜索动作、训练记录或报告"
 );
 
 const showNotifications = ref(false);
@@ -216,4 +245,5 @@ function handleLogout() {
   border-color: #ef4444;
   color: #ef4444;
 }
+
 </style>

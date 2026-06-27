@@ -1,75 +1,81 @@
 <template>
-  <div class="page">
+  <div class="page admin-page">
     <header class="page-header">
       <div>
-        <p class="eyebrow">Exercise Library</p>
-        <h1>动作训练库与规则配置</h1>
-        <p class="subtle">按动作类型、难度和支持方式筛选训练，并查看检测规则。</p>
+        <p class="eyebrow">Rule Management</p>
+        <h1>动作规则管理</h1>
+        <p class="subtle">维护动作检测规则、评分阈值、错误提示和标准动作模板。</p>
       </div>
-      <button v-if="authStore.isAdmin" class="primary-button" type="button">
+      <button class="primary-button" type="button">
         <Plus :size="18" />
         新增规则
       </button>
     </header>
 
-    <section class="split-layout">
-      <aside class="filter-panel">
-        <h2>筛选栏</h2>
-        <div class="filter-group">
-          <strong>动作类型</strong>
-          <button v-for="exercise in exercises" :key="exercise.key" type="button">{{ exercise.name }}</button>
+    <section class="admin-table panel">
+      <div class="admin-table-head admin-rules-grid">
+        <span>动作</span>
+        <span>类型</span>
+        <span>检测方式</span>
+        <span>主要错误</span>
+        <span>状态</span>
+        <span>操作</span>
+      </div>
+      <div v-for="exercise in exercises" :key="exercise.key" class="admin-table-row admin-rules-grid">
+        <div>
+          <strong>{{ exercise.name }}</strong>
+          <small>{{ exercise.level }} · 推荐 {{ exercise.duration }}</small>
         </div>
-        <div class="filter-group">
-          <strong>难度</strong>
-          <button type="button">初级</button>
-          <button type="button">中级</button>
-          <button type="button">高级</button>
+        <span>{{ exercise.category }}</span>
+        <span>{{ exercise.modes.join(" / ") }}</span>
+        <span>{{ exercise.errors.join("、") }}</span>
+        <span class="status-pill good">启用中</span>
+        <div class="admin-row-actions">
+          <button class="secondary-button" type="button">编辑规则</button>
+          <button
+            class="text-button"
+            type="button"
+            :disabled="exercise.key !== 'squat'"
+            :title="exercise.key !== 'squat' ? '当前仅支持深蹲模板生成' : ''"
+            @click="openTemplateModal(exercise)"
+          >
+            添加模板
+          </button>
         </div>
-        <div class="filter-group">
-          <strong>支持方式</strong>
-          <button type="button">摄像头实时检测</button>
-          <button type="button">视频上传分析</button>
-        </div>
-      </aside>
-
-      <section class="exercise-grid">
-        <article v-for="exercise in exercises" :key="exercise.key" class="exercise-card">
-          <div class="exercise-visual" :style="{ '--accent': exercise.accent }">
-            <Dumbbell :size="34" />
-          </div>
-          <div>
-            <span>{{ exercise.category }} · {{ exercise.level }}</span>
-            <h2>{{ exercise.name }}</h2>
-          </div>
-          <p>推荐时长 {{ exercise.duration }}，支持 {{ exercise.modes.join(" / ") }}。</p>
-          <div class="error-chips compact">
-            <span v-for="error in exercise.errors" :key="error">{{ error }}</span>
-          </div>
-          <div class="card-actions">
-            <button class="primary-button" type="button" @click="start(exercise.key)">开始训练</button>
-            <button class="secondary-button" type="button">查看规则</button>
-            <button 
-              v-if="authStore.isAdmin"
-              class="template-button" 
-              type="button" 
-              @click="openTemplateModal(exercise)"
-              :disabled="exercise.key !== 'squat'"
-              :title="exercise.key !== 'squat' ? '当前仅支持深蹲模板生成' : ''"
-            >
-              <Upload :size="16" />
-              {{ exercise.key === 'squat' ? '添加标准动作' : '暂未支持' }}
-            </button>
-          </div>
-        </article>
-      </section>
+      </div>
     </section>
 
-    <!-- 添加标准动作弹窗 -->
+    <section class="admin-grid">
+      <article class="panel">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">Thresholds</p>
+            <h2>评分阈值示例</h2>
+          </div>
+        </div>
+        <div class="admin-note-list">
+          <p>深蹲膝关节角度：最低 80°，低于阈值提示“下蹲深度不足”。</p>
+          <p>俯卧撑躯干稳定：髋肩偏移超过阈值提示“身体塌腰”。</p>
+          <p>开合跳节奏：连续帧节奏过快时提示“动作幅度不足”。</p>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">Template</p>
+            <h2>模板生成说明</h2>
+          </div>
+        </div>
+        <p class="subtle">上传标准动作视频后，系统会提取有效帧、关键角度曲线和动作周期，用于后续模板相似性评分。</p>
+      </article>
+    </section>
+
     <div v-if="showTemplateModal" class="modal-overlay" @click.self="closeTemplateModal">
       <div class="modal-content">
         <div class="modal-header">
           <h3>添加标准动作模板</h3>
-          <button class="close-button" @click="closeTemplateModal">
+          <button class="close-button" type="button" @click="closeTemplateModal">
             <X :size="20" />
           </button>
         </div>
@@ -109,25 +115,15 @@
           </label>
 
           <label class="file-upload" :class="{ 'has-file': templateForm.videoFile }">
-            <input
-              ref="fileInput"
-              type="file"
-              accept="video/*"
-              @change="handleFileChange"
-              required
-            />
+            <input ref="fileInput" type="file" accept="video/*" required @change="handleFileChange" />
             <Upload :size="32" />
-            <span>{{ templateForm.videoFile ? templateForm.videoFile.name : '点击上传标准动作视频' }}</span>
+            <span>{{ templateForm.videoFile ? templateForm.videoFile.name : "点击上传标准动作视频" }}</span>
             <small>支持 MP4、MOV、AVI 等常见格式</small>
           </label>
 
           <div v-if="templateError" class="error-message">{{ templateError }}</div>
 
-          <button 
-            class="primary-button" 
-            type="submit" 
-            :disabled="isUploading || !templateForm.videoFile"
-          >
+          <button class="primary-button" type="submit" :disabled="isUploading || !templateForm.videoFile">
             <Loader2 v-if="isUploading" :size="18" class="spin" />
             <span v-else>生成模板</span>
           </button>
@@ -139,24 +135,12 @@
 
 <script setup lang="ts">
 import { reactive, ref } from "vue";
-import { useRouter } from "vue-router";
-import { useAuthStore } from "@/stores/auth";
 import { apiUpload } from "@/api/client";
-import { useTrainingStore, exercises as trainingExercises } from "@/stores/training";
-import { Dumbbell, Plus, Upload, X, CheckCircle, Loader2 } from "lucide-vue-next";
-
-const router = useRouter();
-const trainingStore = useTrainingStore();
-const authStore = useAuthStore();
+import { exercises as trainingExercises } from "@/stores/training";
+import { CheckCircle, Loader2, Plus, Upload, X } from "lucide-vue-next";
 
 const exercises = trainingExercises;
 
-function start(exerciseKey: string) {
-  trainingStore.setExercise(exerciseKey);
-  router.push("/realtime");
-}
-
-// 模板弹窗相关
 const showTemplateModal = ref(false);
 const isUploading = ref(false);
 const templateUploadSuccess = ref(false);
@@ -164,7 +148,7 @@ const templateError = ref("");
 const templateResult = reactive({
   valid_frames: 0,
   template_path: "",
-  curve_count: 0,
+  curve_count: 0
 });
 
 const templateForm = reactive({
@@ -172,11 +156,11 @@ const templateForm = reactive({
   name: "",
   view: "side",
   version: "v1",
-  videoFile: null as File | null,
+  videoFile: null as File | null
 });
 
-function openTemplateModal(exercise: typeof exercises[0]) {
-  if (!authStore.isAdmin) {
+function openTemplateModal(exercise: (typeof exercises)[0]) {
+  if (exercise.key !== "squat") {
     return;
   }
   templateForm.action = exercise.key;
@@ -195,9 +179,7 @@ function closeTemplateModal() {
 
 function handleFileChange(event: Event) {
   const input = event.target as HTMLInputElement;
-  if (input.files && input.files.length > 0) {
-    templateForm.videoFile = input.files[0];
-  }
+  templateForm.videoFile = input.files?.[0] ?? null;
 }
 
 async function submitTemplate() {
@@ -217,7 +199,6 @@ async function submitTemplate() {
     formData.append("version", templateForm.version);
 
     const result = await apiUpload<any>(`/exercises/${templateForm.action}/templates/from-video`, formData);
-
     templateResult.valid_frames = result.valid_frames || 0;
     templateResult.template_path = result.template_path || "";
     templateResult.curve_count = result.curve_count || 0;

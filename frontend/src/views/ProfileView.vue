@@ -121,7 +121,10 @@
     </section>
 
     <section class="panel profile-logout-panel">
-      <button class="logout-link" type="button" @click="logout">退出登录</button>
+      <button class="logout-link" type="button" @click="logout">
+        <LogOut :size="18" />
+        退出登录
+      </button>
     </section>
 
     <Teleport to="body">
@@ -183,14 +186,16 @@
 <script setup lang="ts">
 import { onUnmounted, ref } from "vue";
 import { storeToRefs } from "pinia";
-import { ArrowLeft, Check, X } from "lucide-vue-next";
+import { ArrowLeft, Check, LogOut, X } from "lucide-vue-next";
 import { useRouter } from "vue-router";
 
 import AvatarCropper from "../components/AvatarCropper.vue";
 import UserAvatar from "../components/UserAvatar.vue";
+import { useAuthStore } from "../stores/auth";
 import { TRAINING_PREFERENCE_OPTIONS, OCCUPATION_OPTIONS, setCustomAvatar, setDefaultAvatar, useProfileStore } from "../stores/profile";
 
 const router = useRouter();
+const authStore = useAuthStore();
 const { profile } = storeToRefs(useProfileStore());
 const trainingPreferenceOptions = TRAINING_PREFERENCE_OPTIONS;
 const occupationOptions = OCCUPATION_OPTIONS;
@@ -228,9 +233,8 @@ function goHome() {
 }
 
 function logout() {
-  localStorage.removeItem("pose-evaluation-auth");
-  window.alert("已退出登录");
-  router.push("/");
+  authStore.logout();
+  router.push("/login");
 }
 
 function resetCropState() {

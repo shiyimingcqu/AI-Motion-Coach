@@ -105,10 +105,11 @@ export const useSettingsStore = defineStore("settings", () => {
     };
   }
 
-  function clearLocalCache() {
+  function resetToDefaults() {
+    resetSettings();
     return {
-      ok: false,
-      message: "清除本地缓存功能开发中，敬请期待。"
+      ok: true,
+      message: "本地设置已恢复默认。"
     };
   }
 
@@ -117,6 +118,6 @@ export const useSettingsStore = defineStore("settings", () => {
     resetSettings,
     exportSettingsJson,
     importSettingsJson,
-    clearLocalCache
+    resetToDefaults
   };
 });
