@@ -15,11 +15,20 @@ export interface Session {
   session_id: string;
   exercise: string;
   date: string;
+  created_at?: string;
   duration_seconds: number;
   total_count: number;
   valid_count: number;
   error_count: number;
   average_score: number;
+}
+
+export interface LiveAnalysisResult {
+  stage: string;
+  count: number;
+  valid_count: number;
+  score: number;
+  errors: string[];
 }
 
 export const exercises: Exercise[] = [
@@ -34,7 +43,7 @@ export const exercises: Exercise[] = [
     accent: "#22c55e"
   },
   {
-    key: "pushup",
+    key: "push_up",
     name: "俯卧撑",
     category: "上肢力量",
     level: "中级",
@@ -138,6 +147,20 @@ export const useTrainingStore = defineStore("training", {
       if (meta) {
         this.errors = meta.errors;
       }
+    },
+    updateLiveMetrics(result: LiveAnalysisResult) {
+      this.stage = result.stage;
+      this.count = result.count;
+      this.validCount = result.valid_count;
+      this.score = result.score;
+      this.errors = result.errors;
+    },
+    resetLiveMetrics() {
+      this.stage = "ready";
+      this.count = 0;
+      this.validCount = 0;
+      this.score = 0;
+      this.errors = [];
     }
   }
 });

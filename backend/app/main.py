@@ -1,5 +1,6 @@
 from app.api.router import create_api_router
 from app.core.config import settings
+from app.db.init_db import init_db
 
 try:
     from fastapi import FastAPI
@@ -20,6 +21,10 @@ def create_app():
         return DependencyMissingApp()
 
     application = FastAPI(title=settings.app_name, version=settings.app_version)
+
+    # 初始化数据库（创建表和默认账号）
+    init_db()
+
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,

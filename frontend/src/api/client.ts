@@ -1,9 +1,42 @@
+import { useAuthStore } from "@/stores/auth";
+
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
+export function apiWebSocketUrl(path: string): string {
+  const base = API_BASE.endsWith("/") ? API_BASE.slice(0, -1) : API_BASE;
+
+  if (base.startsWith("http://") || base.startsWith("https://")) {
+    return `${base.replace(/^http/, "ws")}${path}`;
+  }
+
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}${base}${path}`;
+}
+
+function getAuthHeaders(): Record<string, string> {
+  const authStore = useAuthStore();
+  const headers: Record<string, string> = {};
+  if (authStore.token) {
+    headers["Authorization"] = `Bearer ${authStore.token}`;
+  }
+  return headers;
+}
+
+function handleUnauthorized(response: Response): never {
+  if (response.status === 401) {
+    const authStore = useAuthStore();
+    authStore.logout();
+    window.location.href = "/login";
+  }
+  throw new Error(`Request failed: ${response.status}`);
+}
+
 export async function apiGet<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`);
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: getAuthHeaders(),
+  });
   if (!response.ok) {
-    throw new Error(`GET ${path} failed: ${response.status}`);
+    handleUnauthorized(response);
   }
   return response.json();
 }
@@ -11,11 +44,40 @@ export async function apiGet<T>(path: string): Promise<T> {
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
-    throw new Error(`POST ${path} failed: ${response.status}`);
+    handleUnauthorized(response);
+  }
+  return response.json();
+}
+
+export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    handleUnauthorized(response);
+  }
+  return response.json();
+}
+
+export async function apiDelete<T>(path: string): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  if (!response.ok) {
+    handleUnauthorized(response);
   }
   return response.json();
 }
@@ -23,10 +85,11 @@ export async function apiPost<T>(path: string, body: unknown): Promise<T> {
 export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     method: "POST",
-    body: formData
+    headers: getAuthHeaders(),
+    body: formData,
   });
   if (!response.ok) {
-    throw new Error(`UPLOAD ${path} failed: ${response.status}`);
+    handleUnauthorized(response);
   }
   return response.json();
 }
