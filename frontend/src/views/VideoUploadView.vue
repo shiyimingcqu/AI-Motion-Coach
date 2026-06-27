@@ -123,7 +123,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import {
   BarChart3,
   CheckCircle2,
@@ -134,7 +134,7 @@ import {
   Upload
 } from "lucide-vue-next";
 
-import { apiUpload } from "../api/client";
+import { apiGet, apiUpload } from "../api/client";
 import { exercises } from "../stores/training";
 
 interface AnalysisTask {
@@ -169,44 +169,23 @@ const uploadState = ref<"idle" | "ready" | "uploading" | "success" | "failed">("
 const message = ref("");
 const latestTask = ref<AnalysisTask | null>(null);
 const localPreviewUrl = ref("");
-
-const defaultHistory: HistoryItem[] = [
-  {
-    id: "h1",
-    name: "squat_session_001.mp4",
-    date: "2026-06-25 14:30",
-    duration: "2:45",
-    score: 92,
-    errors: 2,
-    status: "completed"
-  },
-  {
-    id: "h2",
-    name: "pushup_training_023.mp4",
-    date: "2026-06-25 13:15",
-    duration: "1:30",
-    score: 85,
-    errors: 4,
-    status: "completed"
-  },
-  {
-    id: "h3",
-    name: "plank_exercise_045.mp4",
-    date: "2026-06-25 12:00",
-    duration: "3:00",
-    status: "processing"
-  }
-];
+const allTasks = ref<AnalysisTask[]>([]);
+const tasksLoading = ref(true);
 
 const analysisHistory = computed<HistoryItem[]>(() => {
-  if (!latestTask.value) return defaultHistory;
-  const uploadedName = selectedFile.value?.name ?? "uploaded_training_video.mp4";
-  const reportUrl = latestTask.value.output_uri
-    ? `/api/files/${encodeFilePath(latestTask.value.output_uri)}`
-    : undefined;
+  const items: HistoryItem[] = (allTasks.value || []).map(t => ({
+    id: t.task_id,
+    name: t.source_uri?.split("/").pop() || t.task_id.slice(0, 12) + ".mp4",
+    date: "uploaded",
+    duration: "-",
+    status: t.status === "pending" || t.status === "processing" ? "processing" : "completed",
+    reportUrl: t.output_uri ? `/api/files/${t.output_uri.replace(/\\/g, "/").split("/").map(encodeURIComponent).join("/")}` : undefined,
+  }));
 
-  return [
-    {
+  // Add latest upload at top if not yet in backend list
+  if (latestTask.value && !items.some(i => i.id === latestTask.value?.task_id)) {
+    const uploadedName = selectedFile.value?.name ?? "uploaded_training_video.mp4";
+    items.unshift({
       id: latestTask.value.task_id,
       name: uploadedName,
       date: "Just now / 刚刚",
@@ -214,24 +193,30 @@ const analysisHistory = computed<HistoryItem[]>(() => {
       score: uploadState.value === "success" ? 90 : undefined,
       errors: uploadState.value === "success" ? 3 : undefined,
       status: uploadState.value === "success" ? "completed" : "processing",
-      reportUrl
-    },
-    ...defaultHistory
+      reportUrl: latestTask.value.output_uri ? `/api/files/${encodeFilePath(latestTask.value.output_uri)}` : undefined,
+    });
+  }
+
+  return items.slice(0, 20);
+});
+
+const uploadStats = computed(() => {
+  const total = allTasks.value.length + (latestTask.value ? 1 : 0);
+  const completed = allTasks.value.filter(t => t.status === "success" || t.status === "completed").length + (uploadState.value === "success" ? 1 : 0);
+  const processing = allTasks.value.filter(t => t.status === "pending" || t.status === "processing").length + (uploadState.value === "uploading" ? 1 : 0);
+  return [
+    { label: "Total Videos / 总视频数", value: total || "--", icon: FileText, tone: "tone-blue" },
+    { label: "Completed / 已完成", value: completed || "--", icon: CheckCircle2, tone: "tone-green" },
+    { label: "Processing / 处理中", value: processing || "--", icon: LoaderCircle, tone: "tone-orange" },
   ];
 });
 
-const uploadStats = computed(() => [
-  { label: "Total Videos / 总视频数", value: 247 + (latestTask.value ? 1 : 0), icon: FileText, tone: "tone-blue" },
-  { label: "Completed / 已完成", value: 245 + (uploadState.value === "success" ? 1 : 0), icon: CheckCircle2, tone: "tone-green" },
-  { label: "Processing / 处理中", value: uploadState.value === "uploading" ? 3 : 2, icon: LoaderCircle, tone: "tone-orange" }
-]);
-
 function exerciseDisplayName(key: string) {
   const names: Record<string, string> = {
-    squat: "Squat / 深蹲",
-    pushup: "Push-up / 俯卧撑",
-    jumping_jack: "Jumping Jack / 开合跳",
-    plank: "Plank / 平板支撑"
+    squat: "深蹲",
+    pushup: "俯卧撑",
+    jumping_jack: "开合跳",
+    plank: "平板支撑"
   };
   return names[key] ?? key;
 }
@@ -298,10 +283,26 @@ async function uploadVideo() {
     latestTask.value = result.task;
     uploadState.value = "success";
     message.value = `分析完成：${result.task.task_id}`;
+    // Refresh task list
+    await loadTasks();
   } catch {
     uploadState.value = "failed";
     latestTask.value = null;
     message.value = "上传失败，请确认后端服务已启动。";
   }
 }
+
+async function loadTasks() {
+  tasksLoading.value = true;
+  try {
+    const data = await apiGet<{ items: any[] }>("/analysis/tasks");
+    allTasks.value = data.items || [];
+  } catch {
+    allTasks.value = [];
+  } finally {
+    tasksLoading.value = false;
+  }
+}
+
+onMounted(loadTasks);
 </script>

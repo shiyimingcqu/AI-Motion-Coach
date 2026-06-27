@@ -137,7 +137,6 @@ const navGroups = computed<NavGroup[]>(() => [
     items: [
       { path: "/sessions", label: "Training Sessions / 训练记录", icon: ListChecks },
       { path: "/exercises", label: "Exercise Library / 动作库", icon: Dumbbell },
-      { path: "/sessions", label: "Correction Plans / 纠错方案", icon: ClipboardList },
       { path: "/progress", label: "Personal Progress / 个人进步", icon: TrendingUp }
     ]
   },
@@ -154,10 +153,9 @@ const navGroups = computed<NavGroup[]>(() => [
     title: "System Management / 系统管理",
     items: [
       { path: "/rules", label: "Exercise Rules / 动作规则配置", icon: SlidersHorizontal },
-      { path: "/rules", label: "Scoring Templates / 评分模板", icon: ClipboardList },
       { path: "/users", label: "User Management / 用户管理", icon: UsersRound },
       { path: "/settings", label: "Settings / 系统设置", icon: Settings },
-      { path: "/realtime", label: "Skeleton Tracking / 骨架关键点", icon: Activity }
+      // { path: "/realtime", label: "Skeleton Tracking / 骨架关键点", icon: Activity }
     ]
   }
 ]);

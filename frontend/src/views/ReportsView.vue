@@ -5,7 +5,6 @@
         <h1>Evaluation Reports / 评估报告</h1>
         <p>Comprehensive analysis and performance reports</p>
       </div>
-      <button class="blue-action-button" type="button">Generate Report</button>
     </header>
 
     <section class="summary-card-grid">
@@ -18,14 +17,23 @@
     <section class="filter-card report-filter-card">
       <label class="session-search">
         <Filter :size="18" />
-        <input type="search" placeholder="Search reports... / 搜索报告..." />
+        <input v-model="keyword" type="search" placeholder="Search reports... / 搜索报告..." />
       </label>
-      <select><option>All Types</option></select>
-      <select><option>All Status</option></select>
+      <select v-model="typeFilter">
+        <option value="">All Types</option>
+        <option value="Monthly">Monthly</option>
+        <option value="Weekly">Weekly</option>
+      </select>
+      <select v-model="sortOrder">
+        <option value="desc">Newest</option>
+        <option value="asc">Oldest</option>
+      </select>
     </section>
 
     <section class="report-table-card">
-      <table class="report-table">
+      <StateDisplay v-if="loading" type="loading" skeleton="table" :skeleton-rows="5" text="正在加载报告..." />
+      <StateDisplay v-else-if="filteredReports.length === 0" type="empty" title="暂无报告" text="完成训练后，报告将自动生成" />
+      <table v-else class="report-table">
         <thead>
           <tr>
             <th>REPORT / 报告名称</th>
@@ -38,7 +46,7 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="report in reports" :key="report.title">
+          <tr v-for="report in filteredReports" :key="report.id || report.title">
             <td>
               <div class="report-name-cell">
                 <span><FileText :size="18" /></span>
@@ -51,13 +59,13 @@
             <td><span class="report-type-pill">{{ report.type }}</span></td>
             <td>{{ report.date }}</td>
             <td>
-              <span>{{ report.exercises }} exercises</span>
-              <small>{{ report.sessions }} sessions</small>
+              <span>{{ report.exercises_count || 0 }} exercises</span>
+              <small>{{ report.sessions_count || 0 }} sessions</small>
             </td>
             <td>
               <div class="score-progress">
-                <i :class="report.score >= 90 ? 'progress-green' : 'progress-blue'" :style="{ width: `${report.score}%` }" />
-                <strong>{{ report.score }}</strong>
+                <i :class="report.average_score >= 90 ? 'progress-green' : 'progress-blue'" :style="{ width: report.average_score + '%' }" />
+                <strong>{{ report.average_score }}</strong>
               </div>
             </td>
             <td>{{ report.size }}</td>
@@ -76,7 +84,7 @@
       <span class="blue-solid"><ClipboardList :size="25" /></span>
       <div>
         <h2>Automated Report Generation / 自动报告生成</h2>
-        <p>Reports are automatically generated weekly and monthly. You can also create custom reports for specific exercises or time periods.</p>
+        <p>Reports are automatically generated weekly and monthly from training session data.</p>
         <button class="blue-action-button small-blue-button" type="button">Learn More</button>
       </div>
     </section>
@@ -84,20 +92,85 @@
 </template>
 
 <script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
 import { ClipboardList, Download, Eye, FileText, Filter } from "lucide-vue-next";
+import StateDisplay from "../components/StateDisplay.vue";
+import { getPersonalReport } from "../api/reports";
 
-const stats = [
-  { label: "Total Reports / 总报告数", value: 47 },
-  { label: "This Month / 本月", value: 5 },
-  { label: "Published / 已发布", value: 45 },
-  { label: "Drafts / 草稿", value: 2 }
-];
+interface ReportItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  type: string;
+  date: string;
+  exercises_count: number;
+  sessions_count: number;
+  average_score: number;
+  size: string;
+}
 
-const reports = [
-  { title: "Monthly Performance Report - June 2026", subtitle: "6月月度表现报告", type: "Monthly", date: "2026-06-25", exercises: 8, sessions: 22, score: 88, size: "2.4 MB" },
-  { title: "Squat Technique Analysis", subtitle: "深蹲技术分析", type: "Exercise-Specific", date: "2026-06-20", exercises: 1, sessions: 15, score: 90, size: "1.8 MB" },
-  { title: "Weekly Progress Summary - Week 25", subtitle: "第25周进度总结", type: "Weekly", date: "2026-06-18", exercises: 6, sessions: 5, score: 87, size: "1.2 MB" },
-  { title: "Core Strength Assessment", subtitle: "核心力量评估", type: "Assessment", date: "2026-06-15", exercises: 4, sessions: 8, score: 85, size: "1.5 MB" },
-  { title: "Upper Body Performance Q2 2026", subtitle: "上肢表现Q2 2026", type: "Quarterly", date: "2026-06-10", exercises: 12, sessions: 45, score: 86, size: "3.2 MB" }
-];
+const reports = ref<ReportItem[]>([]);
+const loading = ref(true);
+const keyword = ref("");
+const typeFilter = ref("");
+const sortOrder = ref("desc");
+
+const filteredReports = computed(() => {
+  let list = [...reports.value];
+
+  if (typeFilter.value) {
+    list = list.filter(r => r.type === typeFilter.value);
+  }
+
+  const query = keyword.value.trim().toLowerCase();
+  if (query) {
+    list = list.filter(r =>
+      r.title.toLowerCase().includes(query) ||
+      r.subtitle.toLowerCase().includes(query)
+    );
+  }
+
+  list.sort((a, b) => {
+    const diff = a.date.localeCompare(b.date);
+    return sortOrder.value === "desc" ? -diff : diff;
+  });
+
+  return list;
+});
+
+const stats = computed(() => {
+  const total = reports.value.length;
+  const avgScore = total > 0
+    ? reports.value.reduce((s, r) => s + r.average_score, 0) / total
+    : 0;
+  return [
+    { label: "Total Reports / 总报告数", value: total },
+    { label: "Avg Score / 平均分", value: avgScore.toFixed(1) },
+    { label: "Exercises / 动作数", value: reports.value.reduce((s, r) => s + (r.exercises_count || 0), 0) },
+    { label: "Sessions / 训练次数", value: reports.value.reduce((s, r) => s + (r.sessions_count || 0), 0) },
+  ];
+});
+
+onMounted(async () => {
+  try {
+    const data = await getPersonalReport();
+    // Transform personal report data into ReportItem format
+    const item: ReportItem = {
+      id: "report-personal",
+      title: "Personal Performance Report",
+      subtitle: "个人训练表现报告",
+      type: "Monthly",
+      date: new Date().toISOString().slice(0, 10),
+      exercises_count: data.recent_sessions?.length || 0,
+      sessions_count: data.total_sessions || 0,
+      average_score: data.average_score || 0,
+      size: `${data.total_sessions || 0} sessions`,
+    };
+    reports.value = data.total_sessions > 0 ? [item] : [];
+  } catch {
+    reports.value = [];
+  } finally {
+    loading.value = false;
+  }
+});
 </script>

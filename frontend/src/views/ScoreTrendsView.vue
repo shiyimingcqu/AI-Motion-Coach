@@ -1,5 +1,6 @@
 <template>
-  <div class="score-trends-page">
+  <StateDisplay v-if="loading" type="loading" skeleton="chart" />
+  <div v-else class="score-trends-page">
     <header class="section-page-header">
       <div>
         <h1>Score Trends / 分数趋势</h1>
@@ -21,14 +22,16 @@
         <select><option>Last 7 Days</option></select>
       </header>
       <div class="wide-line-chart score-line-chart">
-        <svg viewBox="0 0 1000 240" preserveAspectRatio="none">
-          <polyline points="0,142 165,126 330,132 500,98 665,82 830,90 1000,62" fill="none" stroke="#4f7df3" stroke-width="3" />
+        <svg v-if="trendPoints.length" viewBox="0 0 1000 240" preserveAspectRatio="none">
+          <polyline :points="trendPolyline" fill="none" stroke="#4f7df3" stroke-width="3" />
           <g fill="#4f7df3">
-            <circle cx="0" cy="142" r="6" /><circle cx="165" cy="126" r="6" /><circle cx="330" cy="132" r="6" />
-            <circle cx="500" cy="98" r="6" /><circle cx="665" cy="82" r="6" /><circle cx="830" cy="90" r="6" /><circle cx="1000" cy="62" r="6" />
+            <circle v-for="(p, i) in trendPoints" :key="i" :cx="p.x" :cy="p.y" r="6" />
           </g>
         </svg>
-        <div class="chart-axis"><span>Jun 19</span><span>Jun 20</span><span>Jun 21</span><span>Jun 22</span><span>Jun 23</span><span>Jun 24</span><span>Jun 25</span></div>
+        <div v-if="trendLabels.length" class="chart-axis">
+          <span v-for="(label, i) in trendLabels" :key="i">{{ label }}</span>
+        </div>
+        <StateDisplay v-if="!trendPoints.length" type="empty" title="暂无趋势数据" text="完成训练后趋势图表将自动生成" />
       </div>
     </section>
 
@@ -67,23 +70,121 @@
 </template>
 
 <script setup lang="ts">
-const stats = [
-  { label: "Current Avg / 当前平均分", value: 88, hint: "+6 vs last week", tone: "" },
-  { label: "Peak Score / 最高分", value: 95, hint: "June 23, 2026", tone: "" },
-  { label: "Improvement / 改进率", value: "+12%", hint: "Last 30 days", tone: "tone-text-green" },
-  { label: "Consistency / 一致性", value: "94%", hint: "Score variance", tone: "" }
-];
+import { computed, onMounted, ref } from "vue";
+import { getSessions, type SessionRecord } from "../api/sessions";
+import { getDashboardStats } from "../api/dashboard";
+import StateDisplay from "../components/StateDisplay.vue";
 
-const comparisons = [
-  { name: "Squat", score: 82 },
-  { name: "Push-up", score: 78 },
-  { name: "Plank", score: 82 },
-  { name: "Lunge", score: 76 },
-  { name: "Burpee", score: 75 }
-];
+const sessions = ref<SessionRecord[]>([]);
+const statsData = ref<any>(null);
+const loading = ref(true);
 
-const breakdown = [
-  { name: "Squat", current: 90, change: 8, previous: 82, average: 85 },
-  { name: "Push-up", current: 85, change: 7, previous: 78, average: 80 }
-];
+const trendData = computed(() => statsData.value?.recent_trend || []);
+
+const trendPoints = computed(() => {
+  const data = trendData.value;
+  if (!data || data.length < 2) return [];
+  const width = 1000;
+  const height = 240;
+  const padding = 30;
+  const scores = data.map((d: any) => d.score);
+  const minScore = Math.max(0, Math.min(...scores) - 10);
+  const maxScore = Math.min(100, Math.max(...scores) + 10);
+  const range = maxScore - minScore || 1;
+
+  return data.map((d: any, i: number) => ({
+    x: Math.round(padding + (i / (data.length - 1)) * (width - 2 * padding)),
+    y: Math.round(height - padding - ((d.score - minScore) / range) * (height - 2 * padding)),
+    label: d.date?.slice(5) || "",
+    score: d.score,
+  }));
+});
+
+const trendPolyline = computed(() =>
+  trendPoints.value.map(p => `${p.x},${p.y}`).join(" ")
+);
+
+const trendLabels = computed(() =>
+  trendPoints.value.map(p => p.label)
+);
+
+const stats = computed(() => {
+  const avg = statsData.value?.average_score || 0;
+  const trend = statsData.value?.recent_trend || [];
+  const trendScores = trend.map((d: any) => d.score);
+  const peak = trendScores.length ? Math.max(...trendScores) : 0;
+  const peakDate = trendScores.length ? trend[trendScores.indexOf(peak)]?.date || "" : "";
+  const weekAgo = trendScores.length >= 2 ? trendScores[trendScores.length - 1] - trendScores[0] : 0;
+  const avgSessionScore = sessions.value.length
+    ? Math.round(sessions.value.reduce((s, x) => s + x.average_score, 0) / sessions.value.length)
+    : 0;
+  return [
+    { label: "Current Avg / 当前平均分", value: avgSessionScore || avg, hint: weekAgo >= 0 ? `+${weekAgo} vs last week` : `${weekAgo} vs last week`, tone: weekAgo >= 0 ? "tone-text-green" : "" },
+    { label: "Peak Score / 最高分", value: peak, hint: peakDate || "-", tone: "" },
+    { label: "Improvement / 改进率", value: sessions.value.length >= 2 ? `+${Math.max(0, weekAgo)}%` : "New", hint: "Last 7 days", tone: "tone-text-green" },
+    { label: "Total Sessions / 总次数", value: sessions.value.length, hint: "Total training sessions", tone: "" },
+  ];
+});
+
+const comparisons = computed(() => {
+  const byEx: Record<string, number[]> = {};
+  for (const s of sessions.value) {
+    if (!byEx[s.exercise]) byEx[s.exercise] = [];
+    byEx[s.exercise].push(s.average_score);
+  }
+  const result = Object.entries(byEx).map(([key, scores]) => ({
+    name: exerciseName(key),
+    score: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+  }));
+  return result.length ? result : [{ name: "No data", score: 0 }];
+});
+
+const breakdown = computed(() => {
+  const byEx: Record<string, { current: number; previous: number; count: number; scores: number[] }> = {};
+  for (const s of sessions.value) {
+    if (!byEx[s.exercise]) byEx[s.exercise] = { current: 0, previous: 0, count: 0, scores: [] };
+    byEx[s.exercise].scores.push(s.average_score);
+    byEx[s.exercise].current = s.average_score;
+    byEx[s.exercise].count += 1;
+  }
+  return Object.entries(byEx).map(([key, vals]) => {
+    const prev = vals.scores.length >= 2 ? vals.scores[vals.scores.length - 2] : vals.current;
+    const avg = vals.scores.length
+      ? Math.round(vals.scores.reduce((a, b) => a + b, 0) / vals.scores.length)
+      : vals.current;
+    return {
+      name: exerciseName(key),
+      current: vals.current,
+      change: vals.scores.length >= 2 ? vals.current - prev : 0,
+      previous: prev,
+      average: avg,
+    };
+  }).slice(0, 5);
+});
+
+function exerciseName(key: string): string {
+  const map: Record<string, string> = {
+    squat: "深蹲", push_up: "俯卧撑", jumping_jack: "开合跳", plank: "平板支撑",
+  };
+  return map[key] ?? key;
+}
+
+onMounted(async () => {
+  try {
+    const [sessRes, statsRes] = await Promise.allSettled([
+      getSessions({ limit: 200 }),
+      getDashboardStats(),
+    ]);
+    if (sessRes.status === "fulfilled") {
+      sessions.value = sessRes.value.items || [];
+    }
+    if (statsRes.status === "fulfilled") {
+      statsData.value = statsRes.value;
+    }
+  } catch {
+    // defaults apply
+  } finally {
+    loading.value = false;
+  }
+});
 </script>

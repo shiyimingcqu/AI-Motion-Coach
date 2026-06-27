@@ -12,7 +12,7 @@
     </header>
 
     <section class="summary-card-grid">
-      <article v-for="item in stats" :key="item.label" class="summary-card">
+      <article v-for="item in summaryCards" :key="item.label" class="summary-card">
         <span>{{ item.label }}</span>
         <strong :class="item.tone">{{ item.value }}</strong>
       </article>
@@ -21,50 +21,52 @@
     <section class="filter-card user-filter-card">
       <label class="session-search">
         <Search :size="20" />
-        <input type="search" placeholder="Search users... / 搜索用户..." />
+        <input v-model="keyword" type="search" placeholder="Search users... / 搜索用户..." />
       </label>
-      <select><option>All Roles</option></select>
-      <select><option>All Status</option></select>
+      <select v-model="roleFilter">
+        <option value="">All Roles</option>
+        <option value="admin">Admin</option>
+        <option value="user">User</option>
+      </select>
+      <select v-model="statusFilter">
+        <option value="">All Status</option>
+        <option value="active">Active</option>
+        <option value="inactive">Inactive</option>
+      </select>
     </section>
 
     <section class="users-table-card">
-      <table class="users-table">
+      <StateDisplay v-if="loading" type="loading" size="sm" />
+      <StateDisplay v-else-if="filteredUsers.length === 0" type="empty" title="暂无用户" size="sm" />
+      <table v-else class="users-table">
         <thead>
           <tr>
             <th>USER / 用户</th>
             <th>ROLE / 角色</th>
-            <th>SESSIONS / 训练次数</th>
-            <th>AVG SCORE / 平均分</th>
             <th>STATUS / 状态</th>
             <th>JOINED / 加入时间</th>
             <th>ACTIONS / 操作</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="user in users" :key="user.email">
+          <tr v-for="u in filteredUsers" :key="u.id">
             <td>
               <div class="user-table-cell">
-                <span>{{ user.initial }}</span>
+                <span>{{ u.username.charAt(0).toUpperCase() }}</span>
                 <div>
-                  <strong>{{ user.name }}</strong>
-                  <small>
-                    <Mail :size="13" />
-                    {{ user.email }}
-                  </small>
+                  <strong>{{ u.username }}</strong>
                 </div>
               </div>
             </td>
-            <td><span class="role-pill" :class="user.role.toLowerCase()">{{ user.role }}</span></td>
-            <td>{{ user.sessions }}</td>
+            <td><span class="role-pill" :class="u.role">{{ u.role }}</span></td>
+            <td><span class="status-badge" :class="{ inactive: !u.is_active }">{{ u.is_active ? "Active" : "Inactive" }}</span></td>
+            <td>{{ u.created_at?.slice(0, 10) || "-" }}</td>
             <td>
-              <div class="score-progress">
-                <i :class="user.score >= 90 ? 'progress-green' : user.score < 80 ? 'progress-orange' : 'progress-blue'" :style="{ width: `${user.score}%` }" />
-                <strong>{{ user.score }}</strong>
+              <div class="action-cell">
+                <button class="link-button" type="button" @click="toggleActive(u)">{{ u.is_active ? 'Deactivate' : 'Activate' }}</button>
+                <button class="delete-button" type="button" @click="handleDelete(u)">Delete</button>
               </div>
             </td>
-            <td><span class="status-badge" :class="{ inactive: user.status === 'Inactive' }">{{ user.status }}</span></td>
-            <td>{{ user.joined }}</td>
-            <td><MoreVertical :size="18" /></td>
           </tr>
         </tbody>
       </table>
@@ -73,20 +75,67 @@
 </template>
 
 <script setup lang="ts">
-import { Mail, MoreVertical, Search, UserPlus } from "lucide-vue-next";
+import { computed, onMounted, ref } from "vue";
+import { Search, UserPlus } from "lucide-vue-next";
+import StateDisplay from "../components/StateDisplay.vue";
+import { getUsers, updateUser, deleteUser, type UserRecord } from "../api/admin";
 
-const stats = [
-  { label: "Total Users / 总用户", value: 127, tone: "" },
-  { label: "Active / 活跃", value: 118, tone: "tone-text-green" },
-  { label: "Coaches / 教练", value: 8, tone: "" },
-  { label: "New This Month / 本月新增", value: 12, tone: "tone-text-blue" }
-];
+const users = ref<UserRecord[]>([]);
+const keyword = ref("");
+const roleFilter = ref("");
+const statusFilter = ref("");
+const loading = ref(true);
 
-const users = [
-  { initial: "Z", name: "Zhang Wei / 张伟", email: "zhang.wei@example.com", role: "Admin", sessions: 142, score: 88, status: "Active", joined: "2026-01-15" },
-  { initial: "L", name: "Li Na / 李娜", email: "li.na@example.com", role: "User", sessions: 95, score: 85, status: "Active", joined: "2026-02-20" },
-  { initial: "W", name: "Wang Ming / 王明", email: "wang.ming@example.com", role: "Coach", sessions: 78, score: 92, status: "Active", joined: "2026-03-10" },
-  { initial: "C", name: "Chen Jing / 陈静", email: "chen.jing@example.com", role: "User", sessions: 56, score: 82, status: "Active", joined: "2026-04-05" },
-  { initial: "L", name: "Liu Yang / 刘洋", email: "liu.yang@example.com", role: "User", sessions: 23, score: 78, status: "Inactive", joined: "2026-05-12" }
-];
+const filteredUsers = computed(() => {
+  let list = users.value;
+  if (roleFilter.value) list = list.filter(u => u.role === roleFilter.value);
+  if (statusFilter.value === "active") list = list.filter(u => u.is_active);
+  if (statusFilter.value === "inactive") list = list.filter(u => !u.is_active);
+  const q = keyword.value.trim().toLowerCase();
+  if (q) list = list.filter(u => u.username.toLowerCase().includes(q));
+  return list;
+});
+
+const summaryCards = computed(() => {
+  const total = users.value.length;
+  const admins = users.value.filter(u => u.role === "admin").length;
+  const active = users.value.filter(u => u.is_active).length;
+  return [
+    { label: "Total Users / 总用户数", value: total, tone: "tone-text-blue" },
+    { label: "Admins / 管理员", value: admins, tone: "tone-text-purple" },
+    { label: "Active / 活跃", value: active, tone: "tone-text-green" },
+    { label: "Inactive / 未激活", value: total - active, tone: "tone-text-orange" },
+  ];
+});
+
+async function toggleActive(u: UserRecord) {
+  try {
+    const updated = await updateUser(u.id, { is_active: !u.is_active });
+    const idx = users.value.findIndex(x => x.id === u.id);
+    if (idx >= 0) users.value[idx] = updated;
+  } catch (err: any) {
+    alert("操作失败: " + (err.message || "网络错误"));
+  }
+}
+
+async function handleDelete(u: UserRecord) {
+  if (!confirm(`确定删除用户 "${u.username}"？此操作不可撤销。`)) return;
+  try {
+    await deleteUser(u.id);
+    users.value = users.value.filter(x => x.id !== u.id);
+  } catch (err: any) {
+    alert("删除失败: " + (err.message || "网络错误"));
+  }
+}
+
+onMounted(async () => {
+  try {
+    const data = await getUsers();
+    users.value = data.items || [];
+  } catch {
+    users.value = [];
+  } finally {
+    loading.value = false;
+  }
+});
 </script>
