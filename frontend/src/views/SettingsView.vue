@@ -24,6 +24,18 @@
 
         <label class="setting-row">
           <span>
+            <strong>界面主题</strong>
+            <small>可在深色与浅色（蓝白）之间切换</small>
+          </span>
+          <select v-model="settings.theme">
+            <option v-for="option in themeOptions" :key="option.value" :value="option.value">
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+
+        <label class="setting-row">
+          <span>
             <strong>界面语言</strong>
             <small>切换中英文界面（完整翻译开发中）</small>
           </span>
@@ -156,6 +168,7 @@ import { useRouter } from "vue-router";
 import {
   CAMERA_RESOLUTION_OPTIONS,
   LANGUAGE_OPTIONS,
+  THEME_OPTIONS,
   useSettingsStore
 } from "../stores/settings";
 
@@ -163,6 +176,7 @@ const router = useRouter();
 const settingsStore = useSettingsStore();
 const { settings } = storeToRefs(settingsStore);
 
+const themeOptions = THEME_OPTIONS;
 const languageOptions = LANGUAGE_OPTIONS;
 const cameraResolutionOptions = CAMERA_RESOLUTION_OPTIONS;
 

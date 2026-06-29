@@ -5,8 +5,10 @@ const STORAGE_KEY = "pose-evaluation-settings";
 
 export type AppLanguage = "zh" | "en";
 export type CameraResolution = "auto" | "1280x720" | "1920x1080" | "640x480";
+export type ThemeMode = "dark" | "light";
 
 export interface UserSettings {
+  theme: ThemeMode;
   language: AppLanguage;
   notificationsEnabled: boolean;
   trainingCompleteReminder: boolean;
@@ -19,6 +21,11 @@ export const LANGUAGE_OPTIONS: { value: AppLanguage; label: string }[] = [
   { value: "en", label: "English" }
 ];
 
+export const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
+  { value: "dark", label: "深色（默认）" },
+  { value: "light", label: "浅色（蓝白）" }
+];
+
 export const CAMERA_RESOLUTION_OPTIONS: { value: CameraResolution; label: string }[] = [
   { value: "auto", label: "自动（推荐）" },
   { value: "1920x1080", label: "1920 × 1080" },
@@ -27,6 +34,7 @@ export const CAMERA_RESOLUTION_OPTIONS: { value: CameraResolution; label: string
 ];
 
 const defaultSettings: UserSettings = {
+  theme: "dark",
   language: "zh",
   notificationsEnabled: true,
   trainingCompleteReminder: false,
@@ -36,11 +44,13 @@ const defaultSettings: UserSettings = {
 
 function normalizeSettings(raw: Partial<UserSettings> & Record<string, unknown>): UserSettings {
   const language = raw.language === "en" ? "en" : "zh";
+  const theme = raw.theme === "light" ? "light" : "dark";
   const resolution = CAMERA_RESOLUTION_OPTIONS.some((item) => item.value === raw.cameraResolution)
     ? (raw.cameraResolution as CameraResolution)
     : defaultSettings.cameraResolution;
 
   return {
+    theme,
     language,
     notificationsEnabled: raw.notificationsEnabled !== false,
     trainingCompleteReminder: Boolean(raw.trainingCompleteReminder),
@@ -63,6 +73,10 @@ function loadSettings(): UserSettings {
   }
 }
 
+function syncThemeClass(theme: ThemeMode) {
+  document.documentElement.classList.toggle("theme-light", theme === "light");
+}
+
 function syncLanguageClass(language: AppLanguage) {
   document.documentElement.lang = language === "en" ? "en" : "zh-CN";
 }
@@ -70,12 +84,14 @@ function syncLanguageClass(language: AppLanguage) {
 export const useSettingsStore = defineStore("settings", () => {
   const settings = reactive<UserSettings>(loadSettings());
 
+  syncThemeClass(settings.theme);
   syncLanguageClass(settings.language);
 
   watch(
     settings,
     (value) => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+      syncThemeClass(value.theme);
       syncLanguageClass(value.language);
     },
     { deep: true }

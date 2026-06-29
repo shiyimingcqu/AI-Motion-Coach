@@ -4623,42 +4623,42 @@ body {
 
 /* Global dark theme override */
 :root {
-  color: #f8fafc;
-  background: #05070d;
-  --ink: #f8fafc;
-  --muted: #94a3b8;
-  --paper: #0b1020;
-  --panel: #0f172a;
-  --line: #253047;
-  --deep: #05070d;
+  color: #e6edf7;
+  background: #070b14;
+  --ink: #e6edf7;
+  --muted: #93a4c3;
+  --paper: #0f1628;
+  --panel: #111827;
+  --line: #2e3a59;
+  --deep: #070b14;
   --green: #22c55e;
   --teal: #38bdf8;
-  --signal: #facc15;
-  --danger: #fb7185;
-  --shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
-  --app-bg: #05070d;
-  --app-card: #0f172a;
-  --app-border: #253047;
-  --app-text: #f8fafc;
-  --app-muted: #94a3b8;
-  --app-blue: #60a5fa;
+  --signal: #f59e0b;
+  --danger: #ef4444;
+  --shadow: 0 16px 44px rgba(0, 0, 0, 0.32);
+  --app-bg: #070b14;
+  --app-card: #111827;
+  --app-border: #2e3a59;
+  --app-text: #e6edf7;
+  --app-muted: #93a4c3;
+  --app-blue: #5b8cff;
   --app-green: #22c55e;
-  --app-purple: #c084fc;
-  --app-orange: #fb923c;
+  --app-purple: #8b5cf6;
+  --app-orange: #f59e0b;
 }
 
 html,
 body,
 #app {
-  background: #05070d;
-  color: #f8fafc;
+  background: #070b14;
+  color: #e6edf7;
 }
 
 body {
   background:
-    radial-gradient(circle at top left, rgba(59, 130, 246, 0.18), transparent 30rem),
-    radial-gradient(circle at top right, rgba(168, 85, 247, 0.16), transparent 28rem),
-    #05070d;
+    radial-gradient(circle at 12% -10%, rgba(91, 140, 255, 0.18), transparent 32rem),
+    radial-gradient(circle at 95% -20%, rgba(139, 92, 246, 0.14), transparent 30rem),
+    linear-gradient(180deg, #0b1120 0%, #070b14 45%, #060a13 100%);
 }
 
 .app-dashboard-shell,
@@ -4669,12 +4669,26 @@ body {
   color: #f8fafc;
 }
 
+.standalone-content {
+  background: transparent;
+  color: #f8fafc;
+}
+
 .app-sidebar,
 .app-topbar,
 .app-brand {
-  background: rgba(8, 13, 26, 0.96);
-  color: #f8fafc;
-  border-color: #253047;
+  color: #e6edf7;
+  border-color: #2e3a59;
+}
+
+.app-sidebar {
+  background: linear-gradient(180deg, rgba(11, 18, 36, 0.96), rgba(10, 16, 32, 0.92));
+}
+
+.app-topbar,
+.app-brand {
+  background: rgba(17, 24, 39, 0.88);
+  backdrop-filter: blur(12px);
 }
 
 .app-brand strong,
@@ -4748,8 +4762,8 @@ body {
 
 .app-nav-link.router-link-active,
 .app-nav-link:hover {
-  background: rgba(96, 165, 250, 0.16);
-  color: #93c5fd;
+  background: linear-gradient(90deg, rgba(91, 140, 255, 0.24), rgba(139, 92, 246, 0.14));
+  color: #bfd2ff;
 }
 
 .system-pill {
@@ -4759,8 +4773,8 @@ body {
 
 .app-topbar .logout-button,
 .logout-button {
-  background: #111827;
-  border-color: #334155;
+  background: #121a2d;
+  border-color: #34425f;
   color: #e2e8f0;
 }
 
@@ -4792,10 +4806,10 @@ body {
 .result-panel,
 .filter-panel,
 .exercise-card {
-  background: rgba(15, 23, 42, 0.92);
-  border-color: #253047;
-  color: #f8fafc;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.94), rgba(16, 24, 40, 0.9));
+  border-color: #2e3a59;
+  color: #e6edf7;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.24);
 }
 
 .dashboard-card,
@@ -4823,9 +4837,9 @@ input,
 .quick-button,
 .format-option,
 .details-button {
-  background: #0b1224;
-  border-color: #334155;
-  color: #f8fafc;
+  background: #151f34;
+  border-color: #3a4968;
+  color: #e6edf7;
 }
 
 .session-search input::placeholder,
@@ -5088,18 +5102,26 @@ input::placeholder {
   color: #93c5fd;
 }
 
+.back-link {
+  color: #93c5fd;
+}
+
+.back-link:hover {
+  color: #bfdbfe;
+}
+
 .primary-button,
 .blue-action-button,
 .report-button,
 .tutorial-button,
 .quick-button.active {
-  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  background: linear-gradient(135deg, #5b8cff, #7c5cff);
   color: #ffffff;
 }
 
 .secondary-button {
-  background: #111827;
-  border-color: #334155;
+  background: #151f34;
+  border-color: #3a4968;
   color: #e2e8f0;
 }
 
@@ -5130,4 +5152,353 @@ input::placeholder {
 /* ===== Progress bar colors ===== */
 .progress-orange i {
   background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+/* Unified dark shell (legacy layout: .shell/.sidebar/.topbar) */
+.shell {
+  background: transparent;
+}
+
+.sidebar {
+  background: linear-gradient(180deg, rgba(11, 18, 36, 0.96), rgba(10, 16, 32, 0.92));
+  color: #e2e8f0;
+  border-right: 1px solid #2e3a59;
+}
+
+.brand strong {
+  color: #f8fafc;
+}
+
+.brand small {
+  color: #94a3b8;
+}
+
+.brand-mark {
+  border-color: #60a5fa;
+  color: #60a5fa;
+}
+
+.side-nav a {
+  color: #cbd5e1;
+  border-color: transparent;
+}
+
+.side-nav a.router-link-active,
+.side-nav a:hover {
+  background: linear-gradient(90deg, rgba(91, 140, 255, 0.24), rgba(139, 92, 246, 0.14));
+  border-color: rgba(124, 92, 255, 0.35);
+  color: #bfd2ff;
+}
+
+.topbar {
+  background: rgba(17, 24, 39, 0.88);
+  border-bottom: 1px solid #2e3a59;
+  color: #f8fafc;
+  backdrop-filter: blur(12px);
+}
+
+.topbar strong {
+  color: #f8fafc;
+}
+
+.topbar span {
+  color: #94a3b8;
+}
+
+.search-box {
+  background: #151f34;
+  border-color: #3a4968;
+  color: #f8fafc;
+}
+
+.search-box input {
+  color: #f8fafc;
+}
+
+.search-box input::placeholder {
+  color: #64748b;
+}
+
+/* Blue-white light theme */
+html.theme-light {
+  color-scheme: light;
+}
+
+html.theme-light,
+html.theme-light body,
+html.theme-light #app {
+  background: #f3f7ff;
+  color: #0f172a;
+}
+
+html.theme-light body {
+  background:
+    radial-gradient(circle at 10% -10%, rgba(91, 140, 255, 0.18), transparent 28rem),
+    radial-gradient(circle at 95% -20%, rgba(99, 102, 241, 0.12), transparent 24rem),
+    #f3f7ff;
+}
+
+html.theme-light .app-sidebar,
+html.theme-light .sidebar {
+  background: linear-gradient(180deg, #eef4ff 0%, #e7efff 100%);
+  color: #1e293b;
+  border-right: 1px solid #d6e3ff;
+}
+
+html.theme-light .app-topbar,
+html.theme-light .topbar,
+html.theme-light .app-brand {
+  background: rgba(255, 255, 255, 0.9);
+  color: #0f172a;
+  border-color: #d6e3ff;
+  backdrop-filter: blur(10px);
+}
+
+html.theme-light .brand strong,
+html.theme-light .app-brand strong,
+html.theme-light .topbar strong,
+html.theme-light .app-topbar-title strong {
+  color: #0f172a;
+}
+
+html.theme-light .brand small,
+html.theme-light .topbar span,
+html.theme-light .app-topbar-title span {
+  color: #64748b;
+}
+
+html.theme-light .brand-mark {
+  border-color: #5b8cff;
+  color: #5b8cff;
+}
+
+html.theme-light .side-nav a,
+html.theme-light .app-nav-link {
+  color: #334155;
+}
+
+html.theme-light .side-nav a.router-link-active,
+html.theme-light .side-nav a:hover,
+html.theme-light .app-nav-link.router-link-active,
+html.theme-light .app-nav-link:hover {
+  background: linear-gradient(90deg, rgba(91, 140, 255, 0.22), rgba(124, 92, 255, 0.12));
+  border-color: rgba(91, 140, 255, 0.28);
+  color: #1d4ed8;
+}
+
+html.theme-light .dashboard-metric-card,
+html.theme-light .dashboard-card,
+html.theme-light .summary-card,
+html.theme-light .filter-card,
+html.theme-light .sessions-table-card,
+html.theme-light .streak-card,
+html.theme-light .upload-main-card,
+html.theme-light .analysis-history-card,
+html.theme-light .upload-stat-card,
+html.theme-light .settings-card,
+html.theme-light .settings-side-card,
+html.theme-light .export-card,
+html.theme-light .quick-export-card,
+html.theme-light .users-table-card,
+html.theme-light .feedback-card,
+html.theme-light .ai-recommend-card,
+html.theme-light .report-table-card,
+html.theme-light .automated-report-card,
+html.theme-light .progress-card,
+html.theme-light .library-card,
+html.theme-light .quality-hero,
+html.theme-light .metric-tile,
+html.theme-light .panel,
+html.theme-light .table-panel,
+html.theme-light .upload-zone,
+html.theme-light .result-panel,
+html.theme-light .filter-panel,
+html.theme-light .exercise-card {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  color: #0f172a;
+  border-color: #d6e3ff;
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.08);
+}
+
+html.theme-light input,
+html.theme-light select,
+html.theme-light .search-box,
+html.theme-light .session-search,
+html.theme-light .outline-wide-button,
+html.theme-light .format-option,
+html.theme-light .details-button,
+html.theme-light .quick-button,
+html.theme-light .secondary-button {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: #c7d8fb;
+}
+
+html.theme-light .search-box input,
+html.theme-light .session-search input {
+  color: #0f172a;
+}
+
+html.theme-light .search-box input::placeholder,
+html.theme-light input::placeholder {
+  color: #64748b;
+}
+
+html.theme-light .primary-button,
+html.theme-light .blue-action-button,
+html.theme-light .report-button,
+html.theme-light .tutorial-button,
+html.theme-light .quick-button.active {
+  background: linear-gradient(135deg, #5b8cff, #4f46e5);
+  color: #ffffff;
+}
+
+/* Light theme text correction (override dark hard-coded whites) */
+html.theme-light .section-page-header h1,
+html.theme-light .dashboard-card-header h2,
+html.theme-light .dashboard-metric-card strong,
+html.theme-light .summary-card strong,
+html.theme-light .upload-stat-card strong,
+html.theme-light .dashboard-card h2,
+html.theme-light .settings-card h2,
+html.theme-light .settings-side-card h2,
+html.theme-light .export-card h2,
+html.theme-light .quick-export-card h2,
+html.theme-light .feedback-card h2,
+html.theme-light .ai-recommend-card h2,
+html.theme-light .progress-card h2,
+html.theme-light .library-card-body h2,
+html.theme-light .quality-list strong,
+html.theme-light .report-name-cell strong,
+html.theme-light .user-table-cell strong,
+html.theme-light .sessions-table,
+html.theme-light .report-table,
+html.theme-light .users-table,
+html.theme-light .evaluation-table,
+html.theme-light .analysis-file strong,
+html.theme-light .upload-drop-card strong,
+html.theme-light .format-option strong,
+html.theme-light .date-cell strong,
+html.theme-light .milestone-list strong,
+html.theme-light .score-breakdown-list strong,
+html.theme-light .storage-row strong,
+html.theme-light .system-info-list dd,
+html.theme-light .library-meta-grid strong {
+  color: #0f172a;
+}
+
+html.theme-light .section-page-header p,
+html.theme-light .dashboard-metric-card p,
+html.theme-light .dashboard-metric-card small,
+html.theme-light .summary-card span,
+html.theme-light .upload-stat-card span,
+html.theme-light .settings-card label,
+html.theme-light .settings-card p,
+html.theme-light .settings-side-card,
+html.theme-light .system-info-list dt,
+html.theme-light .format-option small,
+html.theme-light .report-name-cell small,
+html.theme-light .report-table td small,
+html.theme-light .library-card-body p,
+html.theme-light .library-meta-grid span,
+html.theme-light .quality-list p,
+html.theme-light .quality-meta small,
+html.theme-light .milestone-list small,
+html.theme-light .milestone-list time,
+html.theme-light .chart-axis,
+html.theme-light .date-cell span,
+html.theme-light .analysis-file span,
+html.theme-light .evaluation-table th,
+html.theme-light .sessions-table th,
+html.theme-light .report-table th,
+html.theme-light .users-table th {
+  color: #64748b;
+}
+
+html.theme-light .quality-hero {
+  background: linear-gradient(135deg, #dbeafe, #ede9fe);
+  border-color: #c7d2fe;
+}
+
+html.theme-light .quality-hero strong,
+html.theme-light .quality-hero span {
+  color: #1e293b;
+}
+
+/* Light theme refinement: Profile + Settings */
+html.theme-light .settings-page,
+html.theme-light .page.settings-page,
+html.theme-light .page:has(.profile-hero),
+html.theme-light .page {
+  color: #0f172a;
+}
+
+html.theme-light .profile-hero.panel,
+html.theme-light .settings-stack .panel,
+html.theme-light .settings-page .panel {
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+  border-color: #d7e4ff;
+  box-shadow: 0 10px 24px rgba(59, 130, 246, 0.08);
+}
+
+html.theme-light .profile-avatar-button:hover .user-avatar-lg {
+  box-shadow: 0 0 0 2px rgba(91, 140, 255, 0.28);
+}
+
+html.theme-light .profile-field span,
+html.theme-light .setting-row span strong,
+html.theme-light .section-title h2,
+html.theme-light .page-header h1 {
+  color: #0f172a;
+}
+
+html.theme-light .profile-field input,
+html.theme-light .profile-field select,
+html.theme-light .setting-row select,
+html.theme-light .settings-page select,
+html.theme-light .settings-page input[type="text"],
+html.theme-light .settings-page input[type="number"] {
+  background: #ffffff;
+  border-color: #c9d9fb;
+  color: #0f172a;
+}
+
+html.theme-light .profile-field input::placeholder,
+html.theme-light .settings-page input::placeholder {
+  color: #7890b3;
+}
+
+html.theme-light .goal-count {
+  background: #e8f0ff;
+  color: #2457d6;
+}
+
+html.theme-light .goal-option {
+  background: #f5f9ff;
+  border-color: #cfdbf8;
+  color: #334155;
+}
+
+html.theme-light .goal-option.active {
+  background: linear-gradient(135deg, #5b8cff, #4f46e5);
+  border-color: transparent;
+  color: #ffffff;
+}
+
+html.theme-light .goal-hint,
+html.theme-light .settings-note,
+html.theme-light .subtle,
+html.theme-light .setting-row small,
+html.theme-light .profile-avatar-picker small {
+  color: #64748b;
+}
+
+html.theme-light .settings-preview {
+  background: #f3f7ff;
+  color: #1e293b;
+  border: 1px solid #d7e4ff;
+}
+
+html.theme-light .settings-status-message {
+  color: #2563eb;
 }
