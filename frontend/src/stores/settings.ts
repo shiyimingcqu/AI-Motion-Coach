@@ -7,7 +7,6 @@ export type AppLanguage = "zh" | "en";
 export type CameraResolution = "auto" | "1280x720" | "1920x1080" | "640x480";
 
 export interface UserSettings {
-  darkTrainingPanel: boolean;
   language: AppLanguage;
   notificationsEnabled: boolean;
   trainingCompleteReminder: boolean;
@@ -28,7 +27,6 @@ export const CAMERA_RESOLUTION_OPTIONS: { value: CameraResolution; label: string
 ];
 
 const defaultSettings: UserSettings = {
-  darkTrainingPanel: false,
   language: "zh",
   notificationsEnabled: true,
   trainingCompleteReminder: false,
@@ -43,7 +41,6 @@ function normalizeSettings(raw: Partial<UserSettings> & Record<string, unknown>)
     : defaultSettings.cameraResolution;
 
   return {
-    darkTrainingPanel: Boolean(raw.darkTrainingPanel),
     language,
     notificationsEnabled: raw.notificationsEnabled !== false,
     trainingCompleteReminder: Boolean(raw.trainingCompleteReminder),
@@ -66,10 +63,6 @@ function loadSettings(): UserSettings {
   }
 }
 
-function syncThemeClass(enabled: boolean) {
-  document.documentElement.classList.toggle("theme-dark", enabled);
-}
-
 function syncLanguageClass(language: AppLanguage) {
   document.documentElement.lang = language === "en" ? "en" : "zh-CN";
 }
@@ -77,14 +70,12 @@ function syncLanguageClass(language: AppLanguage) {
 export const useSettingsStore = defineStore("settings", () => {
   const settings = reactive<UserSettings>(loadSettings());
 
-  syncThemeClass(settings.darkTrainingPanel);
   syncLanguageClass(settings.language);
 
   watch(
     settings,
     (value) => {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
-      syncThemeClass(value.darkTrainingPanel);
       syncLanguageClass(value.language);
     },
     { deep: true }

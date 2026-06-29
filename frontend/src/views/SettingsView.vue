@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="page settings-page">
     <button class="back-link" type="button" @click="goHome">
       <ArrowLeft :size="24" />
@@ -21,14 +21,6 @@
             <h2>体验设置</h2>
           </div>
         </div>
-
-        <label class="setting-row">
-          <span>
-            <strong>深色模式</strong>
-            <small>开启后，全部界面切换为深色视觉风格</small>
-          </span>
-          <input v-model="settings.darkTrainingPanel" type="checkbox" />
-        </label>
 
         <label class="setting-row">
           <span>

@@ -1,12 +1,24 @@
 ﻿﻿﻿﻿<template>
   <div class="page realtime-page">
+    <div v-if="finishPending" class="finish-overlay" role="dialog" aria-modal="true" aria-label="结束训练中">
+      <div class="finish-modal">
+        <div class="finish-spinner" aria-hidden="true"></div>
+        <strong>正在结束训练</strong>
+        <p>{{ finishStatusText }}</p>
+      </div>
+    </div>
     <header class="page-header">
       <div>
         <p class="eyebrow">Realtime Training</p>
-        <h1>{{ store.currentExerciseMeta.name }}实时检测</h1>
-        <p class="subtle">摄像头或测试视频画面实时叠加人体骨架，并同步返回阶段、次数、评分与纠错提示。</p>
+        <h1>{{ activeExerciseDefinition.name }} 实时检测</h1>
+        <p class="subtle">{{ activeExerciseDefinition.description }}</p>
       </div>
       <div class="header-actions">
+        <select v-model="store.currentExercise" class="exercise-select" @change="onExerciseChange">
+          <option v-for="exercise in exerciseOptions" :key="exercise.key" :value="exercise.key">
+            {{ exercise.name }}
+          </option>
+        </select>
         <span class="status-pill" :class="connectionClass">{{ statusLabel }}</span>
         <button class="primary-button" type="button" @click="connectCamera">
           <Camera :size="18" />
@@ -46,11 +58,11 @@
           <p class="eyebrow">Live Metrics</p>
           <h2>实时数据面板</h2>
         </div>
-        <MetricTile label="当前动作" :value="store.currentExerciseMeta.name" :hint="store.currentExerciseMeta.category" />
-        <MetricTile label="阶段" :value="store.stage" hint="WebSocket stage" />
+        <MetricTile label="当前动作" :value="activeExerciseDefinition.name" :hint="activeExerciseDefinition.key" />
+        <MetricTile label="阶段" :value="store.stage" hint="当前动作阶段" />
         <MetricTile label="次数" :value="store.count" hint="total count" />
         <MetricTile label="有效次数" :value="store.validCount" hint="valid count" />
-        <MetricTile label="评分" :value="store.score" hint="score" />
+        <MetricTile label="评分" :value="store.score" hint="实时评分" />
 
         <div class="live-data-panel">
           <div class="live-data-header">
@@ -64,34 +76,23 @@
               :key="template.template_id"
               :value="template.template_id"
             >
-              {{ template.name }} 路 {{ template.view }} 路 {{ template.version }}
+              {{ template.name }} · {{ template.view }} · {{ template.version }}
             </option>
           </select>
           <small v-if="selectedTemplate">
-            {{ selectedTemplate.valid_frames || "榛樿" }} 甯у弬鑰冩洸绾?          </small>
+            {{ selectedTemplate.valid_frames || "默认" }} 帧参考曲线
+          </small>
         </div>
 
         <div class="live-data-panel">
           <div class="live-data-header">
             <strong>实时角度</strong>
-            <span>{{ currentMetrics ? "更新中" : "等待帧数据" }}</span>
+            <span>{{ currentMetrics ? "更新中" : "等待帧数据" }} · {{ activeMetricDescriptors.length }} 项</span>
           </div>
           <div class="angle-grid">
-            <div>
-              <span>膝角</span>
-              <strong>{{ formatAngle(currentMetrics?.knee_angle) }}</strong>
-            </div>
-            <div>
-              <span>髋角</span>
-              <strong>{{ formatAngle(currentMetrics?.hip_angle) }}</strong>
-            </div>
-            <div>
-              <span>躯干</span>
-              <strong>{{ formatAngle(currentMetrics?.trunk_angle) }}</strong>
-            </div>
-            <div>
-              <span>对称差</span>
-              <strong>{{ formatAngle(currentMetrics?.knee_symmetry_diff) }}</strong>
+            <div v-for="metric in activeMetricDescriptors" :key="metric.key">
+              <span>{{ metric.label }}</span>
+              <strong>{{ formatMetricValue(currentMetrics?.[metric.key], metric.key) }}</strong>
             </div>
           </div>
         </div>
@@ -102,33 +103,15 @@
             <span>{{ displayTemplateScore?.is_partial ? "动态参考" : "完整评分" }}</span>
           </div>
           <div class="live-score-row">
-            <span>鍔ㄦ€佹€诲垎</span>
+            <span>动态总分</span>
             <strong>{{ formatScore(displayTemplateScore?.score) }}</strong>
           </div>
           <div class="angle-diff-list">
-            <div>
-              <span>膝角</span>
-              <b>{{ formatAngle(currentMetrics?.knee_angle) }}</b>
-              <b>{{ formatAngle(displayTemplateScore?.differences.knee_angle) }}</b>
-              <b>{{ formatScore(displayTemplateScore?.detail_scores.knee_angle) }}</b>
-            </div>
-            <div>
-              <span>髋角</span>
-              <b>{{ formatAngle(currentMetrics?.hip_angle) }}</b>
-              <b>{{ formatAngle(displayTemplateScore?.differences.hip_angle) }}</b>
-              <b>{{ formatScore(displayTemplateScore?.detail_scores.hip_angle) }}</b>
-            </div>
-            <div>
-              <span>躯干</span>
-              <b>{{ formatAngle(currentMetrics?.trunk_angle) }}</b>
-              <b>{{ formatAngle(displayTemplateScore?.differences.trunk_angle) }}</b>
-              <b>{{ formatScore(displayTemplateScore?.detail_scores.trunk_angle) }}</b>
-            </div>
-            <div>
-              <span>对称差</span>
-              <b>{{ formatAngle(currentMetrics?.knee_symmetry_diff) }}</b>
-              <b>{{ formatAngle(displayTemplateScore?.differences.knee_symmetry_diff) }}</b>
-              <b>{{ formatScore(displayTemplateScore?.detail_scores.knee_symmetry_diff) }}</b>
+            <div v-for="metric in activeMetricDescriptors" :key="metric.key">
+              <span>{{ metric.label }}</span>
+              <b>{{ formatMetricValue(currentMetrics?.[metric.key], metric.key) }}</b>
+              <b>{{ formatMetricValue(displayTemplateScore?.differences?.[metric.key], metric.key) }}</b>
+              <b>{{ formatScore(displayTemplateScore?.detail_scores?.[metric.key]) }}</b>
             </div>
           </div>
           <div class="angle-diff-legend">
@@ -141,7 +124,7 @@
         <div v-if="cameraError" class="alert-line danger">{{ cameraError }}</div>
         <div v-if="savedMessage" class="alert-line">{{ savedMessage }}</div>
         <div class="error-stack">
-          <strong>閿欒鎻愮ず</strong>
+          <strong>错误提示</strong>
           <span v-if="store.errors.length === 0">暂无错误</span>
           <span v-for="error in store.errors" :key="error">{{ error }}</span>
         </div>
@@ -157,21 +140,9 @@
             <span class="template-score-label">总分</span>
           </div>
           <div class="template-score-details">
-            <div class="detail-item">
-              <span class="detail-label">膝关节角度</span>
-              <span class="detail-value">{{ templateScore.detail_scores.knee_angle.toFixed(1) }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">髋关节角度</span>
-              <span class="detail-value">{{ templateScore.detail_scores.hip_angle.toFixed(1) }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">躯干角度</span>
-              <span class="detail-value">{{ templateScore.detail_scores.trunk_angle.toFixed(1) }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="detail-label">左右对称性</span>
-              <span class="detail-value">{{ templateScore.detail_scores.knee_symmetry_diff.toFixed(1) }}</span>
+            <div v-for="metric in activeMetricDescriptors" :key="metric.key" class="detail-item">
+              <span class="detail-label">{{ metric.label }}</span>
+              <span class="detail-value">{{ formatScore(templateScore.detail_scores?.[metric.key]) }}</span>
             </div>
           </div>
           <div v-if="templateScore.errors.length > 0" class="template-errors">
@@ -199,13 +170,13 @@
         <RefreshCcw :size="18" />
         重新检测
       </button>
-      <button class="secondary-button" type="button" :disabled="!canSave" @click="finishTraining">
-        <Save :size="18" />
-        保存记录
+      <button class="primary-button danger" type="button" :disabled="!canSave" @click="finishTraining">
+        <Square :size="18" />
+        结束训练
       </button>
-      <button class="secondary-button" type="button" :disabled="!lastSessionId" @click="viewSession">
+      <button v-if="lastSessionId && trainingState === 'finished'" class="secondary-button" type="button" @click="viewFeedback">
         <FileSearch :size="18" />
-        查看本次详情
+        查看本次反馈
       </button>
     </section>
   </div>
@@ -214,9 +185,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { Camera, FileSearch, Pause, Play, RefreshCcw, Save, UploadCloud } from "lucide-vue-next";
+import { Camera, FileSearch, Pause, Play, RefreshCcw, Square, UploadCloud } from "lucide-vue-next";
 
 import { apiGet, apiUpload, apiWebSocketUrl, apiPost } from "../api/client";
+import { getSimpleExercises, type ExerciseLibItem } from "../api/exercises";
+import { createSession, getSessions, type SessionRecord } from "../api/sessions";
+import { useAuthStore } from "@/stores/auth";
 import MetricTile from "../components/MetricTile.vue";
 import SkeletonCanvas from "../components/SkeletonCanvas.vue";
 import {
@@ -233,11 +207,11 @@ import { useTrainingStore } from "../stores/training";
 type TrainingState = "idle" | "connecting" | "running" | "paused" | "finished" | "error";
 type PoseLandmarkerInstance = Awaited<ReturnType<typeof createPoseLandmarker>>;
 
-type SquatMetrics = {
-  knee_angle: number;
-  hip_angle: number;
-  trunk_angle: number;
-  knee_symmetry_diff: number;
+type MetricValues = Record<string, number>;
+
+type ExerciseOption = ExerciseLibItem & {
+  core_angles: string[];
+  core_feature_keys: string[];
 };
 
 type TemplateScore = {
@@ -246,8 +220,8 @@ type TemplateScore = {
   is_partial?: boolean;
   score: number;
   level: string;
-  detail_scores: SquatMetrics;
-  differences: SquatMetrics;
+  detail_scores: MetricValues;
+  differences: MetricValues;
   errors: string[];
   suggestions: string[];
 };
@@ -270,7 +244,8 @@ type VideoTestFrame = {
   score: number;
   errors: string[];
   keypoints?: BackendKeypoints;
-  metrics?: SquatMetrics;
+  metrics?: MetricValues;
+  features?: MetricValues;
 };
 
 type VideoTestResponse = {
@@ -292,6 +267,7 @@ const SEND_INTERVAL_MS = 100;
 const VIDEO_TEST_PLAYBACK_MS = 100;
 const DYNAMIC_SCORE_MIN_FRAMES = 10;
 const DYNAMIC_SCORE_INTERVAL_MS = 500;
+const FINISH_TIMEOUT_MS = 5000;
 
 const router = useRouter();
 const store = useTrainingStore();
@@ -305,21 +281,62 @@ const savedMessage = ref("");
 const videoTestLoading = ref(false);
 const trainingState = ref<TrainingState>("idle");
 const lastSessionId = ref("");
-const currentMetrics = ref<SquatMetrics | null>(null);
+const currentMetrics = ref<MetricValues | null>(null);
 const liveTemplateScore = ref<TemplateScore | null>(null);
 const templateScore = ref<TemplateScore | null>(null);
 const templateOptions = ref<TemplateOption[]>([]);
+const exerciseOptions = ref<ExerciseOption[]>([]);
 const selectedTemplateId = ref("");
 const lastDynamicScoreAt = ref(0);
 const dynamicScoreInFlight = ref(false);
+const finishPending = ref(false);
+const finishStatusText = ref("");
+const trainingStartedAt = ref<number | null>(null);
 
 let socket: WebSocket | null = null;
 let poseLandmarker: PoseLandmarkerInstance | null = null;
 let animationFrameId: number | null = null;
 let videoTestTimer: ReturnType<typeof setInterval> | null = null;
+let finishTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let videoTestUrl = "";
 let lastSentAt = 0;
-let motionFrames: SquatMetrics[] = [];
+let motionFrames: MetricValues[] = [];
+let finishRecoveryInFlight = false;
+
+const DEFAULT_EXERCISE_OPTIONS: ExerciseOption[] = [
+  {
+    key: "squat",
+    name: "深蹲",
+    description: "评估下蹲深度、膝髋协同、躯干控制和左右稳定性。",
+    supported_metrics: ["count", "valid_count", "score", "depth_ratio"],
+    core_angles: ["膝角", "髋角", "躯干倾斜角", "左右膝差"],
+    core_feature_keys: ["knee_angle", "hip_angle", "trunk_angle", "knee_symmetry_diff"],
+  },
+  {
+    key: "push_up",
+    name: "俯卧撑",
+    description: "评估肘部屈伸幅度、肩部控制、身体直线和髋部稳定。",
+    supported_metrics: ["count", "valid_count", "score"],
+    core_angles: ["肘角", "肩角", "身体直线角", "髋部塌陷角"],
+    core_feature_keys: ["elbow_angle", "shoulder_angle", "body_line_angle", "hip_sag_angle"],
+  },
+  {
+    key: "plank",
+    name: "平板支撑",
+    description: "评估肩髋踝连线、髋部姿态、颈部角度和保持稳定性。",
+    supported_metrics: ["duration", "score", "error_count"],
+    core_angles: ["肩髋踝直线角", "髋部角", "颈部角"],
+    core_feature_keys: ["body_line_angle", "hip_angle", "neck_angle"],
+  },
+  {
+    key: "jumping_jack",
+    name: "开合跳",
+    description: "评估肩外展、双腿打开幅度、手腕高度和脚踝间距。",
+    supported_metrics: ["count", "valid_count", "score"],
+    core_angles: ["肩外展角", "双腿夹角", "手腕高度", "脚踝距离"],
+    core_feature_keys: ["shoulder_abduction_angle", "leg_spread_angle", "wrist_height", "ankle_distance"],
+  },
+];
 
 const statusLabel = computed(() => {
   const labels: Record<TrainingState, string> = {
@@ -340,23 +357,59 @@ const connectionClass = computed(() => {
 });
 
 const canPause = computed(() => trainingState.value === "running" || trainingState.value === "paused");
-const canSave = computed(() => trainingState.value === "running" || trainingState.value === "paused");
+const canSave = computed(() => (trainingState.value === "running" || trainingState.value === "paused") && !finishPending.value);
 const displayTemplateScore = computed(() => liveTemplateScore.value ?? templateScore.value);
 const selectedTemplate = computed(() =>
   templateOptions.value.find((template) => template.template_id === selectedTemplateId.value)
+);
+const activeExerciseDefinition = computed<ExerciseOption>(() =>
+  exerciseOptions.value.find((exercise) => exercise.key === store.currentExercise)
+  ?? DEFAULT_EXERCISE_OPTIONS.find((exercise) => exercise.key === store.currentExercise)
+  ?? DEFAULT_EXERCISE_OPTIONS[0]
+);
+const activeMetricDescriptors = computed(() =>
+  activeExerciseDefinition.value.core_feature_keys.map((key, index) => ({
+    key,
+    label: activeExerciseDefinition.value.core_angles[index] ?? key,
+  }))
 );
 
 function formatAngle(value?: number) {
   return typeof value === "number" && Number.isFinite(value) ? `${value.toFixed(1)}°` : "--";
 }
 
+function formatDistance(value?: number) {
+  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(3) : "--";
+}
+
 function formatScore(value?: number) {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(1) : "--";
 }
 
-async function loadTemplateOptions() {
-  if (store.currentExercise !== "squat") return;
+function formatMetricValue(value: number | undefined, key: string) {
+  return key.includes("height") || key.includes("distance") ? formatDistance(value) : formatAngle(value);
+}
 
+function normalizeExerciseOptions(items: ExerciseLibItem[]) {
+  return items.map((item) => ({
+    ...item,
+    core_angles: item.core_angles ?? [],
+    core_feature_keys: item.core_feature_keys ?? [],
+  }));
+}
+
+async function loadExerciseOptions() {
+  try {
+    const response = await getSimpleExercises();
+    const items = normalizeExerciseOptions(response.items || []);
+    exerciseOptions.value = items.length > 0 ? items : DEFAULT_EXERCISE_OPTIONS;
+  } catch (error) {
+    console.error("加载动作定义失败:", error);
+    exerciseOptions.value = DEFAULT_EXERCISE_OPTIONS;
+  }
+}
+
+async function loadTemplateOptions() {
   try {
     const response = await apiGet<{ items: TemplateOption[] }>(`/exercises/${store.currentExercise}/templates`);
     templateOptions.value = response.items;
@@ -365,6 +418,16 @@ async function loadTemplateOptions() {
     }
   } catch (error) {
     console.error("加载模板列表失败:", error);
+  }
+}
+
+function onExerciseChange() {
+  store.setExercise(store.currentExercise);
+  resetTraining();
+  loadTemplateOptions();
+  // Update WebSocket with new exercise type
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: "start", exercise_type: store.currentExercise }));
   }
 }
 
@@ -411,8 +474,11 @@ async function startTraining() {
   savedMessage.value = "";
   lastSessionId.value = "";
   poseStatus.value = "";
+  cameraError.value = "";
   store.resetLiveMetrics();
   resetDynamicTemplateState(true);
+  resetFinishState();
+  trainingStartedAt.value = null;
   clearPoseCanvas(overlayRef.value);
   stopVideoTestPlayback();
 
@@ -425,7 +491,7 @@ async function startTraining() {
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
 
   trainingState.value = "connecting";
-  socket.send(JSON.stringify({ type: "start", exercise: store.currentExercise }));
+  socket.send(JSON.stringify({ type: "start", exercise_type: store.currentExercise }));
 }
 
 function togglePause() {
@@ -449,28 +515,49 @@ function resetTraining() {
   savedMessage.value = "";
   lastSessionId.value = "";
   poseStatus.value = "";
+  cameraError.value = "";
   store.resetLiveMetrics();
   resetDynamicTemplateState(true);
+  resetFinishState();
+  trainingStartedAt.value = null;
   clearPoseCanvas(overlayRef.value);
 
   if (socket?.readyState === WebSocket.OPEN) {
     trainingState.value = "connecting";
-    socket.send(JSON.stringify({ type: "start", exercise: store.currentExercise }));
+    socket.send(JSON.stringify({ type: "start", exercise_type: store.currentExercise }));
   } else {
     trainingState.value = "idle";
   }
 }
 
-function finishTraining() {
-  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+async function finishTraining() {
+  if (finishPending.value) return;
+
+  savedMessage.value = "";
+  cameraError.value = "";
+  finishPending.value = true;
+  finishStatusText.value = "正在保存本次训练结果，请稍候...";
 
   stopPoseLoop();
   stopVideoTestPlayback();
+
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    await saveSessionFallback("实时通道已断开，已根据当前统计补存本次训练记录。");
+    return;
+  }
+
+  clearFinishTimeout();
+  finishTimeoutId = setTimeout(() => {
+    void recoverAndRouteAfterFinish("结束训练响应超时，已尝试恢复本次训练记录。");
+  }, FINISH_TIMEOUT_MS);
+
   socket.send(JSON.stringify({ type: "finish" }));
 }
 
-function viewSession() {
-  router.push({ path: "/sessions", query: { session: lastSessionId.value } });
+function viewFeedback() {
+  if (lastSessionId.value) {
+    router.push({ path: "/feedback", query: { session: lastSessionId.value, from: "realtime" } });
+  }
 }
 
 function openRealtimeSocket(): Promise<void> {
@@ -482,16 +569,23 @@ function openRealtimeSocket(): Promise<void> {
   trainingState.value = "connecting";
 
   return new Promise((resolve, reject) => {
-    socket = new WebSocket(apiWebSocketUrl("/realtime/pose"));
+    // Pass JWT token for WebSocket auth
+    const authStore = useAuthStore();
+    const tokenParam = authStore.token ? `?token=${encodeURIComponent(authStore.token)}` : "";
+    socket = new WebSocket(apiWebSocketUrl(`/realtime/pose${tokenParam}`));
 
     socket.onopen = () => resolve();
     socket.onerror = () => {
+      resetFinishState();
       cameraError.value = "实时检测通道连接失败，请确认后端服务已启动。";
       trainingState.value = "error";
       reject(new Error("WebSocket connection failed"));
     };
     socket.onclose = () => {
       stopPoseLoop();
+      if (finishPending.value) {
+        void recoverAndRouteAfterFinish("实时通道已断开，已尝试恢复本次训练记录。");
+      }
       if (trainingState.value === "running" || trainingState.value === "connecting") {
         trainingState.value = "error";
       }
@@ -501,11 +595,14 @@ function openRealtimeSocket(): Promise<void> {
 }
 
 function handleRealtimeMessage(message: Record<string, any>) {
-  console.log("鏀跺埌娑堟伅:", message);
+  console.log("收到消息:", message);
 
   if (message.type === "status") {
-    console.log("鐘舵€佹秷鎭?", message.state);
+    console.log("状态消息:", message.state);
     if (message.state === "running") {
+      if (!trainingStartedAt.value) {
+        trainingStartedAt.value = Date.now();
+      }
       trainingState.value = "running";
       poseStatus.value = "开始检测...";
       resetDynamicTemplateState(true);
@@ -523,20 +620,25 @@ function handleRealtimeMessage(message: Record<string, any>) {
   }
 
   if (message.type === "summary") {
+    resetFinishState();
     trainingState.value = "finished";
     stopPoseLoop();
     poseStatus.value = "";
 
     // 调用模板评分
-    if (motionFrames.length > 0 && store.currentExercise === "squat") {
+    if (motionFrames.length > 0) {
       scoreByTemplate();
     }
 
     const session = message.session as { session_id?: string; total_count?: number } | undefined;
     lastSessionId.value = session?.session_id ?? "";
-    savedMessage.value = session?.session_id
-      ? `记录已保存，共 ${session.total_count ?? store.count} 次。`
-      : "本次没有完成动作，未生成训练记录。";
+
+    if (session?.session_id) {
+      savedMessage.value = "训练已结束，正在跳转到本次反馈。";
+      void router.push({ path: "/feedback", query: { session: session.session_id, from: "realtime" } });
+    } else {
+      void recoverAndRouteAfterFinish("训练已结束，已恢复本次训练记录并准备跳转反馈页。");
+    }
   }
 }
 
@@ -569,7 +671,7 @@ function runPoseFrame(timestamp: number) {
   drawPose(canvas, landmarks);
 
   if (!landmarks) {
-    poseStatus.value = "鏈娴嬪埌浜轰綋锛岃绔欏叆鐢婚潰";
+    poseStatus.value = "未检测到人体，请站入画面";
   } else {
     poseStatus.value = "";
     if (timestamp - lastSentAt >= SEND_INTERVAL_MS) {
@@ -610,7 +712,7 @@ async function handleVideoTestFile(event: Event) {
   savedMessage.value = "";
   lastSessionId.value = "";
   cameraError.value = "";
-  poseStatus.value = "姝ｅ湪鍔犺浇濮挎€佽瘑鍒ā鍨?..";
+  poseStatus.value = "正在加载姿态识别模型..";
   videoTestLoading.value = true;
   trainingState.value = "connecting";
 
@@ -629,7 +731,7 @@ async function handleVideoTestFile(event: Event) {
     poseStatus.value = "连接成功，正在加载视频...";
     showVideoTestPreview(file);
 
-    socket.send(JSON.stringify({ type: "start", exercise: store.currentExercise }));
+    socket.send(JSON.stringify({ type: "start", exercise_type: store.currentExercise }));
   } catch (error) {
     console.error("视频测试失败:", error);
     cameraError.value = "视频测试失败，请确认后端服务已启动且视频格式可读。";
@@ -657,6 +759,113 @@ function showVideoTestPreview(file: File) {
   cameraActive.value = true;
 }
 
+function clearFinishTimeout() {
+  if (finishTimeoutId) {
+    clearTimeout(finishTimeoutId);
+    finishTimeoutId = null;
+  }
+}
+
+function resetFinishState() {
+  clearFinishTimeout();
+  finishPending.value = false;
+  finishStatusText.value = "";
+}
+
+function buildFallbackSessionPayload() {
+  const durationSeconds = trainingStartedAt.value
+    ? Math.max(1, Math.round((Date.now() - trainingStartedAt.value) / 1000))
+    : 0;
+  const totalCount = Number(store.count ?? 0);
+  const validCount = Number(store.validCount ?? 0);
+  const averageScore = Number(store.score ?? 0);
+
+  return {
+    exercise: store.currentExercise,
+    duration_seconds: durationSeconds,
+    total_count: totalCount,
+    valid_count: validCount,
+    error_count: Math.max(0, totalCount - validCount),
+    average_score: averageScore,
+  };
+}
+
+function isRecentMatchingSession(session: SessionRecord, payload: ReturnType<typeof buildFallbackSessionPayload>) {
+  const createdAt = Date.parse(session.created_at);
+  const recentEnough = Number.isFinite(createdAt) && Math.abs(Date.now() - createdAt) <= 2 * 60 * 1000;
+  return recentEnough
+    && session.exercise === payload.exercise
+    && session.total_count === payload.total_count
+    && session.valid_count === payload.valid_count
+    && session.error_count === payload.error_count;
+}
+
+async function recoverLatestSession(payload: ReturnType<typeof buildFallbackSessionPayload>) {
+  try {
+    const response = await getSessions({ limit: 10, exercise: payload.exercise });
+    return response.items.find((item) => isRecentMatchingSession(item, payload)) ?? null;
+  } catch (error) {
+    console.error("查询最近训练记录失败:", error);
+    return null;
+  }
+}
+
+async function recoverAndRouteAfterFinish(successMessage: string) {
+  if (finishRecoveryInFlight) return;
+  finishRecoveryInFlight = true;
+  finishStatusText.value = "正在恢复本次训练记录...";
+
+  try {
+    const payload = buildFallbackSessionPayload();
+    if (payload.total_count <= 0) {
+      resetFinishState();
+      trainingState.value = "finished";
+      savedMessage.value = "本次没有完成动作，未生成训练记录。";
+      return;
+    }
+
+    const existingSession = await recoverLatestSession(payload);
+    if (existingSession?.session_id) {
+      lastSessionId.value = existingSession.session_id;
+      resetFinishState();
+      trainingState.value = "finished";
+      savedMessage.value = successMessage;
+      await router.push({ path: "/feedback", query: { session: existingSession.session_id, from: "realtime" } });
+      return;
+    }
+
+    await saveSessionFallback(successMessage);
+  } finally {
+    finishRecoveryInFlight = false;
+  }
+}
+
+async function saveSessionFallback(successMessage: string) {
+  const payload = buildFallbackSessionPayload();
+
+  if (payload.total_count <= 0) {
+    resetFinishState();
+    trainingState.value = "finished";
+    savedMessage.value = "本次没有完成动作，未生成训练记录。";
+    return;
+  }
+
+  try {
+    finishStatusText.value = "实时通道异常，正在用当前统计补存训练记录...";
+    const session = await createSession(payload);
+    lastSessionId.value = session.session_id;
+    resetFinishState();
+    trainingState.value = "finished";
+    savedMessage.value = successMessage;
+    await router.push({ path: "/feedback", query: { session: session.session_id, from: "realtime" } });
+  } catch (error) {
+    console.error("训练记录补存失败:", error);
+    resetFinishState();
+    trainingState.value = "error";
+    cameraError.value = "结束训练失败，实时通道已断开且补存训练记录未成功。请重新开始检测。";
+  }
+}
+
 function playVideoTestResult(result: VideoTestResponse) {
   if (result.frames.length === 0) {
     poseStatus.value = "视频没有产生可用的实时检测帧";
@@ -666,7 +875,10 @@ function playVideoTestResult(result: VideoTestResponse) {
 
   let frameIndex = 0;
   trainingState.value = "running";
-  poseStatus.value = "姝ｅ湪鎸夊疄鏃惰妭濂忔挱鏀捐棰戞娴嬬粨鏋?..";
+  poseStatus.value = "正在按实时节奏播放视频检测结果..";
+  if (!trainingStartedAt.value) {
+    trainingStartedAt.value = Date.now();
+  }
 
   videoTestTimer = setInterval(() => {
     const frame = result.frames[frameIndex];
@@ -702,14 +914,18 @@ function resetDynamicTemplateState(clearMetrics = false) {
 function handleAnalysisFrame(frame: VideoTestFrame) {
   updateMetricsFromFrame(frame);
 
-  if (!frame.metrics || store.currentExercise !== "squat") return;
+  const sourceMetrics = frame.metrics ?? frame.features;
+  if (!sourceMetrics) return;
 
-  const metrics: SquatMetrics = {
-    knee_angle: Number(frame.metrics.knee_angle),
-    hip_angle: Number(frame.metrics.hip_angle),
-    trunk_angle: Number(frame.metrics.trunk_angle),
-    knee_symmetry_diff: Number(frame.metrics.knee_symmetry_diff),
-  };
+  const metrics: MetricValues = {};
+  for (const { key } of activeMetricDescriptors.value) {
+    const rawValue = sourceMetrics[key];
+    if (typeof rawValue === "number" && Number.isFinite(rawValue)) {
+      metrics[key] = Number(rawValue);
+    }
+  }
+
+  if (Object.keys(metrics).length === 0) return;
 
   currentMetrics.value = metrics;
   motionFrames.push(metrics);
@@ -728,7 +944,7 @@ function requestDynamicTemplateScore() {
 }
 
 async function scoreByTemplate(mode: "live" | "final" = "final") {
-  if (motionFrames.length < 2 || store.currentExercise !== "squat") return;
+  if (motionFrames.length < 2) return;
 
   if (mode === "live") {
     dynamicScoreInFlight.value = true;
@@ -736,7 +952,7 @@ async function scoreByTemplate(mode: "live" | "final" = "final") {
 
   try {
     const response = await apiPost<TemplateScore>("/realtime/score-action", {
-      action: "squat",
+      action: store.currentExercise,
       template_id: selectedTemplateId.value || undefined,
       frames: motionFrames,
     });
@@ -776,6 +992,7 @@ function stopVideoTestPlayback() {
 
 function closeSocket() {
   stopPoseLoop();
+  clearFinishTimeout();
   if (socket) {
     socket.onclose = null;
     socket.close();
@@ -790,8 +1007,9 @@ function revokeVideoTestUrl() {
   }
 }
 
-onMounted(() => {
-  void loadTemplateOptions();
+onMounted(async () => {
+  await loadExerciseOptions();
+  await loadTemplateOptions();
 });
 
 onBeforeUnmount(() => {
@@ -803,3 +1021,68 @@ onBeforeUnmount(() => {
   revokeVideoTestUrl();
 });
 </script>
+
+<style scoped>
+.finish-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.52);
+  backdrop-filter: blur(4px);
+}
+
+.finish-modal {
+  width: min(100%, 360px);
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  padding: 28px 24px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.22);
+  text-align: center;
+}
+
+.finish-modal strong {
+  color: #16211b;
+  font-size: 18px;
+}
+
+.finish-modal p {
+  margin: 0;
+  color: #5f6b63;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.finish-spinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid rgba(59, 130, 246, 0.16);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: finish-spin 0.8s linear infinite;
+}
+
+@keyframes finish-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.primary-button.danger {
+  background: var(--danger, #c84a3a);
+}
+
+.primary-button.danger:hover {
+  background: #b33d2e;
+}
+
+.primary-button.danger:disabled {
+  background: var(--danger, #c84a3a);
+  opacity: 0.58;
+}
+</style>

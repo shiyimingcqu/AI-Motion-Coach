@@ -76,7 +76,22 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   return response.json();
 }
 
-export async function apiDelete(path: string): Promise<void> {
+export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    await throwRequestError(response);
+  }
+  return response.json();
+}
+
+export async function apiDelete<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     method: "DELETE",
     headers: getAuthHeaders(),
@@ -84,6 +99,10 @@ export async function apiDelete(path: string): Promise<void> {
   if (!response.ok) {
     await throwRequestError(response);
   }
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  return response.json();
 }
 
 export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {

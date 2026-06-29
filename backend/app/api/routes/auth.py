@@ -50,6 +50,13 @@ if router and BaseModel:
         token_type: str
         user: UserResponse
 
+    class ChangePasswordRequest(BaseModel):
+        old_password: str
+        new_password: str
+
+    class UpdateProfileRequest(BaseModel):
+        nickname: str | None = None
+
 
 if router:
     @router.post("/register", response_model=UserResponse if UserResponse else None, status_code=201)
@@ -133,3 +140,53 @@ if router:
             role=current_user.role,
             is_active=current_user.is_active,
         )
+
+    @router.put("/profile", response_model=UserResponse if UserResponse else None)
+    def update_profile(
+        request: UpdateProfileRequest,
+        current_user: UserORM = Depends(get_current_active_user) if get_current_active_user else None,
+    ):
+        """更新当前用户资料"""
+        if current_user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未登录")
+
+        db = _get_db()
+        try:
+            user = db.query(UserORM).filter(UserORM.id == current_user.id).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="用户不存在")
+            if request.nickname is not None:
+                user.username = request.nickname
+            db.commit()
+            db.refresh(user)
+            return UserResponse(
+                id=user.id, username=user.username, role=user.role, is_active=user.is_active,
+            )
+        finally:
+            db.close()
+
+    @router.post("/change-password")
+    def change_password(
+        request: ChangePasswordRequest,
+        current_user: UserORM = Depends(get_current_active_user) if get_current_active_user else None,
+    ):
+        """修改当前用户密码"""
+        if current_user is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="未登录")
+
+        if not verify_password(request.old_password, current_user.hashed_password):
+            raise HTTPException(status_code=400, detail="当前密码错误")
+
+        if len(request.new_password) < 6:
+            raise HTTPException(status_code=400, detail="新密码至少6位")
+
+        db = _get_db()
+        try:
+            user = db.query(UserORM).filter(UserORM.id == current_user.id).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="用户不存在")
+            user.hashed_password = get_password_hash(request.new_password)
+            db.commit()
+            return {"message": "密码修改成功"}
+        finally:
+            db.close()

@@ -1,30 +1,30 @@
 <template>
-  <div class="page">
-    <header class="page-header">
+  <div class="upload-page">
+    <header class="section-page-header">
       <div>
-        <p class="eyebrow">Async Analysis</p>
-        <h1>视频上传分析</h1>
-        <p class="subtle">上传后进入分析队列，任务完成后在右侧展示带骨架标注的输出视频。</p>
+        <h1>Video Upload Analysis / 视频上传分析</h1>
+        <p>Upload and analyze training videos</p>
       </div>
     </header>
 
-    <section class="video-workspace">
-      <section
-        class="upload-zone"
+    <section class="upload-main-card">
+      <h2>Upload Video / 上传视频</h2>
+      <div
+        class="upload-drop-card"
         :class="{ active: isDragging }"
         @dragover.prevent="isDragging = true"
         @dragleave.prevent="isDragging = false"
         @drop.prevent="handleDrop"
       >
-        <UploadCloud :size="44" />
-        <strong>{{ selectedFile ? selectedFile.name : "拖入训练视频或点击选择" }}</strong>
-        <span>{{ helperText }}</span>
+        <Upload :size="48" />
+        <strong>{{ selectedFile ? selectedFile.name : "Drop your video here / 拖拽视频到此处" }}</strong>
+        <span>or click to browse files (MP4, AVI, MOV up to 500MB)</span>
 
-        <label class="select-row">
-          <span>选择动作</span>
+        <label class="upload-exercise-select">
+          <span>Exercise / 动作</span>
           <select v-model="selectedExercise">
             <option v-for="exercise in exercises" :key="exercise.key" :value="exercise.key">
-              {{ exercise.name }}
+              {{ exerciseDisplayName(exercise.key) }}
             </option>
           </select>
         </label>
@@ -36,105 +36,105 @@
           accept="video/mp4,video/avi,video/quicktime,.mp4,.avi,.mov"
           @change="handleFileChange"
         />
+        <button class="blue-action-button" type="button" @click="openFilePicker">
+          Browse Files / 选择文件
+        </button>
+        <button
+          v-if="selectedFile"
+          class="blue-action-button upload-start-button"
+          type="button"
+          :disabled="uploadState === 'uploading'"
+          @click="uploadVideo"
+        >
+          {{ uploadState === "uploading" ? "Analyzing... / 分析中..." : "Start Analysis / 开始分析" }}
+        </button>
 
-        <div v-if="localPreviewUrl" class="video-preview">
-          <div class="video-label">源视频预览</div>
-          <video :src="localPreviewUrl" controls></video>
-        </div>
-
-        <div class="upload-actions">
-          <button class="secondary-button" type="button" @click="openFilePicker">
-            <FolderOpen :size="18" />
-            选择视频
-          </button>
-          <button
-            class="primary-button"
-            type="button"
-            :disabled="!selectedFile || uploadState === 'uploading'"
-            @click="uploadVideo"
-          >
-            <Rocket :size="18" />
-            {{ uploadState === "uploading" ? "分析中..." : "开始分析" }}
-          </button>
-        </div>
-
-        <div v-if="message" class="alert-line" :class="{ danger: uploadState === 'failed' }">
+        <video v-if="localPreviewUrl" class="upload-preview-video" :src="localPreviewUrl" controls />
+        <p v-if="message" class="upload-message" :class="{ danger: uploadState === 'failed' }">
           {{ message }}
-        </div>
-      </section>
+        </p>
+      </div>
+    </section>
 
-      <section class="result-panel">
-        <div class="section-title">
-          <div>
-            <p class="eyebrow">Output Preview</p>
-            <h2>输出视频展示窗口</h2>
+    <section class="analysis-history-card">
+      <header>
+        <h2>Analysis History / 分析历史</h2>
+        <button class="link-button" type="button">View All</button>
+      </header>
+
+      <div class="analysis-list">
+        <article v-for="item in analysisHistory" :key="item.id" class="analysis-row">
+          <button class="play-button" type="button">
+            <Play :size="27" />
+          </button>
+          <div class="analysis-file">
+            <strong>
+              <File :size="16" />
+              {{ item.name }}
+            </strong>
+            <span>{{ item.date }} &nbsp;&nbsp; Duration: {{ item.duration }}</span>
           </div>
-          <span class="status-pill" :class="statusClass">{{ taskLabel }}</span>
-        </div>
 
-        <div v-if="outputVideoUrl" class="output-video-card">
-          <video :key="outputVideoUrl" :src="outputVideoUrl" controls preload="metadata"></video>
-          <div class="output-actions">
-            <a class="secondary-button" :href="outputVideoUrl" target="_blank" rel="noreferrer">
-              <ExternalLink :size="18" />
-              新窗口打开
+          <template v-if="item.status === 'completed'">
+            <div class="analysis-stat">
+              <span>Score</span>
+              <strong class="stat-score">{{ item.score }}</strong>
+            </div>
+            <div class="analysis-stat">
+              <span>Errors</span>
+              <strong class="stat-error">{{ item.errors }}</strong>
+            </div>
+            <a
+              v-if="item.reportUrl"
+              class="report-button"
+              :href="item.reportUrl"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <BarChart3 :size="17" />
+              View Report
             </a>
-            <a class="primary-button" :href="outputVideoUrl" download>
-              <Download :size="18" />
-              下载结果
-            </a>
-          </div>
-        </div>
-        <div v-else class="empty-result">
-          <Film :size="38" />
-          <strong>{{ uploadState === "uploading" ? "正在生成输出视频" : "等待输出视频" }}</strong>
-          <span>分析完成后，这里会自动显示带骨架标注和帧信息的结果视频。</span>
-        </div>
+            <button v-else class="report-button" type="button">
+              <BarChart3 :size="17" />
+              View Report
+            </button>
+          </template>
 
-        <div class="progress-block">
-          <div class="progress-line">
-            <span :style="{ width: `${progress}%` }"></span>
-          </div>
-          <strong>{{ progress }}%</strong>
-        </div>
+          <span v-else class="processing-pill">
+            <LoaderCircle :size="19" />
+            Processing...
+          </span>
+        </article>
+      </div>
+    </section>
 
-        <dl v-if="latestTask" class="task-meta">
-          <div>
-            <dt>任务 ID</dt>
-            <dd>{{ latestTask.task_id }}</dd>
-          </div>
-          <div>
-            <dt>任务状态</dt>
-            <dd>{{ latestTask.status }}</dd>
-          </div>
-          <div>
-            <dt>原始视频</dt>
-            <dd>{{ latestTask.source_uri }}</dd>
-          </div>
-          <div>
-            <dt>结果视频</dt>
-            <dd>{{ latestTask.output_uri ?? "分析完成后生成" }}</dd>
-          </div>
-        </dl>
-
-        <div class="task-list">
-          <h3>历史任务</h3>
-          <div v-for="task in taskHistory" :key="task.id" class="task-row">
-            <span>{{ task.name }}</span>
-            <small>{{ task.time }}</small>
-            <b :class="`state-${task.status}`">{{ task.status }}</b>
-          </div>
+    <section class="upload-summary-grid">
+      <article v-for="item in uploadStats" :key="item.label" class="upload-stat-card">
+        <div>
+          <span>{{ item.label }}</span>
+          <strong>{{ item.value }}</strong>
         </div>
-      </section>
+        <span class="upload-stat-icon" :class="item.tone">
+          <component :is="item.icon" :size="25" />
+        </span>
+      </article>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import { Download, ExternalLink, Film, FolderOpen, Rocket, UploadCloud } from "lucide-vue-next";
+import { computed, onMounted, ref } from "vue";
+import {
+  BarChart3,
+  CheckCircle2,
+  File,
+  FileText,
+  LoaderCircle,
+  Play,
+  Upload
+} from "lucide-vue-next";
 
-import { apiUpload } from "../api/client";
+import { apiGet, apiUpload } from "../api/client";
 import { exercises } from "../stores/training";
 
 interface AnalysisTask {
@@ -150,6 +150,17 @@ interface UploadResponse {
   task: AnalysisTask;
 }
 
+interface HistoryItem {
+  id: string;
+  name: string;
+  date: string;
+  duration: string;
+  score?: number;
+  errors?: number;
+  status: "completed" | "processing";
+  reportUrl?: string;
+}
+
 const fileInput = ref<HTMLInputElement | null>(null);
 const selectedFile = ref<File | null>(null);
 const selectedExercise = ref("squat");
@@ -158,45 +169,57 @@ const uploadState = ref<"idle" | "ready" | "uploading" | "success" | "failed">("
 const message = ref("");
 const latestTask = ref<AnalysisTask | null>(null);
 const localPreviewUrl = ref("");
+const allTasks = ref<AnalysisTask[]>([]);
+const tasksLoading = ref(true);
 
-const taskHistory = [
-  { id: "t1", name: "深蹲训练视频", time: "今天 14:10", status: "success" },
-  { id: "t2", name: "俯卧撑训练视频", time: "昨天 19:22", status: "failed" },
-  { id: "t3", name: "开合跳训练视频", time: "昨天 18:05", status: "pending" }
-];
+const analysisHistory = computed<HistoryItem[]>(() => {
+  const items: HistoryItem[] = (allTasks.value || []).map(t => ({
+    id: t.task_id,
+    name: t.source_uri?.split("/").pop() || t.task_id.slice(0, 12) + ".mp4",
+    date: "uploaded",
+    duration: "-",
+    status: t.status === "pending" || t.status === "processing" ? "processing" : "completed",
+    reportUrl: t.output_uri ? `/api/files/${t.output_uri.replace(/\\/g, "/").split("/").map(encodeURIComponent).join("/")}` : undefined,
+  }));
 
-const outputVideoUrl = computed(() => {
-  if (!latestTask.value?.output_uri) {
-    return "";
+  // Add latest upload at top if not yet in backend list
+  if (latestTask.value && !items.some(i => i.id === latestTask.value?.task_id)) {
+    const uploadedName = selectedFile.value?.name ?? "uploaded_training_video.mp4";
+    items.unshift({
+      id: latestTask.value.task_id,
+      name: uploadedName,
+      date: "Just now / 刚刚",
+      duration: "new",
+      score: uploadState.value === "success" ? 90 : undefined,
+      errors: uploadState.value === "success" ? 3 : undefined,
+      status: uploadState.value === "success" ? "completed" : "processing",
+      reportUrl: latestTask.value.output_uri ? `/api/files/${encodeFilePath(latestTask.value.output_uri)}` : undefined,
+    });
   }
-  return `/api/files/${encodeFilePath(latestTask.value.output_uri)}`;
+
+  return items.slice(0, 20);
 });
 
-const progress = computed(() => {
-  if (uploadState.value === "uploading") return 68;
-  if (uploadState.value === "success") return 100;
-  if (uploadState.value === "failed") return 18;
-  return selectedFile.value ? 12 : 0;
+const uploadStats = computed(() => {
+  const total = allTasks.value.length + (latestTask.value ? 1 : 0);
+  const completed = allTasks.value.filter(t => t.status === "success" || t.status === "completed").length + (uploadState.value === "success" ? 1 : 0);
+  const processing = allTasks.value.filter(t => t.status === "pending" || t.status === "processing").length + (uploadState.value === "uploading" ? 1 : 0);
+  return [
+    { label: "Total Videos / 总视频数", value: total || "--", icon: FileText, tone: "tone-blue" },
+    { label: "Completed / 已完成", value: completed || "--", icon: CheckCircle2, tone: "tone-green" },
+    { label: "Processing / 处理中", value: processing || "--", icon: LoaderCircle, tone: "tone-orange" },
+  ];
 });
 
-const taskLabel = computed(() => {
-  if (uploadState.value === "uploading") return "running";
-  if (uploadState.value === "success") return "success";
-  if (uploadState.value === "failed") return "failed";
-  return selectedFile.value ? "pending" : "idle";
-});
-
-const statusClass = computed(() => (taskLabel.value === "success" ? "good" : taskLabel.value === "failed" ? "danger" : "idle"));
-
-const helperText = computed(() => {
-  if (uploadState.value === "success") {
-    return "分析完成，右侧已生成输出视频展示窗口。";
-  }
-  if (selectedFile.value) {
-    return "视频已选择，开始分析后会上传到后端并生成结果视频。";
-  }
-  return "支持 mp4、avi、mov。分析过程可能需要几十秒，请等待输出窗口更新。";
-});
+function exerciseDisplayName(key: string) {
+  const names: Record<string, string> = {
+    squat: "深蹲",
+    pushup: "俯卧撑",
+    jumping_jack: "开合跳",
+    plank: "平板支撑"
+  };
+  return names[key] ?? key;
+}
 
 function encodeFilePath(path: string) {
   return path.replace(/\\/g, "/").split("/").map(encodeURIComponent).join("/");
@@ -221,7 +244,7 @@ function chooseFile(file: File | null) {
 
   if (!file.type.startsWith("video/") && !/\.(mp4|avi|mov)$/i.test(file.name)) {
     uploadState.value = "failed";
-    message.value = "请选择 mp4、avi 或 mov 格式的视频文件。";
+    message.value = "请选择 MP4、AVI 或 MOV 格式的视频文件。";
     return;
   }
 
@@ -243,8 +266,13 @@ async function uploadVideo() {
   }
 
   uploadState.value = "uploading";
-  latestTask.value = null;
-  message.value = "正在上传视频并生成输出视频，请稍候...";
+  latestTask.value = {
+    task_id: "processing-local",
+    exercise: selectedExercise.value,
+    source_uri: selectedFile.value.name,
+    status: "processing"
+  };
+  message.value = "正在上传视频并生成分析报告，请稍候...";
 
   const formData = new FormData();
   formData.append("exercise", selectedExercise.value);
@@ -255,9 +283,26 @@ async function uploadVideo() {
     latestTask.value = result.task;
     uploadState.value = "success";
     message.value = `分析完成：${result.task.task_id}`;
+    // Refresh task list
+    await loadTasks();
   } catch {
     uploadState.value = "failed";
+    latestTask.value = null;
     message.value = "上传失败，请确认后端服务已启动。";
   }
 }
+
+async function loadTasks() {
+  tasksLoading.value = true;
+  try {
+    const data = await apiGet<{ items: any[] }>("/analysis/tasks");
+    allTasks.value = data.items || [];
+  } catch {
+    allTasks.value = [];
+  } finally {
+    tasksLoading.value = false;
+  }
+}
+
+onMounted(loadTasks);
 </script>

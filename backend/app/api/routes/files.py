@@ -1,12 +1,13 @@
 from pathlib import Path
 
+from app.api.deps import get_current_active_user
 from app.core.config import settings
 
 try:
-    from fastapi import APIRouter, HTTPException
+    from fastapi import APIRouter, Depends, HTTPException
     from fastapi.responses import FileResponse
 except ModuleNotFoundError:
-    APIRouter = None
+    APIRouter = Depends = None
     FileResponse = None
     HTTPException = Exception
 
@@ -29,5 +30,8 @@ def _resolve_storage_path(file_path: str) -> Path:
 
 if router:
     @router.get("/{file_path:path}")
-    def get_file(file_path: str):
+    def get_file(
+        file_path: str,
+        current_user=Depends(get_current_active_user) if get_current_active_user else None,
+    ):
         return FileResponse(_resolve_storage_path(file_path))

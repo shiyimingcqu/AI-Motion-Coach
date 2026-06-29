@@ -43,7 +43,7 @@ export const exercises: Exercise[] = [
     accent: "#22c55e"
   },
   {
-    key: "pushup",
+    key: "push_up",
     name: "俯卧撑",
     category: "上肢力量",
     level: "中级",

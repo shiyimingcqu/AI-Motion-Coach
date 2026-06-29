@@ -1,108 +1,1715 @@
 <template>
-  <div class="page">
-    <header class="page-header hero-header">
-      <div>
-        <p class="eyebrow">Summary</p>
-        <h1>今天练得怎么样</h1>
-        <p class="subtle">综合评分稳定上升，主要问题集中在下肢动作控制。</p>
+  <div class="sports-dashboard">
+    <section class="top-header">
+      <div class="th-left">
+        <div class="th-avatar">{{ userInitial }}</div>
+        <div class="th-info">
+          <strong>{{ userName }}</strong>
+          <p>{{ summarySubtitle }}</p>
+        </div>
       </div>
-      <button class="primary-button" type="button" @click="startDetection">
-        <Activity :size="18" />
-        开始实时检测
-      </button>
-    </header>
 
-    <section class="score-band">
-      <div class="score-ring">
-        <span>86</span>
-        <small>综合评分</small>
+      <div class="th-score">
+        <span class="th-score-label">综合评分</span>
+        <div class="th-score-value">
+          <span class="th-score-num">{{ displayScore }}</span>
+          <span class="th-score-unit">/100</span>
+        </div>
+        <span class="th-score-badge" :class="scoreLevel">{{ scoreLabel }}</span>
       </div>
-      <MetricTile label="今日训练" value="3 次" hint="比昨日 +1" />
-      <MetricTile label="有效动作" value="120" hint="有效率 88%" />
-      <MetricTile label="错误动作" value="18" hint="待纠正 2 类" />
+
+      <div class="th-compare">
+        <span class="th-compare-label">对比上次</span>
+        <strong class="th-compare-value" :class="scoreChangeTone">
+          <svg
+            v-if="scoreChangeIcon === 'up'"
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+          >
+            <path d="M12 19V5" />
+            <path d="m5 12 7-7 7 7" />
+          </svg>
+          <svg
+            v-else
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+          >
+            <path d="M12 5v14" />
+            <path d="m19 12-7 7-7-7" />
+          </svg>
+          {{ scoreChangeText }}
+        </strong>
+      </div>
+
+      <div class="th-actions">
+        <button class="btn-primary" @click="router.push('/exercises')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="5,3 19,12 5,21" />
+          </svg>
+          开始训练
+        </button>
+      </div>
     </section>
 
-    <section class="action-grid">
-      <button class="action-card" type="button" @click="startDetection">
-        <Activity :size="22" />
-        <strong>实时检测</strong>
-        <span>打开摄像头开始训练</span>
-      </button>
-      <button class="action-card" type="button" @click="router.push('/upload')">
-        <UploadCloud :size="22" />
-        <strong>上传视频分析</strong>
-        <span>提交已有训练视频</span>
-      </button>
-      <button class="action-card" type="button" @click="router.push('/reports')">
-        <BarChart3 :size="22" />
-        <strong>查看个人报告</strong>
-        <span>查看趋势和错误分布</span>
-      </button>
+    <section class="core-row">
+      <div class="main-panel">
+        <header class="panel-header">
+          <div class="panel-left">
+            <div class="panel-title-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+              </svg>
+              <h2>深蹲动作评估</h2>
+            </div>
+            <div class="phase-badge">
+              <span class="phase-dot pulse-blue"></span>
+              当前阶段：<strong>下蹲阶段</strong>
+            </div>
+            <span class="status-pill warn">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+              检测到 {{ problems.length }} 个问题
+            </span>
+          </div>
+        </header>
+
+        <div class="metric-strip">
+          <div v-for="metric in sideMetrics" :key="metric.label" class="ms-item" :title="metric.tip">
+            <span class="ms-label">{{ metric.label }}</span>
+            <strong :class="metric.cls">{{ metric.value }}</strong>
+            <div class="ms-track">
+              <i :style="{ width: `${metric.value}%` }" :class="metric.cls"></i>
+            </div>
+          </div>
+        </div>
+
+        <div class="skel-area">
+          <div class="skel-grid"></div>
+          <div class="skel-stage-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            下蹲阶段 · 膝关节角度 73°
+          </div>
+
+          <div class="skel-layout">
+            <svg viewBox="0 0 300 520" class="pose-skeleton">
+              <circle cx="150" cy="42" r="20" fill="none" stroke="#3b82f6" stroke-width="2.5" />
+              <line x1="150" y1="62" x2="150" y2="90" stroke="#3b82f6" stroke-width="2.5" />
+              <line x1="150" y1="90" x2="150" y2="210" stroke="#3b82f6" stroke-width="2.5" />
+              <line x1="110" y1="210" x2="190" y2="210" stroke="#3b82f6" stroke-width="2.5" />
+              <line x1="150" y1="110" x2="90" y2="172" stroke="#3b82f6" stroke-width="2.5" />
+              <line x1="90" y1="172" x2="72" y2="230" stroke="#3b82f6" stroke-width="2.5" />
+              <line x1="150" y1="110" x2="210" y2="172" stroke="#3b82f6" stroke-width="2.5" />
+              <line x1="210" y1="172" x2="228" y2="230" stroke="#3b82f6" stroke-width="2.5" />
+              <line x1="130" y1="210" x2="70" y2="350" stroke="#f59e0b" stroke-width="3" />
+              <line x1="70" y1="350" x2="55" y2="470" stroke="#f59e0b" stroke-width="2.5" />
+              <line x1="170" y1="210" x2="230" y2="350" stroke="#3b82f6" stroke-width="2.5" />
+              <line x1="230" y1="350" x2="245" y2="470" stroke="#3b82f6" stroke-width="2.5" />
+              <g fill="#3b82f6">
+                <circle cx="150" cy="90" r="5" />
+                <circle cx="150" cy="130" r="5" />
+                <circle cx="90" cy="172" r="5" />
+                <circle cx="72" cy="230" r="4.5" />
+                <circle cx="210" cy="172" r="5" />
+                <circle cx="228" cy="230" r="4.5" />
+                <circle cx="130" cy="210" r="5" />
+                <circle cx="170" cy="210" r="5" />
+              </g>
+              <g fill="#f59e0b">
+                <circle cx="70" cy="350" r="5" />
+                <circle cx="55" cy="470" r="4.5" />
+              </g>
+              <circle cx="230" cy="350" r="5" fill="#3b82f6" />
+              <circle cx="245" cy="470" r="4.5" fill="#3b82f6" />
+              <g class="warning-anim">
+                <circle
+                  cx="70"
+                  cy="350"
+                  r="24"
+                  fill="none"
+                  stroke="#ef4444"
+                  stroke-width="1.5"
+                  stroke-dasharray="4 3"
+                  opacity="0.7"
+                />
+                <text x="70" y="390" text-anchor="middle" fill="#ef4444" font-size="10" font-weight="700">
+                  膝内扣
+                </text>
+              </g>
+            </svg>
+          </div>
+
+          <div class="score-card-overlay">
+            <div class="score-ring-big">
+              <span class="score-ring-num">{{ scoreValueForRing }}</span>
+              <span class="score-ring-label">综合评分</span>
+            </div>
+            <div class="score-ring-meta">
+              <span class="score-ring-grade good">{{ scoreLabel }}</span>
+              <div class="score-ring-issues">
+                <span>主要问题：</span>
+                <strong>{{ issueSummary }}</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="view-strip">
+            <button class="view-angle active">正面</button>
+            <button class="view-angle">侧面</button>
+            <button class="view-angle">后面</button>
+            <button class="view-angle disabled">3D</button>
+          </div>
+        </div>
+
+        <div class="phase-flow-bar">
+          <div class="phase-flow">
+            <div
+              v-for="(phase, index) in phases"
+              :key="phase"
+              class="phase-step"
+              :class="{ active: index === 1, done: index < 1 }"
+            >
+              <div class="phase-circle">
+                <svg v-if="index < 1" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span v-else>{{ index + 1 }}</span>
+              </div>
+              <span class="phase-label">{{ phase }}</span>
+              <span v-if="index === 1" class="phase-now">当前</span>
+            </div>
+            <div class="phase-connector">
+              <div class="phase-connector-fill" style="width: 30%"></div>
+            </div>
+          </div>
+
+          <div class="play-controls">
+            <button class="play-btn-small">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="8,5 19,12 8,19" />
+              </svg>
+            </button>
+            <div class="timeline-mini">
+              <div class="tl-track">
+                <div class="tl-fill" style="width: 38%"></div>
+                <div class="tl-thumb" style="left: 38%"></div>
+              </div>
+              <div class="tl-labels"><span>00:12</span><span>03:45</span></div>
+            </div>
+            <div class="speed-mini">
+              <button v-for="speed in ['0.5x', '1.0x', '1.5x']" :key="speed" :class="{ active: speed === '1.0x' }">
+                {{ speed }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="right-col">
+        <div class="tab-bar">
+          <button :class="['tab-btn', { active: activeTab === 'problems' }]" @click="activeTab = 'problems'">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            问题识别 <span class="tab-count">{{ feedbackItems.length || 0 }}</span>
+          </button>
+          <button :class="['tab-btn', { active: activeTab === 'advice' }]" @click="activeTab = 'advice'">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+            纠正建议 <span class="tab-count">{{ adviceGroups.length || 0 }}</span>
+          </button>
+        </div>
+
+        <div v-show="activeTab === 'problems'" class="section-card">
+          <header class="sc-header">
+            <div class="sc-header-icon danger">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <div>
+              <h3>问题识别</h3>
+              <p>发现 <strong>{{ problems.length }}</strong> 个动作问题，共扣 <strong class="score-deduct">-{{ totalDeduction }}</strong> 分</p>
+            </div>
+          </header>
+
+          <div class="problem-list">
+            <div
+              v-for="(item, index) in problems"
+              :key="`${item.title}-${index}`"
+              :class="['problem-item', item.level, { selected: selectedProblem === index }]"
+              @click="selectedProblem = index"
+            >
+              <div class="pi-top">
+                <div class="pi-num" :class="item.level">{{ index + 1 }}</div>
+                <div class="pi-info">
+                  <div class="pi-title-row">
+                    <strong>{{ item.title }}</strong>
+                    <span class="pi-badge" :class="item.level">{{ item.badge }}</span>
+                  </div>
+                  <p>{{ item.desc }}</p>
+                </div>
+              </div>
+              <div class="pi-meta">
+                <span class="pi-time">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  {{ item.time }}
+                </span>
+                <span class="pi-deduct">扣分：<strong>-{{ item.deduct }}</strong></span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="selectedProblem !== null" class="quick-advice">
+            <div class="qa-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+            </div>
+            <div>
+              <strong>当前建议</strong>
+              <p>{{ currentProblem?.recommend }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div v-show="activeTab === 'advice'" class="section-card">
+          <header class="sc-header">
+            <div class="sc-header-icon success">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
+            </div>
+            <div>
+              <h3>纠正建议</h3>
+              <p>针对 <strong>{{ problems.length }}</strong> 个问题，共 <strong>{{ adviceGroups.length }}</strong> 项训练</p>
+            </div>
+          </header>
+
+          <div class="advice-accordion">
+            <div v-for="(group, groupIndex) in adviceGroups" :key="group.label" class="accordion-item">
+              <button class="accordion-header" :class="{ open: openAccordion === groupIndex }" @click="toggleAccordion(groupIndex)">
+                <span class="accordion-dot" :style="{ background: group.color }"></span>
+                <span class="accordion-title">{{ group.label }}</span>
+                <span class="accordion-count">{{ group.items.length }} 项</span>
+                <svg
+                  :class="['accordion-chevron', { open: openAccordion === groupIndex }]"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+              <div v-if="openAccordion === groupIndex" class="accordion-body">
+                <div v-for="(item, itemIndex) in group.items" :key="item.title" class="advice-item">
+                  <div class="ai-num">{{ itemIndex + 1 }}</div>
+                  <div class="ai-body">
+                    <strong>{{ item.title }}</strong>
+                    <p>{{ item.desc }}</p>
+                    <div class="ai-prescription">
+                      <span>{{ item.sets }}</span>
+                      <span>{{ item.freq }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <button class="btn-full-plan">查看完整纠正方案</button>
+        </div>
+      </aside>
     </section>
 
-    <section class="dashboard-grid">
-      <article class="panel">
-        <div class="section-title">
-          <div>
-            <p class="eyebrow">Recent</p>
-            <h2>最近训练记录</h2>
-          </div>
-          <button class="text-button" type="button" @click="router.push('/sessions')">全部记录</button>
-        </div>
-        <div class="session-list">
-          <div v-for="session in latestSessions" :key="session.session_id" class="session-item">
-            <span>{{ exerciseName(session.exercise) }}</span>
-            <strong>{{ session.average_score }} 分</strong>
-            <small>{{ session.date }} · {{ session.valid_count }}/{{ session.total_count }} 有效</small>
-          </div>
-        </div>
-      </article>
+    <section class="charts-row">
+      <div class="chart-card">
+        <header class="chart-card-header">
+          <h3>评分趋势</h3>
+          <span class="chart-pill up">近 7 天 · {{ scoreValueForRing }}</span>
+        </header>
+        <div ref="trendChartRef" class="chart-body"></div>
+      </div>
 
-      <article class="panel">
-        <div class="section-title">
-          <div>
-            <p class="eyebrow">Trend</p>
-            <h2>本周评分趋势</h2>
-          </div>
-          <span class="status-pill good">+6 分</span>
+      <div class="chart-card">
+        <header class="chart-card-header">
+          <h3>能力雷达图</h3>
+          <span class="chart-pill">短板：关节活动度</span>
+        </header>
+        <div ref="radarChartRef" class="chart-body"></div>
+        <div class="chart-footer">
+          <span class="cf-badge good">优势：动作流畅度 {{ sideMetrics[0]?.value ?? 0 }}</span>
+          <span class="cf-badge warn">短板：关节活动度 {{ sideMetrics[2]?.value ?? 0 }}</span>
         </div>
-        <div class="mini-chart" aria-label="最近 7 天平均分趋势">
-          <span v-for="(score, index) in store.trend" :key="index" :style="{ height: `${score - 48}%` }">
-            <b>{{ score }}</b>
-          </span>
-        </div>
-      </article>
+      </div>
+
+      <div class="chart-card">
+        <header class="chart-card-header">
+          <h3>左右对称性</h3>
+          <span class="chart-pill">左右对比</span>
+        </header>
+        <div ref="symmetryChartRef" class="chart-body"></div>
+      </div>
     </section>
 
-    <section class="panel error-panel">
-      <div>
-        <p class="eyebrow">Correction Focus</p>
-        <h2>常见错误 Top 5</h2>
-      </div>
-      <div class="error-chips">
-        <span v-for="item in store.errorStats" :key="item.name">{{ item.name }} · {{ item.value }} 次</span>
-      </div>
+    <section class="bottom-actions">
+      <button class="ba-btn">重新评估</button>
+      <button class="ba-btn">生成纠正计划</button>
+      <button class="ba-btn" @click="router.push('/export')">导出 PDF</button>
+      <button class="ba-btn primary" @click="router.push('/reports')">查看完整报告</button>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { Activity, BarChart3, UploadCloud } from "lucide-vue-next";
+import * as echarts from "echarts/core";
+import { BarChart, LineChart, RadarChart } from "echarts/charts";
+import { GridComponent, LegendComponent, RadarComponent, TooltipComponent } from "echarts/components";
+import { CanvasRenderer } from "echarts/renderers";
+import { useAuthStore } from "@/stores/auth";
+import { getDashboardStats } from "../api/dashboard";
+import { getFeedbacks, type FeedbackItem } from "../api/feedback";
 
-import MetricTile from "../components/MetricTile.vue";
-import { demoSessions, exercises, useTrainingStore } from "../stores/training";
+echarts.use([
+  BarChart,
+  LineChart,
+  RadarChart,
+  GridComponent,
+  LegendComponent,
+  RadarComponent,
+  TooltipComponent,
+  CanvasRenderer,
+]);
+
+type Severity = "high" | "medium" | "low";
+
+type ProblemItem = {
+  title: string;
+  desc: string;
+  level: Severity;
+  badge: string;
+  time: string;
+  deduct: number;
+  recommend: string;
+};
+
+type AdviceGroup = {
+  label: string;
+  color: string;
+  items: Array<{
+    title: string;
+    desc: string;
+    sets: string;
+    freq: string;
+  }>;
+};
 
 const router = useRouter();
-const store = useTrainingStore();
-const latestSessions = computed(() => demoSessions.slice(0, 3));
+const authStore = useAuthStore();
 
-function startDetection() {
-  router.push("/realtime");
+const statsData = ref<any>(null);
+const statsLoading = ref(true);
+const feedbackItems = ref<FeedbackItem[]>([]);
+
+const trendChartRef = ref<HTMLDivElement | null>(null);
+const radarChartRef = ref<HTMLDivElement | null>(null);
+const symmetryChartRef = ref<HTMLDivElement | null>(null);
+const chartInstances: echarts.ECharts[] = [];
+
+const activeTab = ref<"problems" | "advice">("problems");
+const selectedProblem = ref<number | null>(0);
+const openAccordion = ref<number | null>(0);
+const phases = ["准备阶段", "下蹲阶段", "底部停顿", "起身阶段", "结束阶段"];
+
+const feedbackDescriptions: Record<string, string> = {
+  下蹲深度不足: "下蹲深度不够，说明髋膝协同和动作控制还可以继续优化。",
+  膝盖内扣: "膝关节向内偏移，可能带来额外膝部压力，需要加强外展控制。",
+  躯干前倾过大: "躯干前倾幅度偏大，通常和髋部灵活性或核心稳定不足有关。",
+  身体塌腰: "塌腰说明腹压和核心控制不足，动作稳定性会明显下降。",
+  臀部下沉: "臀部下沉意味着核心与臀部发力不均衡，姿态保持能力不足。",
+  手臂未举过肩: "肩部活动度受限，举臂路线不完整。",
+  双脚打开不足: "站距偏窄会影响重心分配和下肢稳定性。",
+};
+
+const feedbackSuggestionMap: Record<string, string> = {
+  下蹲深度不足: "继续降低重心，同时保持脚跟贴地和膝盖跟随脚尖方向。",
+  膝盖内扣: "加入弹力带侧步和臀中肌激活训练，起身时主动向外推膝。",
+  躯干前倾过大: "先建立腹压，再维持胸椎伸展，避免依赖腰背代偿完成动作。",
+  身体塌腰: "强化核心稳定训练，保持骨盆中立，避免腰椎过度参与。",
+  臀部下沉: "补充臀桥、平板支撑等训练，提升臀部与核心的协同控制。",
+  手臂未举过肩: "增加肩关节灵活性和胸椎伸展练习，再逐步提高举臂角度。",
+  双脚打开不足: "将站距调整到肩宽到 1.5 倍肩宽之间，找到更稳定的发力位置。",
+};
+
+const userName = computed(() => authStore.username || "用户");
+const userInitial = computed(() => (userName.value || "U").charAt(0).toUpperCase());
+
+const scoreValue = computed(() => statsData.value?.average_score);
+const scoreValueForRing = computed(() => Math.round(Number(scoreValue.value ?? 86)));
+const displayScore = computed(() => (scoreValue.value == null ? "--" : scoreValueForRing.value));
+
+const scoreLabel = computed(() => {
+  if (scoreValue.value == null) return "暂无";
+  if (scoreValue.value >= 85) return "优秀";
+  if (scoreValue.value >= 75) return "良好";
+  if (scoreValue.value >= 60) return "中等";
+  return "需改进";
+});
+
+const scoreLevel = computed(() => (scoreValue.value != null && scoreValue.value >= 75 ? "good" : ""));
+const scoreChangeValue = computed(() => Number(statsData.value?.average_score_change ?? 0));
+const scoreChangeTone = computed(() => (scoreChangeValue.value >= 0 ? "up" : "down"));
+const scoreChangeIcon = computed(() => (scoreChangeValue.value >= 0 ? "up" : "down"));
+const scoreChangeText = computed(() => {
+  if (statsData.value?.average_score_change == null) return "--";
+  return `${scoreChangeValue.value >= 0 ? "+" : ""}${scoreChangeValue.value.toFixed(1)}`;
+});
+
+const summarySubtitle = computed(() => {
+  const stats = statsData.value;
+  if (!stats || stats.total_sessions === 0) return "暂无训练记录，开始你的第一次训练吧";
+  const last = stats.recent_sessions?.[0];
+  if (last) {
+    return `${last.exercise} · ${(last.created_at || "").slice(0, 10)}`;
+  }
+  return `共 ${stats.total_sessions} 次训练`;
+});
+
+const sideMetrics = computed(() => {
+  const base = Number(scoreValue.value ?? 0);
+  return [
+    {
+      label: "动作流畅度",
+      value: Math.min(100, Math.max(0, base ? base + 5 : 0)),
+      cls: base >= 80 ? "good" : "warn",
+      tip: "根据动作连续性与停顿时长综合评估。",
+    },
+    {
+      label: "动作稳定性",
+      value: Math.min(100, Math.max(0, base)),
+      cls: base >= 80 ? "good" : "warn",
+      tip: "根据重心偏移和关键点波动综合评估。",
+    },
+    {
+      label: "关节活动度",
+      value: Math.min(100, Math.max(0, base - 8)),
+      cls: base >= 75 ? "good" : "warn",
+      tip: "根据关键关节活动范围与动作深度综合评估。",
+    },
+    {
+      label: "左右对称性",
+      value: Math.min(100, Math.max(0, base - 3)),
+      cls: base >= 78 ? "good" : "warn",
+      tip: "根据左右侧角度差异和动作轨迹综合评估。",
+    },
+    {
+      label: "姿态控制力",
+      value: Math.min(100, Math.max(0, base ? base + 2 : 0)),
+      cls: base >= 80 ? "good" : "warn",
+      tip: "根据核心稳定和关键点控制能力综合评估。",
+    },
+  ];
+});
+
+const problems = computed<ProblemItem[]>(() => {
+  if (feedbackItems.value.length === 0) {
+    return [
+      {
+        title: "暂无问题数据",
+        desc: "完成一次训练后，这里会自动展示识别到的主要动作问题。",
+        level: "low",
+        badge: "信息",
+        time: "-",
+        deduct: 0,
+        recommend: "先开始一次训练，我们会基于结果给出更准确的纠正建议。",
+      },
+    ];
+  }
+
+  return feedbackItems.value.slice(0, 5).map((feedback) => {
+    const level = (feedback.severity || "low") as Severity;
+    return {
+      title: feedback.issue,
+      desc: feedbackDescriptions[feedback.issue] || `检测到动作问题：${feedback.issue}`,
+      level,
+      badge: level === "high" ? "高风险" : level === "medium" ? "中风险" : "低风险",
+      time: feedback.created_at?.slice(0, 10) || "最近",
+      deduct: level === "high" ? 8 : level === "medium" ? 6 : 4,
+      recommend: feedbackSuggestionMap[feedback.issue] || "建议安排专项控制训练并结合视频回放逐步修正。",
+    };
+  });
+});
+
+const currentProblem = computed(() => {
+  if (selectedProblem.value === null) return null;
+  return problems.value[selectedProblem.value] || null;
+});
+
+const issueSummary = computed(() => {
+  return problems.value.slice(0, 2).map((item) => item.title).join(" · ") || "暂无";
+});
+
+const adviceGroups = computed<AdviceGroup[]>(() => {
+  return problems.value.map((problem, index) => ({
+    label: problem.title,
+    color: problem.level === "high" ? "#f87171" : problem.level === "medium" ? "#fbbf24" : "#60a5fa",
+    items: [
+      {
+        title: `专项纠正 ${index + 1}`,
+        desc: problem.recommend,
+        sets: problem.level === "high" ? "4 组 x 10 次" : "3 组 x 10 次",
+        freq: problem.level === "high" ? "每周 4 次" : "每周 3 次",
+      },
+      {
+        title: "动作控制练习",
+        desc: `围绕“${problem.title}”进行慢速控制训练，先稳住动作路径，再逐步增加节奏。`,
+        sets: "2 组 x 45 秒",
+        freq: "训练前热身",
+      },
+    ],
+  }));
+});
+
+const totalDeduction = computed(() => problems.value.reduce((sum, item) => sum + item.deduct, 0));
+
+function toggleAccordion(index: number) {
+  openAccordion.value = openAccordion.value === index ? null : index;
 }
 
-function exerciseName(key: string) {
-  return exercises.find((item) => item.key === key)?.name ?? key;
+function disposeCharts() {
+  while (chartInstances.length > 0) {
+    chartInstances.pop()?.dispose();
+  }
 }
+
+function createChart(el: HTMLDivElement, option: echarts.EChartsCoreOption) {
+  const chart = echarts.init(el);
+  chart.setOption(option);
+  chartInstances.push(chart);
+}
+
+function resizeCharts() {
+  chartInstances.forEach((chart) => chart.resize());
+}
+
+function buildCharts() {
+  disposeCharts();
+
+  const trendData = statsData.value?.recent_trend || [];
+  const trendDates = trendData.length ? trendData.map((item: any) => String(item.date).slice(5)) : ["暂无数据"];
+  const trendScores = trendData.length ? trendData.map((item: any) => Number(item.score)) : [0];
+  const score = Number(scoreValue.value ?? 80);
+  const metricValues = sideMetrics.value.map((item) => item.value);
+
+  if (trendChartRef.value) {
+    createChart(trendChartRef.value, {
+      color: ["#60a5fa"],
+      grid: { left: 40, right: 14, top: 12, bottom: 28 },
+      tooltip: {
+        trigger: "axis",
+        backgroundColor: "rgba(8,13,26,0.94)",
+        borderColor: "#253047",
+        textStyle: { color: "#e2e8f0" },
+        formatter: (params: any[]) => {
+          const point = params[0];
+          return `${point.axisValue}: ${point.value} 分`;
+        },
+      },
+      xAxis: {
+        type: "category",
+        boundaryGap: false,
+        data: trendDates,
+        axisLine: { lineStyle: { color: "#1e293b" } },
+        axisTick: { show: false },
+        axisLabel: { color: "#64748b", fontSize: 11 },
+      },
+      yAxis: {
+        type: "value",
+        min: 60,
+        max: 100,
+        interval: 10,
+        splitLine: { lineStyle: { color: "rgba(30,41,59,0.6)", type: "dashed" } },
+        axisLabel: { color: "#64748b", fontSize: 11 },
+      },
+      series: [
+        {
+          type: "line",
+          smooth: true,
+          symbolSize: 7,
+          lineStyle: { width: 2.5 },
+          areaStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: "rgba(59,130,246,0.25)" },
+              { offset: 1, color: "rgba(59,130,246,0.02)" },
+            ]),
+          },
+          data: trendScores,
+        },
+      ],
+    });
+  }
+
+  if (radarChartRef.value) {
+    createChart(radarChartRef.value, {
+      color: ["#60a5fa"],
+      tooltip: {
+        backgroundColor: "rgba(8,13,26,0.94)",
+        borderColor: "#253047",
+        textStyle: { color: "#e2e8f0" },
+      },
+      radar: {
+        center: ["50%", "52%"],
+        radius: "68%",
+        indicator: [
+          { name: "动作流畅度", max: 100 },
+          { name: "动作稳定性", max: 100 },
+          { name: "关节活动度", max: 100 },
+          { name: "左右对称性", max: 100 },
+          { name: "姿态控制力", max: 100 },
+        ],
+        axisName: { color: "#94a3b8", fontSize: 11 },
+        splitArea: { areaStyle: { color: ["rgba(15,23,42,0.5)", "rgba(8,13,26,0.8)"] } },
+        splitLine: { lineStyle: { color: "#1e293b" } },
+        axisLine: { lineStyle: { color: "#1e293b" } },
+      },
+      series: [
+        {
+          type: "radar",
+          data: [{ value: metricValues, name: "当前表现" }],
+          areaStyle: { color: "rgba(59,130,246,0.2)" },
+          lineStyle: { color: "#60a5fa", width: 2 },
+          itemStyle: { color: "#3b82f6" },
+          symbolSize: 4,
+        },
+      ],
+    });
+  }
+
+  if (symmetryChartRef.value) {
+    createChart(symmetryChartRef.value, {
+      tooltip: {
+        trigger: "axis",
+        backgroundColor: "rgba(8,13,26,0.94)",
+        borderColor: "#253047",
+        textStyle: { color: "#e2e8f0" },
+      },
+      legend: {
+        data: ["左侧", "右侧"],
+        textStyle: { color: "#64748b", fontSize: 10 },
+        top: 0,
+      },
+      grid: { left: 40, right: 14, top: 26, bottom: 28 },
+      xAxis: {
+        type: "category",
+        data: ["髋部", "腿部", "膝关节", "踝关节"],
+        axisLine: { lineStyle: { color: "#1e293b" } },
+        axisTick: { show: false },
+        axisLabel: { color: "#64748b", fontSize: 11 },
+      },
+      yAxis: {
+        type: "value",
+        min: 0,
+        max: 100,
+        splitLine: { lineStyle: { color: "rgba(30,41,59,0.6)", type: "dashed" } },
+        axisLabel: { color: "#64748b", fontSize: 11 },
+      },
+      series: [
+        {
+          type: "bar",
+          name: "左侧",
+          data: [score + 5, score, score - 10, score - 3],
+          color: "#3b82f6",
+          barWidth: 14,
+          itemStyle: { borderRadius: [3, 3, 0, 0] },
+        },
+        {
+          type: "bar",
+          name: "右侧",
+          data: [score + 8, score + 3, score - 14, score],
+          color: "#10b981",
+          barWidth: 14,
+          itemStyle: { borderRadius: [3, 3, 0, 0] },
+        },
+      ],
+    });
+  }
+}
+
+onMounted(async () => {
+  try {
+    const [statsResult, feedbackResult] = await Promise.allSettled([
+      getDashboardStats(),
+      getFeedbacks({ limit: 10 }),
+    ]);
+
+    if (statsResult.status === "fulfilled") {
+      statsData.value = statsResult.value;
+    }
+
+    if (feedbackResult.status === "fulfilled") {
+      feedbackItems.value = feedbackResult.value.items || [];
+    }
+  } catch (error) {
+    console.warn("Dashboard data load failed:", error);
+    statsData.value = null;
+    feedbackItems.value = [];
+  } finally {
+    statsLoading.value = false;
+    await nextTick();
+    buildCharts();
+  }
+
+  window.addEventListener("resize", resizeCharts);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", resizeCharts);
+  disposeCharts();
+});
 </script>
+
+<style scoped>
+.sports-dashboard {
+  display: grid;
+  gap: 18px;
+  max-width: 1560px;
+  margin: 0 auto;
+}
+
+.top-header,
+.main-panel,
+.section-card,
+.chart-card {
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(8, 13, 26, 0.98));
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
+}
+
+.top-header {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: 28px;
+  padding: 16px 24px;
+}
+
+.th-left,
+.panel-left,
+.th-score,
+.th-compare {
+  display: flex;
+  align-items: center;
+}
+
+.th-left {
+  gap: 14px;
+}
+
+.th-avatar {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.th-info strong,
+.panel-title-icon h2,
+.chart-card-header h3,
+.sc-header h3,
+.pi-title-row strong,
+.ai-body strong {
+  color: #f8fafc;
+}
+
+.th-info p,
+.th-score-label,
+.th-score-unit,
+.th-compare-label,
+.ms-label,
+.sc-header p,
+.pi-info p,
+.pi-meta span,
+.accordion-count,
+.ai-body p,
+.ai-prescription,
+.chart-pill,
+.tl-labels {
+  color: #94a3b8;
+}
+
+.th-score {
+  gap: 10px;
+}
+
+.th-score-value {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.th-score-num {
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 1;
+  background: linear-gradient(135deg, #60a5fa, #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.th-score-badge,
+.phase-badge,
+.status-pill,
+.phase-now,
+.pi-badge,
+.tab-count,
+.chart-pill,
+.cf-badge {
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.th-score-badge {
+  padding: 2px 10px;
+  font-size: 10px;
+}
+
+.th-score-badge.good,
+.score-ring-grade.good,
+.cf-badge.good {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.th-compare {
+  gap: 8px;
+}
+
+.th-compare-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.th-compare-value.up {
+  color: #34d399;
+}
+
+.th-compare-value.down {
+  color: #f87171;
+}
+
+.th-actions {
+  justify-self: end;
+}
+
+.btn-primary,
+.btn-full-plan,
+.ba-btn,
+.tab-btn,
+.accordion-header,
+.view-angle,
+.play-btn-small,
+.speed-mini button {
+  cursor: pointer;
+}
+
+.btn-primary,
+.tab-btn.active,
+.play-btn-small,
+.ba-btn.primary {
+  color: #fff;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  border: none;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+}
+
+.core-row {
+  display: grid;
+  grid-template-columns: 1.38fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.main-panel {
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.06);
+  background: rgba(8, 13, 26, 0.7);
+}
+
+.panel-left {
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.panel-title-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-title-icon svg,
+.skel-stage-label,
+.phase-step.active .phase-label,
+.btn-full-plan {
+  color: #93c5fd;
+}
+
+.phase-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px;
+  background: rgba(59, 130, 246, 0.1);
+  font-size: 12px;
+}
+
+.phase-badge strong {
+  color: #f8fafc;
+}
+
+.phase-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.pulse-blue {
+  background: #3b82f6;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 12px;
+  font-size: 12px;
+}
+
+.status-pill.warn,
+.cf-badge.warn {
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+}
+
+.metric-strip {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(8, 13, 26, 0.35);
+  border-bottom: 1px solid rgba(59, 130, 246, 0.04);
+}
+
+.ms-item {
+  display: grid;
+  gap: 4px;
+}
+
+.ms-item strong,
+.score-ring-num {
+  font-weight: 900;
+}
+
+.ms-item .good,
+.ms-track .good {
+  color: #34d399;
+  background: linear-gradient(90deg, #10b981, #34d399);
+}
+
+.ms-item .warn,
+.ms-track .warn {
+  color: #fbbf24;
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.ms-track {
+  height: 4px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(30, 41, 59, 0.6);
+}
+
+.ms-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.skel-area {
+  position: relative;
+  min-height: 400px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+
+.skel-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(59, 130, 246, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(59, 130, 246, 0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.skel-stage-label,
+.score-card-overlay,
+.view-strip {
+  position: absolute;
+  z-index: 5;
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  background: rgba(8, 13, 26, 0.82);
+  backdrop-filter: blur(8px);
+}
+
+.skel-stage-label {
+  top: 10px;
+  left: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.skel-layout {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 220px;
+}
+
+.pose-skeleton {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.warning-anim {
+  animation: pulseWarn 1.8s ease-in-out infinite;
+}
+
+.score-card-overlay {
+  left: 14px;
+  bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-radius: 10px;
+}
+
+.score-ring-big {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 1px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(8, 13, 26, 0.9) 38%, transparent 39%),
+    conic-gradient(#34d399 0 86%, rgba(255, 255, 255, 0.04) 86% 100%);
+  border: 2px solid rgba(52, 211, 153, 0.2);
+}
+
+.score-ring-label {
+  font-size: 8px;
+  color: #94a3b8;
+}
+
+.score-ring-meta {
+  display: grid;
+  gap: 5px;
+}
+
+.score-ring-grade {
+  width: fit-content;
+  padding: 2px 8px;
+  font-size: 10px;
+}
+
+.score-ring-issues {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.score-ring-issues strong,
+.pi-deduct strong,
+.score-deduct {
+  color: #f87171;
+}
+
+.view-strip {
+  top: 10px;
+  right: 14px;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.view-angle {
+  padding: 4px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.view-angle.active {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+}
+
+.view-angle.disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.phase-flow-bar {
+  display: grid;
+  gap: 12px;
+  padding: 14px 18px;
+  border-top: 1px solid rgba(59, 130, 246, 0.06);
+  background: rgba(8, 13, 26, 0.7);
+}
+
+.phase-flow {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.phase-step {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  text-align: center;
+}
+
+.phase-circle {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px solid #334155;
+  background: rgba(30, 41, 59, 0.8);
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.phase-step.done .phase-circle {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: #10b981;
+  color: #34d399;
+}
+
+.phase-step.active .phase-circle {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: #3b82f6;
+  color: #93c5fd;
+}
+
+.phase-label {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.phase-now {
+  padding: 1px 7px;
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  font-size: 8px;
+}
+
+.phase-connector {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 12px;
+  z-index: 1;
+  height: 2px;
+  margin: 0 calc(50% + 12px);
+  background: #1e293b;
+  border-radius: 999px;
+}
+
+.phase-connector-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+}
+
+.play-controls {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.play-btn-small {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+}
+
+.timeline-mini {
+  display: grid;
+  gap: 4px;
+}
+
+.tl-track {
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(30, 41, 59, 0.7);
+}
+
+.tl-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #60a5fa, #a78bfa);
+}
+
+.tl-thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #f8fafc;
+}
+
+.tl-labels,
+.speed-mini,
+.tab-bar,
+.pi-title-row,
+.pi-meta,
+.chart-footer,
+.bottom-actions {
+  display: flex;
+}
+
+.tl-labels {
+  justify-content: space-between;
+  font-size: 10px;
+}
+
+.speed-mini {
+  gap: 2px;
+}
+
+.speed-mini button,
+.ba-btn,
+.btn-full-plan {
+  border: 1px solid rgba(59, 130, 246, 0.12);
+  background: rgba(59, 130, 246, 0.06);
+  color: #cbd5e1;
+}
+
+.speed-mini button {
+  padding: 3px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.speed-mini button.active {
+  background: rgba(59, 130, 246, 0.16);
+  color: #93c5fd;
+}
+
+.right-col {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.tab-bar {
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid rgba(59, 130, 246, 0.1);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.96);
+}
+
+.tab-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.section-card {
+  padding: 18px;
+}
+
+.sc-header {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.06);
+}
+
+.sc-header-icon,
+.qa-icon,
+.ai-num {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.sc-header-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.sc-header-icon.danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+}
+
+.sc-header-icon.success,
+.qa-icon,
+.ai-num {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+}
+
+.problem-list,
+.advice-accordion,
+.accordion-body {
+  display: grid;
+  gap: 8px;
+}
+
+.problem-item,
+.advice-item {
+  padding: 12px;
+  border-radius: 9px;
+}
+
+.problem-item {
+  border: 1px solid transparent;
+}
+
+.problem-item.high {
+  background: rgba(239, 68, 68, 0.05);
+  border-color: rgba(239, 68, 68, 0.12);
+}
+
+.problem-item.medium {
+  background: rgba(245, 158, 11, 0.04);
+  border-color: rgba(245, 158, 11, 0.12);
+}
+
+.problem-item.low {
+  background: rgba(59, 130, 246, 0.03);
+  border-color: rgba(59, 130, 246, 0.08);
+}
+
+.problem-item.selected {
+  outline: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.pi-top,
+.quick-advice,
+.advice-item {
+  display: flex;
+  gap: 10px;
+}
+
+.pi-num {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.pi-num.high,
+.pi-badge.high {
+  background: rgba(239, 68, 68, 0.14);
+  color: #f87171;
+}
+
+.pi-num.medium,
+.pi-badge.medium {
+  background: rgba(245, 158, 11, 0.14);
+  color: #fbbf24;
+}
+
+.pi-num.low,
+.pi-badge.low {
+  background: rgba(59, 130, 246, 0.1);
+  color: #93c5fd;
+}
+
+.pi-badge {
+  padding: 1px 8px;
+  font-size: 9px;
+}
+
+.pi-meta {
+  justify-content: space-between;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(59, 130, 246, 0.04);
+  font-size: 10px;
+}
+
+.quick-advice {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 9px;
+  border: 1px solid rgba(16, 185, 129, 0.1);
+  background: rgba(16, 185, 129, 0.04);
+}
+
+.qa-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+
+.quick-advice strong {
+  display: block;
+  margin-bottom: 3px;
+}
+
+.accordion-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(59, 130, 246, 0.06);
+  border-radius: 9px;
+  background: rgba(8, 13, 26, 0.4);
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+}
+
+.accordion-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.accordion-title {
+  flex: 1;
+}
+
+.accordion-chevron {
+  color: #64748b;
+  transition: transform 0.2s ease;
+}
+
+.accordion-chevron.open {
+  transform: rotate(180deg);
+}
+
+.accordion-body {
+  padding: 8px 0 0 14px;
+}
+
+.advice-item {
+  background: rgba(8, 13, 26, 0.3);
+}
+
+.ai-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.ai-body {
+  display: grid;
+  gap: 2px;
+}
+
+.btn-full-plan {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 9px;
+}
+
+.charts-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.chart-card {
+  padding: 16px;
+}
+
+.chart-card-header,
+.chart-footer {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chart-card-header {
+  margin-bottom: 14px;
+}
+
+.chart-body {
+  width: 100%;
+  height: 260px;
+}
+
+.chart-footer {
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.cf-badge {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+.bottom-actions {
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ba-btn {
+  padding: 12px 18px;
+  border-radius: 10px;
+}
+
+@keyframes pulseWarn {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 1200px) {
+  .top-header,
+  .core-row,
+  .charts-row {
+    grid-template-columns: 1fr;
+  }
+
+  .top-header {
+    gap: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .sports-dashboard {
+    gap: 14px;
+  }
+
+  .top-header,
+  .chart-card,
+  .section-card {
+    padding: 14px;
+  }
+
+  .metric-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .play-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .tab-bar,
+  .bottom-actions {
+    flex-direction: column;
+  }
+}
+</style>

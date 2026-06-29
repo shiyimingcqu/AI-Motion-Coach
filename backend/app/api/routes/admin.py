@@ -12,7 +12,6 @@ except ModuleNotFoundError:
     BaseModel = None
     Session = None
 
-
 router = APIRouter(prefix="/admin", tags=["admin"]) if APIRouter else None
 
 
@@ -28,7 +27,8 @@ if router and BaseModel:
         items: list[AdminUserResponse]
 
     class AdminUserUpdateRequest(BaseModel):
-        is_active: bool
+        is_active: bool | None = None
+        role: str | None = None
 
     class AdminUserCreateRequest(BaseModel):
         username: str
@@ -51,7 +51,6 @@ if router and BaseModel:
     def list_users(db: Session = Depends(get_db)):
         users = (
             db.query(UserORM)
-            .filter(UserORM.role == "user")
             .order_by(UserORM.id.asc())
             .all()
         )
@@ -119,13 +118,28 @@ if router and BaseModel:
         if user is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
 
-        if user.role == "admin":
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="管理员账号不能在用户管理中禁用")
+        if request.role is not None:
+            if request.role not in {"user", "admin"}:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="角色只能是 user 或 admin")
+            user.role = request.role
 
-        user.is_active = request.is_active
+        if request.is_active is not None:
+            user.is_active = request.is_active
         db.commit()
         db.refresh(user)
         return _to_admin_user_response(user)
+
+    @router.put(
+        "/users/{user_id}",
+        response_model=AdminUserResponse,
+    )
+    def replace_user(
+        user_id: int,
+        request: AdminUserUpdateRequest,
+        db: Session = Depends(get_db),
+        current_admin: UserORM = Depends(require_admin),
+    ):
+        return update_user_status(user_id, request, db, current_admin)
 
     @router.delete(
         "/users/{user_id}",

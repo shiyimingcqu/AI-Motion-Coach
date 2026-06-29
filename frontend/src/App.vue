@@ -103,14 +103,18 @@ import {
   Bell,
   ClipboardList,
   Dumbbell,
+  FileDown,
   FileText,
   Gauge,
   Layers,
+  LineChart,
   Shield,
   Search,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
+  Target,
+  TrendingUp,
   UploadCloud,
   Users
 } from "lucide-vue-next";
@@ -139,8 +143,28 @@ function unlockPageScroll() {
 
 onUnmounted(unlockPageScroll);
 
-const pageTitle = computed(() =>
-  authStore.isAdmin ? "管理后台" : "学生训练端"
+const pageTitleMap: Record<string, string> = {
+  "/": "Overview / 总览",
+  "/realtime": "Realtime Detection / 实时姿态检测",
+  "/upload": "Video Upload / 视频上传分析",
+  "/feedback": "Error Feedback / 动作错误反馈",
+  "/sessions": "Training Sessions / 训练记录",
+  "/exercises": "Exercise Library / 动作库",
+  "/progress": "Personal Progress / 个人进步趋势",
+  "/reports": "Evaluation Reports / 评估报告",
+  "/score-trends": "Score Trends / 分数趋势",
+  "/motion-quality": "Motion Quality Metrics / 动作质量指标",
+  "/export": "Export Reports / 报告导出",
+  "/rules": "Exercise Rules / 动作规则配置",
+  "/users": "User Management / 用户管理",
+  "/settings": "Settings / 系统设置"
+};
+
+const pageTitle = computed(() => pageTitleMap[route.path] ?? "Pose Training AI");
+const pageSubtitle = computed(() =>
+  authStore.isAdmin
+    ? "System Management / 管理后台"
+    : "Student Training Workspace / 学生训练工作台"
 );
 
 const roleText = computed(() =>
@@ -155,8 +179,14 @@ const baseNavItems = [
   { path: "/", label: "首页总览", icon: Gauge },
   { path: "/realtime", label: "实时检测", icon: Activity },
   { path: "/upload", label: "视频分析", icon: UploadCloud },
+  { path: "/feedback", label: "动作反馈", icon: Target },
   { path: "/sessions", label: "训练记录", icon: ClipboardList },
+  { path: "/exercises", label: "动作库", icon: Dumbbell },
+  { path: "/progress", label: "个人进步", icon: TrendingUp },
   { path: "/reports", label: "个人报告", icon: BarChart3 },
+  { path: "/score-trends", label: "分数趋势", icon: BarChart3 },
+  { path: "/motion-quality", label: "动作质量", icon: LineChart },
+  { path: "/export", label: "报告导出", icon: FileDown },
 ];
 
 const adminNavItems = [

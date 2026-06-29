@@ -6,9 +6,16 @@ import RealtimeDetectView from "../views/RealtimeDetectView.vue";
 import VideoUploadView from "../views/VideoUploadView.vue";
 import SessionsView from "../views/SessionsView.vue";
 import ReportsView from "../views/ReportsView.vue";
+import PersonalProgressView from "../views/PersonalProgressView.vue";
+import ScoreTrendsView from "../views/ScoreTrendsView.vue";
+import MotionQualityView from "../views/MotionQualityView.vue";
 import ExerciseRulesView from "../views/ExerciseRulesView.vue";
 import ProfileView from "../views/ProfileView.vue";
 import SettingsView from "../views/SettingsView.vue";
+import UserManagementView from "../views/UserManagementView.vue";
+import ExportReportsView from "../views/ExportReportsView.vue";
+import ExerciseLibraryView from "../views/ExerciseLibraryView.vue";
+import ErrorFeedbackView from "../views/ErrorFeedbackView.vue";
 import LoginView from "../views/LoginView.vue";
 import AdminDashboardView from "../views/AdminDashboardView.vue";
 import AdminUsersView from "../views/AdminUsersView.vue";
@@ -27,9 +34,16 @@ export const router = createRouter({
     { path: "/", component: DashboardView, meta: { userOnly: true } },
     { path: "/realtime", component: RealtimeDetectView, meta: { userOnly: true } },
     { path: "/upload", component: VideoUploadView, meta: { userOnly: true } },
+    { path: "/feedback", component: ErrorFeedbackView, meta: { userOnly: true } },
     { path: "/sessions", component: SessionsView, meta: { userOnly: true } },
+    { path: "/exercises", component: ExerciseLibraryView, meta: { userOnly: true } },
+    { path: "/progress", component: PersonalProgressView, meta: { userOnly: true } },
     { path: "/reports", component: ReportsView, meta: { userOnly: true } },
+    { path: "/score-trends", component: ScoreTrendsView, meta: { userOnly: true } },
+    { path: "/motion-quality", component: MotionQualityView, meta: { userOnly: true } },
+    { path: "/export", component: ExportReportsView, meta: { userOnly: true } },
     { path: "/rules", redirect: "/admin/rules" },
+    { path: "/users", component: UserManagementView, meta: { adminOnly: true } },
     { path: "/profile", component: ProfileView, meta: { userOnly: true } },
     { path: "/settings", component: SettingsView, meta: { userOnly: true } },
     { path: "/admin", component: AdminDashboardView, meta: { adminOnly: true } },
