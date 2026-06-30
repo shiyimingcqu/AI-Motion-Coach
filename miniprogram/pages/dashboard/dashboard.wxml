@@ -1,0 +1,77 @@
+<!-- 首页 Dashboard -->
+<scroll-view class="dashboard-page" scroll-y enhanced show-scrollbar="{{false}}">
+  <!-- 顶部问候 -->
+  <view class="greeting-section">
+    <view class="greeting-left">
+      <text class="greeting-text">{{greeting}}</text>
+      <text class="greeting-name">{{userInfo.username || '用户'}}</text>
+    </view>
+    <image class="avatar" src="{{userInfo.avatarUrl || '/assets/icons/profile.png'}}" mode="aspectFill"></image>
+  </view>
+
+  <!-- 统计卡片 -->
+  <view class="stats-section">
+    <view class="stats-row-top">
+      <view class="stat-card stat-primary">
+        <text class="stat-card-value">{{stats.todaySessions}}</text>
+        <text class="stat-card-label">今日训练</text>
+      </view>
+      <view class="stat-card stat-success">
+        <text class="stat-card-value">{{stats.totalSessions}}</text>
+        <text class="stat-card-label">总训练次数</text>
+      </view>
+    </view>
+    <view class="stats-row-bottom">
+      <view class="stat-card stat-warning">
+        <text class="stat-card-value">{{stats.averageScore}}</text>
+        <text class="stat-card-label">平均得分</text>
+      </view>
+      <view class="stat-card stat-info">
+        <text class="stat-card-value">{{stats.totalDuration}}</text>
+        <text class="stat-card-label">总训练时长(分)</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 趋势区域 -->
+  <view class="trend-section card" wx:if="{{trendData.length > 0}}">
+    <view class="card-title">最近7天趋势</view>
+    <view class="trend-chart">
+      <view class="trend-bar-wrap" wx:for="{{trendData}}" wx:key="index">
+        <view class="trend-bar-fill" style="height: {{item.height}}rpx; background: {{item.color}}"></view>
+        <text class="trend-bar-label">{{item.date}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 最近训练 -->
+  <view class="recent-section card" wx:if="{{recentSessions.length > 0}}">
+    <view class="card-title">最近训练</view>
+    <view class="recent-list">
+      <view class="recent-item" wx:for="{{recentSessions}}" wx:key="session_id" bindtap="goToSession" data-id="{{item.session_id}}">
+        <view class="recent-left">
+          <text class="recent-exercise">{{item.exercise_name}}</text>
+          <text class="recent-date">{{item.date}}</text>
+        </view>
+        <view class="recent-right">
+          <text class="recent-score" style="color: {{item.scoreColor}}">{{item.score}}</text>
+          <text class="recent-duration">{{item.duration}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty-state" wx:if="{{recentSessions.length === 0 && !loading}}">
+    <text class="icon">🏋️</text>
+    <text>还没有训练记录</text>
+    <text class="text-muted" style="margin-top: 8rpx;">开始你的第一次训练吧！</text>
+  </view>
+
+  <!-- 开始训练按钮 -->
+  <view class="start-training-area">
+    <button class="btn btn-primary btn-lg" bindtap="goToTraining">开始训练</button>
+  </view>
+
+  <view style="height: 40rpx;"></view>
+</scroll-view>

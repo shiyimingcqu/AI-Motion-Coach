@@ -1,5 +1,8 @@
 """Realtime analysis WebSocket and HTTP endpoints — multi-exercise support."""
 
+import os
+from pathlib import Path
+
 from app.api.deps import get_current_active_user
 from app.core.security import decode_access_token
 from app.db.session import SessionLocal
@@ -11,10 +14,19 @@ from app.services.session.session_service import session_service
 from app.services.video.video_analysis_service import video_analysis_service
 
 try:
-    from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect, Query
+    from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect, Query
 except ModuleNotFoundError:
     APIRouter = None
     File = Form = HTTPException = UploadFile = WebSocket = WebSocketDisconnect = Query = None
+
+try:
+    import cv2
+    import numpy as np
+    import base64
+except ModuleNotFoundError:
+    cv2 = None
+    np = None
+    base64 = None
 
 router = APIRouter(prefix="/realtime", tags=["realtime"]) if APIRouter else None
 
@@ -28,6 +40,79 @@ def _parse_keypoints(raw_keypoints: dict) -> dict[str, NormalizedKeypoint]:
         )
         for name, value in raw_keypoints.items()
     }
+
+
+# Module-level MediaPipe PoseLandmarker instance (lazy init, reused across requests)
+_landmarker = None
+
+
+def _find_pose_landmarker_model() -> Path:
+    candidates = [
+        Path(__file__).resolve().parents[3] / "pose_landmarker_lite.task",
+        Path(r"C:\temp\pose_landmarker_lite.task"),
+        Path(__file__).resolve().parents[4] / "frontend" / "public" / "mediapipe" / "models" / "pose_landmarker_lite.task",
+    ]
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    raise RuntimeError(
+        "pose_landmarker_lite.task not found. Tried: "
+        + ", ".join(str(candidate) for candidate in candidates)
+    )
+
+
+def _get_landmarker():
+    """Get or create the MediaPipe PoseLandmarker instance (singleton)."""
+    global _landmarker
+    if _landmarker is None:
+        try:
+            from mediapipe.tasks.python import BaseOptions
+            from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions, RunningMode
+
+            # 模型文件（避免中文路径，MediaPipe C++ 层不支持）
+            model_path = r"C:\temp\pose_landmarker_lite.task"
+            if not os.path.exists(model_path):
+                raise RuntimeError(f"模型文件不存在: {model_path}")
+
+            options = PoseLandmarkerOptions(
+                base_options=BaseOptions(model_asset_path=model_path),
+                running_mode=RunningMode.IMAGE,
+                num_poses=1,
+                min_pose_detection_confidence=0.3,
+                min_pose_presence_confidence=0.3,
+                min_tracking_confidence=0.3,
+            )
+            _landmarker = PoseLandmarker.create_from_options(options)
+        except Exception as e:
+            raise RuntimeError(f"MediaPipe 初始化失败: {e}")
+    return _landmarker
+
+
+def _get_landmarker():
+    """Get or create the MediaPipe PoseLandmarker instance (singleton)."""
+    global _landmarker
+    if _landmarker is None:
+        try:
+            from mediapipe.tasks.python import BaseOptions
+            from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions, RunningMode
+
+            model_path = _find_pose_landmarker_model()
+            model_buffer = model_path.read_bytes()
+
+            options = PoseLandmarkerOptions(
+                base_options=BaseOptions(model_asset_buffer=model_buffer),
+                running_mode=RunningMode.IMAGE,
+                num_poses=1,
+                min_pose_detection_confidence=0.3,
+                min_pose_presence_confidence=0.3,
+                min_tracking_confidence=0.3,
+            )
+            _landmarker = PoseLandmarker.create_from_options(options)
+        except Exception as e:
+            raise RuntimeError(f"MediaPipe 初始化失败: {e}")
+    return _landmarker
 
 
 if router:
@@ -72,17 +157,20 @@ if router:
         exercise: str = Form("squat"),
         max_frames: int = Form(120),
         file: UploadFile = File(...),
-        current_user=Depends(get_current_active_user) if get_current_active_user else None,
     ):
-        source_uri = await local_storage.save_upload(file)
         try:
+            source_uri = await local_storage.save_upload(file)
             return video_analysis_service.run_realtime_video_test(
                 source_uri=source_uri,
                 exercise=exercise,
                 max_frames=max_frames,
             )
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=400, detail=f"视频文件路径不存在: {exc}") from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"视频分析失败: {exc}") from exc
 
     @router.post("/score-action", status_code=200)
     async def score_action(
@@ -125,6 +213,136 @@ if router:
             raise HTTPException(status_code=400, detail=str(exc))
 
         return result
+
+    @router.post("/pose-detect")
+    async def pose_detect(
+        request: dict = Body(...),
+    ):
+        """
+        接收 base64 图片帧，运行 MediaPipe Pose，返回关键点和特征。
+
+        Request:
+        {
+            "exercise_type": "squat",
+            "frames": [{"image": "base64_jpeg_data"}, ...]
+        }
+
+        Response:
+        {
+            "frames": [{
+                "keypoints": [{"x":0.5,"y":0.3,"z":0,"visibility":0.99}, ...],  # 33点
+                "features": {"knee_angle":120.5,...}
+            }, ...]
+        }
+        """
+        if cv2 is None or np is None or base64 is None:
+            raise HTTPException(status_code=500, detail="cv2/numpy 不可用")
+
+        exercise_type = request.get("exercise_type", "squat")
+        frames = request.get("frames", [])
+
+        if not frames:
+            raise HTTPException(status_code=400, detail="frames 不能为空")
+
+        try:
+            analyzer = get_analyzer(exercise_type)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        # 获取 MediaPipe Pose 单例
+        try:
+            landmarker = _get_landmarker()
+        except RuntimeError as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+
+        landmark_names = [
+            "nose", "left_eye_inner", "left_eye", "left_eye_outer",
+            "right_eye_inner", "right_eye", "right_eye_outer",
+            "left_ear", "right_ear", "mouth_left", "mouth_right",
+            "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
+            "left_wrist", "right_wrist", "left_pinky", "right_pinky",
+            "left_index", "right_index", "left_thumb", "right_thumb",
+            "left_hip", "right_hip", "left_knee", "right_knee",
+            "left_ankle", "right_ankle", "left_heel", "right_heel",
+            "left_foot_index", "right_foot_index",
+        ]
+
+        results = []
+        for frame_data in frames:
+            try:
+                image_b64 = frame_data.get("image", "")
+                if not image_b64:
+                    results.append({"keypoints": None, "features": None})
+                    continue
+
+                # 解码 base64 图片
+                try:
+                    img_bytes = base64.b64decode(image_b64)
+                    nparr = np.frombuffer(img_bytes, np.uint8)
+                    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                    if img is None:
+                        results.append({"keypoints": None, "features": None})
+                        continue
+                except Exception:
+                    results.append({"keypoints": None, "features": None})
+                    continue
+
+                # MediaPipe 处理（新 Tasks API）
+                from mediapipe import Image, ImageFormat
+                rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                mp_image = Image(image_format=ImageFormat.SRGB, data=rgb)
+                mp_result = landmarker.detect(mp_image)
+
+                if not mp_result.pose_landmarks:
+                    print(f"[pose-detect] frame {img.shape}: no pose landmarks detected")
+                    results.append({"keypoints": None, "features": None, "error": "未检测到人体"})
+                    continue
+
+                print(f"[pose-detect] frame {img.shape}: detected {len(mp_result.pose_landmarks)} pose(s), {len(mp_result.pose_landmarks[0]) if mp_result.pose_landmarks else 0} landmarks")
+                # 提取 33 关键点
+                landmarks = mp_result.pose_landmarks[0]
+                keypoints = []
+                for i in range(33):
+                    if i < len(landmarks):
+                        lm = landmarks[i]
+                        keypoints.append({
+                            "x": round(lm.x, 6),
+                            "y": round(lm.y, 6),
+                            "z": round(lm.z, 6),
+                            "visibility": round(lm.visibility, 6),
+                        })
+                    else:
+                        keypoints.append({"x": 0, "y": 0, "z": 0, "visibility": 0})
+
+                # 构建 NormalizedKeypoint 字典用于特征提取
+                named_keypoints = {}
+                for idx, name in enumerate(landmark_names):
+                    if idx < len(landmarks):
+                        lm = landmarks[idx]
+                        named_keypoints[name] = NormalizedKeypoint(
+                            x=lm.x, y=lm.y, visibility=lm.visibility
+                        )
+
+                # 提取动作特征
+                features = None
+                try:
+                    features = analyzer.extract_features(named_keypoints)
+                except Exception:
+                    pass
+
+                results.append({
+                    "keypoints": keypoints,
+                    "features": features,
+                })
+            except Exception as e:
+                import traceback
+                tb = traceback.format_exc()
+                results.append({"keypoints": None, "features": None, "error": str(e)[:200]})
+
+        return {
+            "exercise_type": exercise_type,
+            "frames": results,
+        }
 
     @router.websocket("/pose")
     async def realtime_pose(websocket: WebSocket, exercise_type: str = Query("squat")):
@@ -180,6 +398,7 @@ if router:
                 if message_type == "start":
                     new_exercise = payload.get("exercise_type", exercise_type)
                     analyzer = get_analyzer(new_exercise)
+                    analyzer.reset()
                     state = {}
                     saved_session = None
                     running = True

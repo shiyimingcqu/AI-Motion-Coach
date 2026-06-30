@@ -1,0 +1,278 @@
+/* 训练页样式 */
+.training-page {
+  width: 100%;
+  height: 100vh;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 顶部栏 */
+.top-bar {
+  background: rgba(0, 0, 0, 0.6);
+  position: relative;
+  z-index: 100;
+}
+
+.top-bar-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 88rpx;
+  padding: 0 24rpx;
+}
+
+.back-btn {
+  font-size: 28rpx;
+  color: #fff;
+  padding: 8rpx 16rpx;
+}
+
+.exercise-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #fff;
+}
+
+.debug-toggle {
+  font-size: 22rpx;
+  color: rgba(255,255,255,0.5);
+  padding: 8rpx 12rpx;
+  border: 1rpx solid rgba(255,255,255,0.3);
+  border-radius: 8rpx;
+}
+
+/* 倒计时覆盖层 */
+.countdown-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.countdown-number {
+  font-size: 160rpx;
+  font-weight: 700;
+  color: #3b82f6;
+  text-shadow: 0 0 40rpx rgba(59, 130, 246, 0.5);
+}
+
+.countdown-tip {
+  font-size: 32rpx;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: 20rpx;
+}
+
+/* 摄像头 */
+.camera-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.camera-wrapper {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8rpx;
+}
+
+.camera-status {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+}
+
+.status-badge {
+  background: rgba(0, 0, 0, 0.6);
+  padding: 16rpx 32rpx;
+  border-radius: var(--radius-full);
+}
+
+.status-badge text {
+  font-size: 28rpx;
+  color: #fff;
+}
+
+/* 信息面板 */
+.info-panel {
+  background: linear-gradient(180deg, rgba(0,0,0,0.85), rgba(0,0,0,0.95));
+  padding: 20rpx 24rpx;
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
+}
+
+/* 分数区域 */
+.score-section {
+  display: flex;
+  align-items: center;
+  gap: 32rpx;
+  margin-bottom: 12rpx;
+}
+
+.score-main {
+  display: flex;
+  align-items: baseline;
+  gap: 8rpx;
+}
+
+.score-value {
+  font-size: 64rpx;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.score-label {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.stats-row {
+  display: flex;
+  gap: 32rpx;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stat-value {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #fff;
+}
+
+.stat-label {
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* 阶段指示 */
+.phase-indicator {
+  margin-bottom: 12rpx;
+}
+
+.phase-text {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(59, 130, 246, 0.3);
+  padding: 6rpx 16rpx;
+  border-radius: var(--radius-full);
+}
+
+/* 反馈区域 */
+.feedback-area {
+  margin-bottom: 12rpx;
+  max-height: 120rpx;
+  overflow-y: auto;
+}
+
+.feedback-item {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 6rpx 0;
+}
+
+.feedback-icon {
+  font-size: 22rpx;
+}
+
+.feedback-text {
+  font-size: 24rpx;
+  color: #fbbf24;
+}
+
+/* 控制按钮 */
+.controls {
+  display: flex;
+  gap: 16rpx;
+}
+
+.controls .btn {
+  flex: 1;
+}
+
+/* 调试面板 */
+.debug-panel {
+  position: absolute;
+  top: 120rpx;
+  left: 16rpx;
+  right: 16rpx;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 12rpx;
+  padding: 16rpx 20rpx;
+  z-index: 50;
+  border: 1rpx solid rgba(255,255,255,0.15);
+}
+
+.debug-title {
+  font-size: 22rpx;
+  color: #fbbf24;
+  font-weight: 600;
+  margin-bottom: 8rpx;
+  display: block;
+}
+
+.debug-row {
+  display: flex;
+  gap: 20rpx;
+  font-size: 18rpx;
+  color: rgba(255,255,255,0.7);
+  line-height: 1.8;
+}
+
+.debug-error {
+  color: #ef4444;
+  word-break: break-all;
+}
+
+/* 强制退出 */
+.force-exit-area {
+  margin-top: 16rpx;
+  text-align: center;
+}
+
+.force-exit-link {
+  font-size: 22rpx;
+  color: rgba(255,255,255,0.35);
+  text-decoration: underline;
+}
+
+.btn-sm {
+  padding: 10rpx 24rpx;
+  font-size: 24rpx;
+  flex: 0 0 auto;
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1rpx solid rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.6);
+}
+
+/* 调试按钮 */
+.debug-buttons {
+  padding: 0 24rpx;
+  margin-top: 12rpx;
+}
+
+.debug-btn-row {
+  display: flex;
+  gap: 16rpx;
+}

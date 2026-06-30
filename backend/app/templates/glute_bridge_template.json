@@ -1,0 +1,19 @@
+{
+  "action": "glute_bridge",
+  "version": "1.0",
+  "description": "标准臀桥动作模板，用于对比评分",
+  "weights": {
+    "hip_angle": 0.60,
+    "body_line_angle": 0.40
+  },
+  "template_sequence": {
+    "hip_angle": [90, 100, 115, 130, 145, 155, 165, 170, 175, 170, 165, 155, 145, 130, 115, 100, 90],
+    "body_line_angle": [20, 18, 15, 12, 8, 5, 3, 2, 2, 2, 3, 5, 8, 12, 15, 18, 20]
+  },
+  "thresholds": {
+    "excellent": 90,
+    "good": 75,
+    "fair": 60,
+    "poor": 0
+  }
+}

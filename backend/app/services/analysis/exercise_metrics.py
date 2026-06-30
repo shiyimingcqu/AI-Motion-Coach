@@ -34,6 +34,25 @@ EXERCISE_CORE_METRICS: dict[str, list[CoreMetricDefinition]] = {
         CoreMetricDefinition(label="手腕高度", feature_key="wrist_height"),
         CoreMetricDefinition(label="脚踝距离", feature_key="ankle_distance"),
     ],
+    "lunge": [
+        CoreMetricDefinition(label="膝角", feature_key="knee_angle"),
+        CoreMetricDefinition(label="髋角", feature_key="hip_angle"),
+        CoreMetricDefinition(label="躯干倾斜角", feature_key="trunk_angle"),
+        CoreMetricDefinition(label="左右膝差", feature_key="knee_symmetry_diff"),
+    ],
+    "glute_bridge": [
+        CoreMetricDefinition(label="髋角", feature_key="hip_angle"),
+        CoreMetricDefinition(label="身体直线角", feature_key="body_line_angle"),
+    ],
+    "high_knees": [
+        CoreMetricDefinition(label="抬膝高度", feature_key="knee_height"),
+        CoreMetricDefinition(label="膝角", feature_key="knee_angle"),
+    ],
+    "burpee": [
+        CoreMetricDefinition(label="髋角", feature_key="hip_angle"),
+        CoreMetricDefinition(label="身体直线角", feature_key="body_line_angle"),
+        CoreMetricDefinition(label="手腕高度", feature_key="wrist_height"),
+    ],
 }
 
 
