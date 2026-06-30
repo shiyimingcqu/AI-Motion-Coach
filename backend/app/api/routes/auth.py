@@ -88,6 +88,9 @@ if router:
                 role=user.role,
                 is_active=user.is_active,
             )
+        except Exception:
+            db.rollback()
+            raise
         finally:
             db.close()
 
@@ -162,6 +165,9 @@ if router:
             return UserResponse(
                 id=user.id, username=user.username, role=user.role, is_active=user.is_active,
             )
+        except Exception:
+            db.rollback()
+            raise
         finally:
             db.close()
 
@@ -188,5 +194,8 @@ if router:
             user.hashed_password = get_password_hash(request.new_password)
             db.commit()
             return {"message": "密码修改成功"}
+        except Exception:
+            db.rollback()
+            raise
         finally:
             db.close()
