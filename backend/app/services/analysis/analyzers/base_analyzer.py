@@ -1,9 +1,10 @@
 """Base exercise analyzer — defines the interface all exercise analyzers must implement."""
 
-from app.services.analysis.models import NormalizedKeypoint
-from app.services.analysis.angle_calculator import calculate_angle
-from collections import deque
+from collections import Counter, deque
 import time
+
+from app.services.analysis.angle_calculator import calculate_angle
+from app.services.analysis.models import NormalizedKeypoint
 
 Keypoints = dict[str, NormalizedKeypoint]
 
@@ -35,6 +36,11 @@ class BaseExerciseAnalyzer:
         self.scores_history: list[float] = []
         self.previous_stage = "ready"
         self.stage_stability_counter = 0
+        self._rep_samples: list[dict[str, float]] = []
+        self.rep_summaries: list[dict[str, float]] = []
+        self.rep_results: list[dict] = []
+        self.session_issue_counts: Counter[str] = Counter()
+        self.session_feedback_counts: Counter[str] = Counter()
 
     # ─── abstract methods ────────────────────────────────────
 
@@ -50,6 +56,34 @@ class BaseExerciseAnalyzer:
         """Return {'score': float, 'issues': list[str], 'feedback': list[str]}."""
         raise NotImplementedError
 
+    def rep_sample_phases(self) -> tuple[str, ...]:
+        """Movement phases where rep summary samples are collected."""
+        return ("down", "bottom", "descending")
+
+    def rep_completion_from_phases(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        """Return (lowering_phases, rising_phases) that mark one completed rep."""
+        return (("down", "bottom", "descending"), ("up", "standing", "top_support", "ascending"))
+
+    def rep_summary_phase(self) -> str:
+        """Phase label used when scoring a completed rep summary."""
+        return "bottom"
+
+    def summarize_rep(self, samples: list[dict[str, float]]) -> dict[str, float]:
+        """Collapse per-frame samples into one rep-level feature snapshot."""
+        if not samples:
+            return {}
+        return dict(samples[-1])
+
+    def score_rep(self, summary: dict[str, float]) -> dict:
+        """Score a completed rep using summarized features."""
+        return self.score_frame(summary, self.rep_summary_phase())
+
+    def get_session_issue_counts(self) -> Counter[str]:
+        return self.session_issue_counts
+
+    def get_session_feedback_counts(self) -> Counter[str]:
+        return self.session_feedback_counts
+
     # ─── public entry point ──────────────────────────────────
 
     def analyze_frame(self, landmarks: Keypoints, state: dict) -> dict:
@@ -63,17 +97,43 @@ class BaseExerciseAnalyzer:
 
         score_result = self.score_frame(smoothed, phase)
 
+        lowering_phases, rising_phases = self.rep_completion_from_phases()
+        rep_completed = current_stage in lowering_phases and phase in rising_phases
+
+        if phase in self.rep_sample_phases():
+            self._rep_samples.append(dict(smoothed))
+
+        frame_issues: list[str] = []
+        frame_feedback: list[str] = []
+        frame_score = score_result["score"]
+
+        if rep_completed:
+            rep_summary = self.summarize_rep(self._rep_samples)
+            rep_result = self.score_rep(rep_summary) if rep_summary else {
+                "score": 0,
+                "issues": [],
+                "feedback": [],
+            }
+            self._last_down_was_valid = len(rep_result.get("issues", [])) == 0
+            frame_issues = rep_result.get("issues", [])
+            frame_feedback = rep_result.get("feedback", [])
+            frame_score = rep_result.get("score", frame_score)
+            for issue in frame_issues:
+                self.session_issue_counts[issue] += 1
+            for suggestion in frame_feedback:
+                self.session_feedback_counts[suggestion] += 1
+            self.rep_summaries.append(rep_summary)
+            self.rep_results.append(rep_result)
+            self._rep_samples = []
+
         # Count a rep only when we cross once from the lowering/bottom phase
         # into the rising/finished phase. Using the committed current stage
         # avoids double-counting on sequences like bottom -> up -> standing.
-        if current_stage in ("bottom", "down") and phase in ("up", "standing", "top_support"):
+        if rep_completed:
             self.count += 1
             if self._last_down_was_valid:
                 self.valid_count += 1
-            self.scores_history.append(score_result["score"])
-
-        if phase in ("bottom", "open_peak"):
-            self._last_down_was_valid = len(score_result["issues"]) == 0
+            self.scores_history.append(frame_score)
 
         self.previous_stage = current_stage
         self.stage = phase
@@ -84,9 +144,9 @@ class BaseExerciseAnalyzer:
             "count": self.count,
             "valid_count": self.valid_count,
             "features": smoothed,
-            "score": score_result["score"],
-            "issues": score_result["issues"],
-            "feedback": score_result.get("feedback", []),
+            "score": frame_score,
+            "issues": frame_issues,
+            "feedback": frame_feedback,
             "detail_scores": score_result.get("detail_scores", {}),
         }
 

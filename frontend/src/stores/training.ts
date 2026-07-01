@@ -29,6 +29,7 @@ export interface LiveAnalysisResult {
   valid_count: number;
   score: number;
   errors: string[];
+  feedback: string[];
 }
 
 export const exercises: Exercise[] = [
@@ -125,6 +126,7 @@ export const useTrainingStore = defineStore("training", {
     validCount: 10,
     score: 86,
     errors: ["下蹲深度不足", "膝盖内扣"],
+    feedbacks: ["动作整体标准，保持当前节奏与稳定性"],
     taskStatus: "running",
     trend: [78, 82, 80, 86, 88, 84, 91],
     errorStats: [
@@ -154,6 +156,7 @@ export const useTrainingStore = defineStore("training", {
       this.validCount = result.valid_count;
       this.score = result.score;
       this.errors = result.errors;
+      this.feedbacks = result.feedback;
     },
     resetLiveMetrics() {
       this.stage = "ready";
@@ -161,6 +164,7 @@ export const useTrainingStore = defineStore("training", {
       this.validCount = 0;
       this.score = 0;
       this.errors = [];
+      this.feedbacks = [];
     }
   }
 });

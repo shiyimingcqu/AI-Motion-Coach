@@ -21,17 +21,22 @@ $env:PYTHONPATH='backend'
 python -m unittest discover -s backend/tests -p "test_*.py"
 ```
 
-完整后端依赖安装后可启动 API：
+## 完整后端依赖安装后可启动 API：
 
 ```powershell
 pip install -r backend/requirements.txt
 uvicorn app.main:app --app-dir backend --reload
 ```
 
-前端启动：
-
+## 前端启动：
+### 首次启动：
 ```powershell
 cd frontend
 npm install
+npm run dev
+```
+### 以后启动：
+```powershell
+cd frontend
 npm run dev
 ```

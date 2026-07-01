@@ -1,4 +1,4 @@
-﻿﻿﻿﻿<template>
+<template>
   <div class="page realtime-page">
     <div v-if="finishPending" class="finish-overlay" role="dialog" aria-modal="true" aria-label="结束训练中">
       <div class="finish-modal">
@@ -129,6 +129,12 @@
           <span v-for="error in store.errors" :key="error">{{ error }}</span>
         </div>
 
+        <div class="error-stack">
+          <strong>实时建议</strong>
+          <span v-if="store.feedbacks.length === 0">暂无建议</span>
+          <span v-for="advice in store.feedbacks" :key="advice">{{ advice }}</span>
+        </div>
+
         <!-- 模板评分结果 -->
         <div v-if="templateScore" class="template-score-panel">
           <div class="template-score-header">
@@ -243,6 +249,7 @@ type VideoTestFrame = {
   valid_count: number;
   score: number;
   errors: string[];
+  feedback?: string[];
   keypoints?: BackendKeypoints;
   metrics?: MetricValues;
   features?: MetricValues;
@@ -668,7 +675,7 @@ function runPoseFrame(timestamp: number) {
   }
 
   const landmarks = detectPose(poseLandmarker, video, timestamp);
-  drawPose(canvas, landmarks);
+  drawPose(canvas, landmarks, video, "cover");
 
   if (!landmarks) {
     poseStatus.value = "未检测到人体，请站入画面";
@@ -852,7 +859,11 @@ async function saveSessionFallback(successMessage: string) {
 
   try {
     finishStatusText.value = "实时通道异常，正在用当前统计补存训练记录...";
-    const session = await createSession(payload);
+    const session = await createSession({
+      ...payload,
+      issues: [...new Set(store.errors.filter(Boolean))],
+      suggestions: [...new Set(store.feedbacks.filter(Boolean))],
+    });
     lastSessionId.value = session.session_id;
     resetFinishState();
     trainingState.value = "finished";
@@ -980,6 +991,7 @@ function updateMetricsFromFrame(frame: VideoTestFrame) {
     valid_count: Number(frame.valid_count ?? 0),
     score: Number(frame.score ?? 0),
     errors: Array.isArray(frame.errors) ? frame.errors : [],
+    feedback: Array.isArray(frame.feedback) ? frame.feedback : [],
   });
 }
 

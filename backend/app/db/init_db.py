@@ -183,9 +183,11 @@ def _migrate_legacy_schema():
         return
 
     session_columns = {column["name"] for column in inspector.get_columns("sessions")}
-    if "user_id" not in session_columns:
-        with engine.begin() as connection:
+    with engine.begin() as connection:
+        if "user_id" not in session_columns:
             connection.execute(text("ALTER TABLE sessions ADD COLUMN user_id INTEGER"))
+        if "feedback_summary" not in session_columns:
+            connection.execute(text("ALTER TABLE sessions ADD COLUMN feedback_summary TEXT"))
 
 
 def _create_default_users(db: Session):

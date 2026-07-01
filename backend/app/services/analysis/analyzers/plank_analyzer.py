@@ -110,6 +110,7 @@ class PlankAnalyzer(BaseExerciseAnalyzer):
     def score_frame(self, features: dict, phase: str) -> dict:
         issues: list[str] = []
         detail_scores: dict[str, float] = {}
+        feedback: list[str] = []
 
         # --- Body line (40%) ---
         bl = features.get("body_line_angle", 0)
@@ -117,8 +118,10 @@ class PlankAnalyzer(BaseExerciseAnalyzer):
         detail_scores["body_line"] = round(s_bl, 1)
         if s_bl < 60:
             issues.append("塌腰或撅臀明显，身体未保持直线")
+            feedback.append("收紧核心，保持肩-髋-踝成一直线")
         elif s_bl < 80:
             issues.append("身体直线略有偏差")
+            feedback.append("轻微调整髋部位置，维持直线")
 
         # --- Core stability (30%) ---
         hip = features.get("hip_sag", 0)
@@ -126,8 +129,10 @@ class PlankAnalyzer(BaseExerciseAnalyzer):
         detail_scores["stability"] = round(s_hip, 1)
         if s_hip < 60:
             issues.append("髋部不稳定，核心控制不足")
+            feedback.append("收紧腹部与臀部，避免髋部下沉")
         elif s_hip < 80:
             issues.append("髋部略有下沉")
+            feedback.append("保持骨盆中立，核心持续发力")
 
         # --- Shoulder-elbow position (15%) ---
         off = features.get("elbow_offset", 0)
@@ -137,6 +142,11 @@ class PlankAnalyzer(BaseExerciseAnalyzer):
         detail_scores["shoulder_position"] = round(s_off, 1)
         if s_off < 60:
             issues.append("肩膀未在手肘正上方，姿势不正确")
+            feedback.append("让肩膀正对手肘，减少手肘外移")
+
+        neck = features.get("neck_angle", 0)
+        if neck and neck < 160:
+            feedback.append("保持颈部中立，目视下方，避免抬头或低头过多")
 
         # --- Duration (15%) — scored only at the end, use placeholder ---
         detail_scores["duration"] = 0.0
@@ -146,5 +156,6 @@ class PlankAnalyzer(BaseExerciseAnalyzer):
 
         if phase == "unstable":
             issues.append("身体晃动过大，核心控制不稳定")
+            feedback.append("放慢呼吸，保持稳定支撑")
 
-        return {"score": score, "issues": issues, "detail_scores": detail_scores, "feedback": []}
+        return {"score": score, "issues": issues, "detail_scores": detail_scores, "feedback": feedback}

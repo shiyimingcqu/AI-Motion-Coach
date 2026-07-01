@@ -4,7 +4,7 @@ from typing import Optional
 
 import cv2
 
-from app.services.analysis.analyzers.registry import ANALYZER_REGISTRY
+from app.services.analysis.analyzers.registry import ANALYZER_CLASSES, get_analyzer
 from app.services.analysis.exercise_metrics import (
     build_default_weights,
     get_core_feature_keys,
@@ -37,9 +37,9 @@ class TemplateBuilderService:
         name: Optional[str] = None,
         version: str = "v1",
     ) -> dict:
-        if action not in ANALYZER_REGISTRY:
+        if action not in ANALYZER_CLASSES:
             raise ValueError(
-                f"暂不支持动作类型: {action}，支持 {', '.join(sorted(ANALYZER_REGISTRY.keys()))}"
+                f"暂不支持动作类型: {action}，支持 {', '.join(sorted(ANALYZER_CLASSES.keys()))}"
             )
 
         template_name = name or f"标准{view}视角{action}"
@@ -78,7 +78,7 @@ class TemplateBuilderService:
             raise ValueError(f"无法打开视频: {video_path}")
 
         pose = self._create_pose()
-        analyzer = ANALYZER_REGISTRY[action]
+        analyzer = get_analyzer(action)
         feature_keys = get_core_feature_keys(action)
         features = {feature_key: [] for feature_key in feature_keys}
 

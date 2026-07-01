@@ -34,6 +34,8 @@ export interface CreateSessionPayload {
   valid_count: number;
   error_count: number;
   average_score: number;
+  issues?: string[];
+  suggestions?: string[];
 }
 
 export function getSessions(params?: SessionsQuery) {

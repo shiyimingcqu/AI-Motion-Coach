@@ -110,13 +110,43 @@
       </button>
     </section>
 
-    <section class="ai-recommend-card">
+    <!-- AI 建议面板 -->
+    <section v-if="mode === 'session' && sessionId" class="ai-advice-section">
+      <div class="ai-advice-panel">
+        <div class="ai-advice-header">
+          <div class="ai-advice-title">
+            <Info :size="18" />
+            <strong>AI 智能建议</strong>
+          </div>
+          <div class="ai-advice-actions">
+            <label class="voice-toggle">
+              <Volume2 :size="14" />
+              <input type="checkbox" v-model="voiceEnabled" />
+              语音播报
+            </label>
+            <button
+              class="ai-advice-button"
+              type="button"
+              :disabled="aiLoading || detections.length === 0"
+              @click="generateAiAdvice"
+            >
+              {{ aiLoading ? "生成中..." : "生成 AI 建议" }}
+            </button>
+          </div>
+        </div>
+        <AiAdviceContent
+          class="ai-advice-text"
+          :content="aiAdvice"
+          placeholder="点击上方按钮生成基于本次训练的 AI 建议。AI 将分析您的动作问题和改进建议，给出个性化指导。"
+        />
+      </div>
+    </section>
+
+    <section v-else-if="mode === 'history'" class="ai-recommend-card">
       <span class="blue-solid"><Info :size="20" /></span>
       <div>
         <h2>AI Recommendations / AI 建议</h2>
-        <p>• Focus on knee alignment during squats - 35% of errors detected in this area</p>
-        <p>• Review push-up form video tutorial to reduce elbow flare incidents</p>
-        <p>• Consider adding plank progression exercises to improve core stability</p>
+        <p>切换到"本次训练"模式并生成建议，可查看基于您具体训练数据的 AI 分析。</p>
       </div>
     </section>
   </div>
@@ -125,10 +155,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { AlertTriangle, CheckCircle2, Info, ShieldAlert } from "lucide-vue-next";
+import { AlertTriangle, CheckCircle2, Info, ShieldAlert, Volume2 } from "lucide-vue-next";
 import StateDisplay from "../components/StateDisplay.vue";
+import AiAdviceContent from "../components/AiAdviceContent.vue";
 import { getFeedbacks } from "../api/feedback";
 import { getSession, getSessions } from "../api/sessions";
+import { useAiAdvice } from "../composables/useAiAdvice";
 
 type Mode = "session" | "history";
 
@@ -150,11 +182,13 @@ interface Mistake {
 
 const route = useRoute();
 const router = useRouter();
+const { aiAdvice, aiLoading, voiceEnabled, requestAiAdvice, clearAdvice } = useAiAdvice();
 
 const detections = ref<Detection[]>([]);
 const loading = ref(true);
 const mode = ref<Mode>("history");
 const sessionId = ref("");
+const sessionExercise = ref("squat");
 
 const stats = ref({ critical: 0, warning: 0, minor: 0, correct: 0 });
 
@@ -221,9 +255,10 @@ async function loadSessionFeedbacks(sid: string) {
       stats.value = { critical: 0, warning: 0, minor: 0, correct: 0 };
     }
 
-    // Count correct from this session's valid_count
+    // Count correct from this session's valid_count and record exercise type
     if (sessionRes.status === "fulfilled" && sessionRes.value) {
       stats.value.correct = sessionRes.value.valid_count ?? 0;
+      sessionExercise.value = sessionRes.value.exercise || "squat";
     }
   } finally {
     loading.value = false;
@@ -297,6 +332,34 @@ onMounted(async () => {
     await loadHistoryFeedbacks();
   }
 });
+
+async function generateAiAdvice() {
+  if (detections.value.length === 0) {
+    aiAdvice.value = "暂无足够数据生成建议，请先完成训练。";
+    return;
+  }
+
+  // 从检测数据构建 payload
+  const errors = detections.value.map((d) => d.problem).filter(Boolean);
+  const feedbacks = detections.value.map((d) => d.suggestion).filter(Boolean);
+
+  // 去重
+  const uniqueErrors = [...new Set(errors)];
+  const uniqueFeedbacks = [...new Set(feedbacks)];
+
+  await requestAiAdvice({
+    exercise: sessionExercise.value,
+    stage: "completed",
+    errors: uniqueErrors,
+    feedbacks: uniqueFeedbacks,
+    metrics: {
+      total_errors: errors.length,
+      critical_count: stats.value.critical,
+      warning_count: stats.value.warning,
+      valid_count: stats.value.correct,
+    },
+  });
+}
 </script>
 
 <style scoped>
@@ -384,5 +447,85 @@ onMounted(async () => {
 .feedback-actions .secondary-button:hover {
   background: rgba(27, 122, 87, 0.05);
   border-color: var(--green, #1b7a57);
+}
+
+/* AI 建议面板样式 */
+.ai-advice-section {
+  margin-top: 24px;
+}
+
+.ai-advice-panel {
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.ai-advice-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.ai-advice-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #e2e8f0;
+  font-size: 14px;
+}
+
+.ai-advice-title strong {
+  font-weight: 600;
+}
+
+.ai-advice-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.voice-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.voice-toggle input {
+  margin: 0;
+}
+
+.ai-advice-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.ai-advice-button:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.ai-advice-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ai-advice-text {
+  margin-top: 8px;
 }
 </style>

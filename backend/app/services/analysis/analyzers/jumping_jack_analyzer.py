@@ -22,6 +22,20 @@ REQUIRED = {
 class JumpingJackAnalyzer(BaseExerciseAnalyzer):
     exercise_type = "jumping_jack"
 
+    def rep_sample_phases(self) -> tuple[str, ...]:
+        return ("opening", "open_peak")
+
+    def rep_completion_from_phases(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        return (("opening", "open_peak"), ("closing", "complete"))
+
+    def rep_summary_phase(self) -> str:
+        return "open_peak"
+
+    def summarize_rep(self, samples: list[dict[str, float]]) -> dict[str, float]:
+        if not samples:
+            return {}
+        return max(samples, key=lambda sample: sample.get("spread_ratio", 0))
+
     def extract_features(self, landmarks: Keypoints) -> dict[str, float]:
         missing = REQUIRED - set(landmarks)
         if missing:
@@ -96,6 +110,7 @@ class JumpingJackAnalyzer(BaseExerciseAnalyzer):
     def score_frame(self, features: dict, phase: str) -> dict:
         issues: list[str] = []
         detail_scores: dict[str, float] = {}
+        feedback: list[str] = []
         total = 0.0
         count = 0.0
 
@@ -106,8 +121,10 @@ class JumpingJackAnalyzer(BaseExerciseAnalyzer):
         count += 0.25
         if s_arm < 60:
             issues.append("手臂未充分举过头顶")
+            feedback.append("手臂伸直上举，尽量举过头顶")
         elif s_arm < 80:
             issues.append("手臂举高幅度略不足")
+            feedback.append("手臂再抬高一点，形成完整幅度")
 
         sp = features.get("spread_ratio", 0)
         s_leg = self._score_by_range(sp, (2.0, 5.0), (0.5, 6.0))
@@ -116,8 +133,10 @@ class JumpingJackAnalyzer(BaseExerciseAnalyzer):
         count += 0.25
         if s_leg < 60:
             issues.append("双脚打开幅度不足")
+            feedback.append("双脚分开到肩宽以上，落地轻盈")
         elif s_leg < 80:
             issues.append("腿部展开略不足")
+            feedback.append("保持膝盖与脚尖方向一致，扩大步幅")
 
         arm_h = features.get("avg_arm_height", 0)
         foot = features.get("foot_distance", 0)
@@ -127,8 +146,10 @@ class JumpingJackAnalyzer(BaseExerciseAnalyzer):
         count += 0.25
         if sync < 60:
             issues.append("手脚不同步，动作不协调")
+            feedback.append("手臂上举与双脚打开同时进行")
         elif sync < 80:
             issues.append("手脚配合略有延迟")
+            feedback.append("节奏放慢一点，保证同步")
 
         sym = features.get("arm_angle_diff", 0)
         s_sym = self._score_by_range(sym, (0, 15), (0, 40))
@@ -137,10 +158,11 @@ class JumpingJackAnalyzer(BaseExerciseAnalyzer):
         count += 0.15
         if s_sym < 60:
             issues.append("左右动作不对称")
+            feedback.append("保持左右手臂高度一致，减少偏差")
 
         detail_scores["rhythm"] = 85.0
         total += 85.0 * 0.10
         count += 0.10
 
         score = round(total / count, 1) if count else 80.0
-        return {"score": score, "issues": issues, "detail_scores": detail_scores, "feedback": []}
+        return {"score": score, "issues": issues, "detail_scores": detail_scores, "feedback": feedback}

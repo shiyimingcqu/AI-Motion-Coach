@@ -31,3 +31,11 @@ if router:
             from fastapi import HTTPException
             raise HTTPException(status_code=404, detail="Task not found")
         return task
+
+    @router.get("/tasks")
+    def list_analysis_tasks(
+        limit: int = 50,
+        offset: int = 0,
+        current_user=Depends(get_current_active_user) if get_current_active_user else None,
+    ):
+        return {"items": task_service.list_tasks(limit=limit, offset=offset)}

@@ -134,6 +134,8 @@ class SessionORM(Base if Base is not None else object):
         valid_count = Column(Integer, default=0, nullable=False)
         error_count = Column(Integer, default=0, nullable=False)
         average_score = Column(Float, default=0.0, nullable=False)
+        # 存储反馈摘要的 JSON 字符串（issues 和 suggestions）
+        feedback_summary = Column(Text, nullable=True)
         created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     def to_dict(self):
@@ -146,5 +148,6 @@ class SessionORM(Base if Base is not None else object):
             "valid_count": self.valid_count,
             "error_count": self.error_count,
             "average_score": self.average_score,
+            "feedback_summary": self.feedback_summary,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

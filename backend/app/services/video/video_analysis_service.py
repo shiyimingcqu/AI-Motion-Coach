@@ -1,3 +1,4 @@
+import json
 from dataclasses import asdict
 from pathlib import Path
 from uuid import uuid4
@@ -5,18 +6,160 @@ from uuid import uuid4
 import cv2
 
 from app.core.config import settings
+from app.db.session import SessionLocal
+from app.models.entities import SessionORM
 from app.services.analysis.exercise_analyzer import ExerciseAnalyzer
-from app.services.analysis.feedback_service import FeedbackService
 from app.services.analysis.models import NormalizedKeypoint
 from app.services.analysis.template_service import TemplateService
+from app.services.analysis.unified_feedback_service import unified_feedback_service
 from app.services.session.session_service import session_service
 
 
 class VideoAnalysisService:
     def __init__(self, storage_root: str):
         self.storage_root = Path(storage_root)
+        # 与实时视频测试保持一致的分析帧上限
+        self.default_max_frames = 120
 
-    def analyze_video(self, source_uri: str, exercise: str) -> str:
+    def analyze_video(
+        self,
+        source_uri: str,
+        exercise: str,
+        user_id: int | None = None,
+    ) -> dict:
+        """视频上传分析：与 run_realtime_video_test 共用同一套帧分析逻辑。"""
+        analysis = self.run_realtime_video_test(
+            source_uri=source_uri,
+            exercise=exercise,
+            max_frames=self.default_max_frames,
+            persist_session=True,
+            user_id=user_id,
+        )
+        output_uri = self._render_annotated_video(
+            source_uri=source_uri,
+            exercise=exercise,
+            max_frames=self.default_max_frames,
+        )
+        return {
+            "output_uri": output_uri,
+            "session_id": analysis.get("session_id"),
+            "processed_frames": analysis["processed_frames"],
+            "summary": analysis["summary"],
+            "issues": analysis["issues"],
+            "suggestions": analysis["suggestions"],
+            "unified_feedback": analysis["unified_feedback"],
+        }
+
+    def run_realtime_video_test(
+        self,
+        source_uri: str,
+        exercise: str,
+        max_frames: int = 120,
+        keypoint_extractor=None,
+        persist_session: bool = False,
+        user_id: int | None = None,
+    ) -> dict:
+        source_path = self._resolve_source(source_uri)
+        capture = cv2.VideoCapture(str(source_path))
+        if not capture.isOpened():
+            raise ValueError(f"Cannot open video: {source_uri}")
+
+        video_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+        video_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+        analyzer = ExerciseAnalyzer(exercise=exercise)
+        template_service = TemplateService()
+        pose = self._create_pose()
+        frame_results = []
+        limit = max(1, min(int(max_frames), 600))
+
+        try:
+            for frame_index, frame in self._iter_capture_frames(capture, limit):
+                if keypoint_extractor is not None:
+                    keypoints = keypoint_extractor(frame, pose)
+                elif pose is not None:
+                    keypoints = self._extract_keypoints_from_frame(frame, pose)
+                else:
+                    keypoints = {}
+
+                if not keypoints:
+                    continue
+
+                try:
+                    result = analyzer.analyze(keypoints)
+                except ValueError:
+                    continue
+                payload = result.to_dict()
+                payload["frame_index"] = frame_index
+                payload["keypoints"] = {key: asdict(value) for key, value in keypoints.items()}
+                if payload.get("features"):
+                    payload["metrics"] = payload["features"]
+                frame_results.append(payload)
+        finally:
+            capture.release()
+            if pose is not None:
+                pose.close()
+
+        analysis = self._build_analysis_response(
+            analyzer=analyzer,
+            output_uri=str(source_path).replace("\\", "/"),
+            processed_frames=len(frame_results),
+            persist_session=persist_session,
+            user_id=user_id,
+        )
+        formatted_feedback = {
+            "errors": analysis["issues"],
+            "feedbacks": analysis["suggestions"],
+        }
+
+        template_score = None
+        if frame_results:
+            try:
+                frames_with_metrics = [
+                    frame.get("metrics", {})
+                    for frame in frame_results
+                    if frame.get("metrics")
+                ]
+
+                if frames_with_metrics:
+                    score_result = template_service.score_by_template(exercise, frames_with_metrics)
+                    template_score = {
+                        "score": score_result["score"],
+                        "level": score_result["level"],
+                        "detail_scores": score_result["detail_scores"],
+                        "differences": score_result["differences"],
+                        "errors": formatted_feedback["errors"],
+                        "suggestions": formatted_feedback["feedbacks"],
+                    }
+            except Exception:
+                pass
+
+        return {
+            "exercise": exercise,
+            "source_uri": str(source_path).replace("\\", "/"),
+            "processed_frames": len(frame_results),
+            "video_width": video_width,
+            "video_height": video_height,
+            "frames": frame_results,
+            "summary": analysis["summary"],
+            "session_id": analysis.get("session_id"),
+            "template_score": template_score,
+            "unified_feedback": {
+                **analysis["unified_feedback"],
+                "errors": formatted_feedback["errors"],
+                "feedbacks": formatted_feedback["feedbacks"],
+            },
+            "issues": analysis["issues"],
+            "suggestions": analysis["suggestions"],
+        }
+
+    def _render_annotated_video(
+        self,
+        source_uri: str,
+        exercise: str,
+        max_frames: int = 120,
+    ) -> str:
+        """生成带骨架标注的输出视频（不影响分析结果）。"""
         source_path = self._resolve_source(source_uri)
         output_path = self._make_output_path(source_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -39,136 +182,114 @@ class VideoAnalysisService:
             raise ValueError("Cannot open browser-compatible video writer")
 
         pose = self._create_pose()
-        analyzer = ExerciseAnalyzer(exercise=exercise)
-        frame_index = 0
+        limit = max(1, min(int(max_frames), 600))
 
-        while True:
-            ok, frame = capture.read()
-            if not ok:
-                break
-
-            annotated = self._annotate_frame(frame, pose, exercise, frame_index)
+        try:
+            for frame_index, frame in self._iter_capture_frames(capture, limit):
+                pose_result = self._process_pose_on_frame(frame, pose) if pose is not None else None
+                annotated = self._annotate_frame(frame, pose_result, exercise, frame_index)
+                if annotated.shape[1] != width or annotated.shape[0] != height:
+                    annotated = cv2.resize(annotated, (width, height))
+                writer.write(annotated)
+        finally:
+            capture.release()
+            writer.release()
             if pose is not None:
-                self._analyze_frame(annotated, pose, analyzer)
+                pose.close()
 
-            if annotated.shape[1] != width or annotated.shape[0] != height:
-                annotated = cv2.resize(annotated, (width, height))
-            writer.write(annotated)
-            frame_index += 1
+        return str(output_path).replace("\\", "/")
 
-        capture.release()
-        writer.release()
-
-        if pose is not None:
-            pose.close()
-
+    def _build_analysis_response(
+        self,
+        analyzer: ExerciseAnalyzer,
+        output_uri: str,
+        processed_frames: int,
+        persist_session: bool,
+        user_id: int | None = None,
+    ) -> dict:
         session_summary = analyzer.get_session_summary()
-        if session_summary["total_count"] > 0:
-            session_service.create_session(
+        unified_feedback = analyzer.get_unified_feedback()
+        formatted_feedback = unified_feedback_service.format_for_ai(unified_feedback)
+        session_id: str | None = None
+
+        if persist_session and session_summary["total_count"] > 0:
+            session = session_service.create_session(
                 exercise=session_summary["exercise"],
                 duration_seconds=session_summary["duration_seconds"],
                 total_count=session_summary["total_count"],
                 valid_count=session_summary["valid_count"],
                 error_count=session_summary["error_count"],
                 average_score=session_summary["average_score"],
+                user_id=user_id,
             )
-
-        return str(output_path).replace("\\", "/")
-
-    def run_realtime_video_test(
-        self,
-        source_uri: str,
-        exercise: str,
-        max_frames: int = 120,
-        keypoint_extractor=None,
-    ) -> dict:
-        source_path = self._resolve_source(source_uri)
-        capture = cv2.VideoCapture(str(source_path))
-        if not capture.isOpened():
-            raise ValueError(f"Cannot open video: {source_uri}")
-
-        video_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
-        video_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-        analyzer = ExerciseAnalyzer(exercise=exercise)
-        template_service = TemplateService()
-        feedback_service = FeedbackService()
-        pose = self._create_pose()
-        frame_results = []
-        frame_index = 0
-        limit = max(1, min(int(max_frames), 600))
-
-        try:
-            while frame_index < limit:
-                ok, frame = capture.read()
-                if not ok:
-                    break
-
-                if keypoint_extractor is not None:
-                    keypoints = keypoint_extractor(frame, pose)
-                elif pose is not None:
-                    keypoints = self._extract_keypoints_from_frame(frame, pose)
-                else:
-                    keypoints = {}
-
-                result = analyzer.analyze(keypoints)
-                payload = result.to_dict()
-                payload["frame_index"] = frame_index
-                payload["keypoints"] = {key: asdict(value) for key, value in keypoints.items()}
-                if payload.get("features"):
-                    payload["metrics"] = payload["features"]
-
-                frame_results.append(payload)
-                frame_index += 1
-        finally:
-            capture.release()
-            if pose is not None:
-                pose.close()
-
-        template_score = None
-        if frame_results:
+            session_id = session.session_id
             try:
-                frames_with_metrics = [
-                    frame.get("metrics", {})
-                    for frame in frame_results
-                    if frame.get("metrics")
-                ]
-
-                if frames_with_metrics:
-                    score_result = template_service.score_by_template(exercise, frames_with_metrics)
-                    feedback = feedback_service.generate_template_feedback(score_result)
-                    template_score = {
-                        "score": score_result["score"],
-                        "level": score_result["level"],
-                        "detail_scores": score_result["detail_scores"],
-                        "differences": score_result["differences"],
-                        "errors": feedback["errors"],
-                        "suggestions": feedback["suggestions"],
-                    }
+                self._save_feedback_summary(session_id, formatted_feedback)
             except Exception:
                 pass
 
         return {
-            "exercise": exercise,
-            "source_uri": str(source_path).replace("\\", "/"),
-            "processed_frames": len(frame_results),
-            "video_width": video_width,
-            "video_height": video_height,
-            "frames": frame_results,
-            "summary": analyzer.get_session_summary(),
-            "template_score": template_score,
+            "output_uri": output_uri,
+            "session_id": session_id,
+            "processed_frames": processed_frames,
+            "summary": session_summary,
+            "issues": formatted_feedback["errors"],
+            "suggestions": formatted_feedback["feedbacks"],
+            "unified_feedback": {
+                "score": unified_feedback["summary_score"],
+                "level": unified_feedback["summary_level"],
+                "total_reps": unified_feedback["total_reps"],
+                "valid_reps": unified_feedback["valid_reps"],
+                "items": [
+                    {
+                        "issue": item["issue"],
+                        "suggestion": item["suggestion"],
+                        "severity": item["severity"],
+                    }
+                    for item in unified_feedback["items"]
+                ],
+            },
         }
 
-    def _analyze_frame(self, frame, pose, analyzer):
-        keypoints = self._extract_keypoints_from_frame(frame, pose)
-        if keypoints:
-            analyzer.analyze(keypoints)
+    def _save_feedback_summary(self, session_id: str, formatted_feedback: dict) -> None:
+        feedback_data = {
+            "issues": formatted_feedback["errors"],
+            "suggestions": formatted_feedback["feedbacks"],
+            "metrics": formatted_feedback["metrics"],
+            "score": formatted_feedback["score"],
+            "level": formatted_feedback["level"],
+        }
+        db = SessionLocal()
+        try:
+            sess = db.query(SessionORM).filter(
+                SessionORM.session_id == session_id
+            ).first()
+            if sess:
+                sess.feedback_summary = json.dumps(feedback_data, ensure_ascii=False)
+                db.commit()
+        finally:
+            db.close()
+
+    @staticmethod
+    def _iter_capture_frames(capture: cv2.VideoCapture, limit: int):
+        frame_index = 0
+        while frame_index < limit:
+            ok, frame = capture.read()
+            if not ok:
+                break
+            yield frame_index, frame
+            frame_index += 1
+
+    def _process_pose_on_frame(self, frame, pose):
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        return pose.process(rgb)
 
     def _extract_keypoints_from_frame(self, frame, pose):
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        result = pose.process(rgb)
+        pose_result = self._process_pose_on_frame(frame, pose)
+        return self._extract_keypoints_from_pose_result(pose_result)
 
-        if not result.pose_landmarks:
+    def _extract_keypoints_from_pose_result(self, pose_result):
+        if pose_result is None or not pose_result.pose_landmarks:
             return {}
 
         keypoints = {}
@@ -185,8 +306,8 @@ class VideoAnalysisService:
         ]
 
         for index, name in enumerate(landmark_names):
-            if index < len(result.pose_landmarks.landmark):
-                landmark = result.pose_landmarks.landmark[index]
+            if index < len(pose_result.pose_landmarks.landmark):
+                landmark = pose_result.pose_landmarks.landmark[index]
                 keypoints[name] = NormalizedKeypoint(
                     x=landmark.x,
                     y=landmark.y,
@@ -222,11 +343,18 @@ class VideoAnalysisService:
             min_tracking_confidence=0.5,
         )
 
-    def _annotate_frame(self, frame, pose, exercise: str, frame_index: int):
+    def _annotate_frame(self, frame, pose_result, exercise: str, frame_index: int):
         annotated = frame.copy()
 
-        if pose is not None:
-            self._draw_pose(annotated, pose)
+        if pose_result is not None and pose_result.pose_landmarks:
+            import mediapipe as mp
+
+            mp.solutions.drawing_utils.draw_landmarks(
+                annotated,
+                pose_result.pose_landmarks,
+                mp.solutions.pose.POSE_CONNECTIONS,
+                mp.solutions.drawing_styles.get_default_pose_landmarks_style(),
+            )
 
         cv2.rectangle(annotated, (12, 12), (360, 92), (18, 32, 26), -1)
         cv2.putText(
@@ -250,22 +378,6 @@ class VideoAnalysisService:
             cv2.LINE_AA,
         )
         return annotated
-
-    @staticmethod
-    def _draw_pose(frame, pose):
-        import mediapipe as mp
-
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        result = pose.process(rgb)
-        if not result.pose_landmarks:
-            return
-
-        mp.solutions.drawing_utils.draw_landmarks(
-            frame,
-            result.pose_landmarks,
-            mp.solutions.pose.POSE_CONNECTIONS,
-            mp.solutions.drawing_styles.get_default_pose_landmarks_style(),
-        )
 
 
 video_analysis_service = VideoAnalysisService(settings.storage_root)

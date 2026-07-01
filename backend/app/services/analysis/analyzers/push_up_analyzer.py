@@ -18,6 +18,14 @@ REQUIRED = {
 class PushUpAnalyzer(BaseExerciseAnalyzer):
     exercise_type = "push_up"
 
+    def rep_completion_from_phases(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        return (("descending", "bottom"), ("ascending", "top_support"))
+
+    def summarize_rep(self, samples: list[dict[str, float]]) -> dict[str, float]:
+        if not samples:
+            return {}
+        return min(samples, key=lambda sample: sample.get("elbow_angle", 180))
+
     def extract_features(self, landmarks: Keypoints) -> dict[str, float]:
         missing = REQUIRED - set(landmarks)
         if missing:
@@ -96,6 +104,7 @@ class PushUpAnalyzer(BaseExerciseAnalyzer):
     def score_frame(self, features: dict, phase: str) -> dict:
         issues: list[str] = []
         detail_scores: dict[str, float] = {}
+        feedback: list[str] = []
         total = 0.0
         count = 0
 
@@ -109,8 +118,10 @@ class PushUpAnalyzer(BaseExerciseAnalyzer):
             count += 0.4
             if s < 60:
                 issues.append("肘关节弯曲不足，下降幅度不够")
+                feedback.append("下降时肘关节弯曲到接近 90°，胸部接近地面")
             elif s < 80:
                 issues.append("下降幅度略不足")
+                feedback.append("再下沉一点，保证动作幅度")
 
         # --- Body line (30%) ---
         bl = features.get("body_line_angle", 0)
@@ -120,8 +131,10 @@ class PushUpAnalyzer(BaseExerciseAnalyzer):
         count += 0.3
         if s_bl < 60:
             issues.append("身体未保持直线（塌腰或撅臀）")
+            feedback.append("收紧核心，让肩-髋-踝保持一条直线")
         elif s_bl < 80:
             issues.append("身体直线略有偏差")
+            feedback.append("保持核心稳定，避免臀部过高或塌腰")
 
         # --- Symmetry (20%) ---
         sym = features.get("symmetry_diff", 0)
@@ -131,8 +144,10 @@ class PushUpAnalyzer(BaseExerciseAnalyzer):
         count += 0.2
         if s_sym < 60:
             issues.append("左右发力不均，身体不对称")
+            feedback.append("注意左右手均匀用力，肩膀保持水平")
         elif s_sym < 80:
             issues.append("左右略有不对称")
+            feedback.append("调整手部位置，保持身体对称")
 
         # --- Stability / tempo (10%) ---
         hip = features.get("hip_sag", 0)
@@ -140,6 +155,10 @@ class PushUpAnalyzer(BaseExerciseAnalyzer):
         detail_scores["stability"] = round(s_hip, 1)
         total += s_hip * 0.1
         count += 0.1
+        if s_hip < 60:
+            feedback.append("避免臀部下沉或撅起，保持平板姿势")
+        elif s_hip < 80:
+            feedback.append("收紧腹部，稳定髋部位置")
 
         score = round(total / count, 1) if count else 80.0
-        return {"score": score, "issues": issues, "detail_scores": detail_scores, "feedback": []}
+        return {"score": score, "issues": issues, "detail_scores": detail_scores, "feedback": feedback}

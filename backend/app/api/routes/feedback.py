@@ -12,34 +12,6 @@ except ModuleNotFoundError:
 router = APIRouter(prefix="/feedback", tags=["feedback"]) if APIRouter else None
 
 
-_ERROR_PATTERNS: dict[str, list[dict]] = {
-    "squat": [
-        {"issue": "下蹲深度不足", "severity": "high", "suggestion": "下蹲时继续降低重心，使膝关节弯曲更充分"},
-        {"issue": "膝盖内扣", "severity": "high", "suggestion": "保持膝盖与脚尖方向一致，避免内扣"},
-        {"issue": "躯干前倾过大", "severity": "medium", "suggestion": "收紧核心，保持背部挺直"},
-        {"issue": "左右不平衡", "severity": "medium", "suggestion": "注意调整站姿，保持左右平衡"},
-        {"issue": "后跟离地", "severity": "low", "suggestion": "脚跟贴地，重心保持在脚掌中部"},
-    ],
-    "push_up": [
-        {"issue": "身体塌腰", "severity": "high", "suggestion": "收紧核心肌群，保持肩-髋-踝一条直线"},
-        {"issue": "肘部弯曲不足", "severity": "high", "suggestion": "下降至肘关节约90度"},
-        {"issue": "左右不对称", "severity": "medium", "suggestion": "检查左右肩肘高度是否一致"},
-        {"issue": "头部姿态不当", "severity": "low", "suggestion": "保持颈椎中立，目视前下方"},
-    ],
-    "plank": [
-        {"issue": "髋部下沉", "severity": "high", "suggestion": "收紧核心，保持身体直线"},
-        {"issue": "肩膀不在手肘正上方", "severity": "medium", "suggestion": "调整手肘位置至肩膀正下方"},
-        {"issue": "头颈姿态异常", "severity": "low", "suggestion": "保持颈椎中立，目视地面"},
-    ],
-    "jumping_jack": [
-        {"issue": "手臂未举过肩", "severity": "medium", "suggestion": "手臂充分举过头顶"},
-        {"issue": "双脚打开不足", "severity": "medium", "suggestion": "双脚打开至肩宽1.5倍以上"},
-        {"issue": "手脚不同步", "severity": "medium", "suggestion": "手脚同时到达最大位置"},
-        {"issue": "节奏不稳定", "severity": "low", "suggestion": "保持匀速呼吸和动作节奏"},
-    ],
-}
-
-
 if router:
 
     @router.get("")
@@ -68,20 +40,41 @@ if router:
             items: list[dict] = []
 
             for sess in sessions:
-                patterns = _ERROR_PATTERNS.get(sess.exercise, [])
-                err_count = sess.error_count or 0
-                if err_count > 0 and patterns:
-                    for i in range(min(err_count, len(patterns))):
-                        pat = patterns[i % len(patterns)]
-                        items.append({
-                            "id": f"fb-{sess.session_id}-{i}",
-                            "session_id": sess.session_id,
-                            "exercise": sess.exercise,
-                            "issue": pat["issue"],
-                            "severity": pat["severity"],
-                            "suggestion": pat["suggestion"],
-                            "created_at": sess.created_at.isoformat(),
-                        })
+                # 优先使用 session 中保存的真实反馈摘要
+                if sess.feedback_summary:
+                    try:
+                        import json
+                        fb_data = json.loads(sess.feedback_summary)
+                        issues = fb_data.get("issues", [])
+                        suggestions = fb_data.get("suggestions", [])
+
+                        # 如果没有问题，显示正面反馈
+                        if not issues:
+                            items.append({
+                                "id": f"fb-{sess.session_id}-ok",
+                                "session_id": sess.session_id,
+                                "exercise": sess.exercise,
+                                "issue": "动作完成良好",
+                                "severity": "low",
+                                "suggestion": suggestions[0] if suggestions else "继续保持良好的动作质量！",
+                                "created_at": sess.created_at.isoformat(),
+                            })
+                        else:
+                            # 显示真实的问题和建议
+                            for i, (issue, suggestion) in enumerate(zip(issues, suggestions)):
+                                severity = "high" if i == 0 else "medium" if i == 1 else "low"
+                                items.append({
+                                    "id": f"fb-{sess.session_id}-{i}",
+                                    "session_id": sess.session_id,
+                                    "exercise": sess.exercise,
+                                    "issue": issue,
+                                    "severity": severity,
+                                    "suggestion": suggestion,
+                                    "created_at": sess.created_at.isoformat(),
+                                })
+                        continue
+                    except Exception:
+                        pass  # 解析失败时跳过，不再使用预设假数据
 
             return {"items": items, "total": len(items)}
         finally:

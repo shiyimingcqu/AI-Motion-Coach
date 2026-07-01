@@ -1,9 +1,11 @@
 """Realtime analysis WebSocket and HTTP endpoints — multi-exercise support."""
 
+import json
+
 from app.api.deps import get_current_active_user
 from app.core.security import decode_access_token
 from app.db.session import SessionLocal
-from app.models.entities import UserORM
+from app.models.entities import UserORM, SessionORM
 from app.services.analysis.models import NormalizedKeypoint
 from app.services.analysis.analyzers.registry import get_analyzer, ANALYZER_REGISTRY
 from app.services.storage.local_storage import local_storage
@@ -161,6 +163,7 @@ if router:
             if summary["total_count"] <= 0:
                 return None
 
+            # 创建 session
             saved_session = session_service.create_session(
                 exercise=summary["exercise"],
                 duration_seconds=summary["duration_seconds"],
@@ -170,6 +173,35 @@ if router:
                 average_score=summary["average_score"],
                 user_id=user_id,
             )
+
+            # 保存反馈摘要
+            try:
+                from app.services.analysis.unified_feedback_service import (
+                    build_unified_feedback_from_analyzer,
+                    unified_feedback_service,
+                )
+                unified_feedback = build_unified_feedback_from_analyzer(analyzer)
+                formatted = unified_feedback_service.format_for_ai(unified_feedback)
+                feedback_data = {
+                    "issues": formatted["errors"],
+                    "suggestions": formatted["feedbacks"],
+                    "metrics": formatted["metrics"],
+                    "score": formatted["score"],
+                    "level": formatted["level"],
+                }
+                db = SessionLocal()
+                try:
+                    sess = db.query(SessionORM).filter(
+                        SessionORM.session_id == saved_session.session_id
+                    ).first()
+                    if sess:
+                        sess.feedback_summary = json.dumps(feedback_data, ensure_ascii=False)
+                        db.commit()
+                finally:
+                    db.close()
+            except Exception:
+                pass  # 反馈保存失败不影响主流程
+
             return saved_session
 
         try:
