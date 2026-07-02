@@ -25,10 +25,13 @@
 
 ## 小程序端
 - 技术栈：原生微信小程序 (WXML/WXSS/JS)
-- 57 个文件，7 个页面（登录、首页、动作库、训练、结果、报告、我的）+ 4 个组件
+- 57+ 个文件，8 个页面（登录、首页 dashboard、动作库 list/detail、训练 training、结果 result、报告 reports、我的 profile）+ 4 个组件
 - 认证：wx.login() → POST /api/auth/wechat-login → JWT
 - 姿态检测：Camera 帧 → base64 → POST /api/realtime/pose-detect → 关键点 → WebSocket /api/realtime/pose → 评分 → Canvas 骨架
 - 后端新增端点：
   - POST /api/auth/wechat-login（微信 code → openid → JWT）
   - POST /api/realtime/pose-detect（base64 图片帧 → MediaPipe 33 关键点）
 - 后端模型修改：UserORM 新增 openid 字段，hashed_password 改为 nullable
+- 视觉设计：主色 `#4f8cff`，圆角 16/20/28rpx，柔和卡片（白底 + 浅阴影 + 顶部彩色描边）
+- 图表：折线图 / 雷达图通过 `rich-text` 节点注入 SVG 字符串实现
+- WebSocket `analysis` 消息兼容多种字段名：`knee_angle`/`hip_angle`/`torso_angle` 或 `metrics.{knee,hip,torso}`

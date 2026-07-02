@@ -4,32 +4,45 @@ const { EXERCISE_CONFIG, getScoreLevel } = require('../../utils/constants');
 const { formatDate, formatDuration } = require('../../utils/util');
 const app = getApp();
 
+const RECOMMEND_LIST = [
+  { key: 'squat', icon: '🦵', name: '深蹲', level: '初级', duration: '8 分钟', people: 86 },
+  { key: 'push_up', icon: '💪', name: '俯卧撑', level: '中级', duration: '10 分钟', people: 142 },
+  { key: 'plank', icon: '🧘', name: '平板支撑', level: '初级', duration: '5 分钟', people: 68 },
+  { key: 'jumping_jack', icon: '🤸', name: '开合跳', level: '初级', duration: '6 分钟', people: 95 },
+  { key: 'lunge', icon: '🚶', name: '弓步蹲', level: '中级', duration: '9 分钟', people: 53 },
+  { key: 'high_knees', icon: '🏃', name: '高抬腿', level: '中级', duration: '5 分钟', people: 71 },
+];
+
 Page({
   data: {
-    greeting: '早上好',
+    statusBarHeight: 44,
     userInfo: {},
     stats: {
       todaySessions: 0,
-      totalSessions: 0,
+      weekSessions: 0,
       averageScore: 0,
-      totalDuration: 0,
+      totalDuration: 0
     },
-    trendData: [],
-    recentSessions: [],
+    recommended: null,
     loading: true
   },
 
+  onLoad() {
+    try {
+      const sysInfo = wx.getSystemInfoSync();
+      this.setData({ statusBarHeight: sysInfo.statusBarHeight || 44 });
+    } catch (e) {}
+  },
+
   onShow() {
-    this.updateGreeting();
+    this.pickRecommend();
     this.loadDashboard();
   },
 
-  updateGreeting() {
-    const hour = new Date().getHours();
-    let greeting = '早上好';
-    if (hour >= 12 && hour < 18) greeting = '下午好';
-    else if (hour >= 18) greeting = '晚上好';
-    this.setData({ greeting });
+  pickRecommend() {
+    const list = RECOMMEND_LIST;
+    const idx = Math.floor(Math.random() * list.length);
+    this.setData({ recommended: list[idx] });
   },
 
   async loadDashboard() {
@@ -37,44 +50,15 @@ Page({
     this.setData({ userInfo, loading: true });
 
     try {
-      const stats = await ApiClient.get('/api/dashboard/stats');
-
-      // 处理趋势数据
-      const trendData = (stats.recent_trend || []).map(item => {
-        const level = getScoreLevel(item.score);
-        const maxH = 140;
-        const height = Math.max(4, (item.score / 100) * maxH);
-        return {
-          date: item.date ? item.date.slice(5) : '',  // MM-DD
-          score: item.score,
-          height,
-          color: level.color
-        };
-      });
-
-      // 处理最近训练
-      const recentSessions = (stats.recent_sessions || []).slice(0, 5).map(s => {
-        const config = EXERCISE_CONFIG[s.exercise];
-        const level = getScoreLevel(s.average_score || s.score || 0);
-        return {
-          session_id: s.session_id,
-          exercise_name: config ? config.name : (s.exercise || '未知'),
-          date: formatDate(s.created_at, 'MM-DD HH:mm'),
-          score: s.average_score || s.score || 0,
-          scoreColor: level.color,
-          duration: formatDuration(s.duration_seconds || 0),
-        };
-      });
+      const stats = await ApiClient.get('/api/dashboard/stats').catch(() => ({}));
 
       this.setData({
         stats: {
           todaySessions: stats.today_sessions || 0,
-          totalSessions: stats.total_sessions || 0,
+          weekSessions: stats.week_sessions || stats.total_sessions || 0,
           averageScore: Math.round(stats.average_score || 0),
           totalDuration: stats.total_duration_minutes || 0,
         },
-        trendData,
-        recentSessions,
         loading: false
       });
     } catch (err) {
@@ -87,8 +71,38 @@ Page({
     wx.switchTab({ url: '/pages/exercises/list' });
   },
 
-  goToSession(e) {
-    const id = e.currentTarget.dataset.id;
-    // 跳转到结果页（暂不支持从 session 恢复）
+  goToVideoAnalysis() {
+    wx.switchTab({ url: '/pages/exercises/list' });
+  },
+
+  goToReports() {
+    wx.switchTab({ url: '/pages/reports/reports' });
+  },
+
+  goToExercises() {
+    wx.switchTab({ url: '/pages/exercises/list' });
+  },
+
+  goToRecommend() {
+    const r = this.data.recommended;
+    if (!r) return;
+    wx.navigateTo({ url: `/pages/exercises/detail?key=${r.key}` });
+  },
+
+  shuffleRecommend() {
+    this.pickRecommend();
+  },
+
+  goToWarmup() {
+    wx.showToast({ title: '功能开发中', icon: 'none' });
+  },
+  goToStretch() {
+    wx.showToast({ title: '功能开发中', icon: 'none' });
+  },
+  goToPlan() {
+    wx.showToast({ title: '功能开发中', icon: 'none' });
+  },
+  goToFavorites() {
+    wx.showToast({ title: '功能开发中', icon: 'none' });
   }
 });

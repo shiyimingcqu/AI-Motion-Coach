@@ -96,7 +96,8 @@ Page({
           const level = getScoreLevel(score);
           return {
             session_id: s.session_id,
-            exercise_name: config ? config.name : (s.exercise || '未知'),
+            exercise_name: config.name || (s.exercise || '未知'),
+            icon: config.icon || '🏋️',
             date: formatDate(s.created_at, 'MM-DD HH:mm'),
             score,
             scoreColor: level.color,

@@ -1,9 +1,20 @@
 <!-- 动作详情页 -->
 <view class="detail-page">
+  <!-- 顶部导航 -->
+  <view class="top-bar">
+    <view class="top-bar-content">
+      <view class="back-btn" bindtap="goBack">
+        <text class="back-arrow">‹</text>
+      </view>
+      <text class="top-title">{{exercise.name}}</text>
+      <view class="top-bar-right"></view>
+    </view>
+  </view>
+
   <!-- 头部 -->
-  <view class="detail-header" style="background: linear-gradient(135deg, {{exercise.accentColor}}, {{exercise.accentColor}}cc)">
-    <text class="detail-icon">{{exercise.icon}}</text>
-    <text class="detail-name">{{exercise.name}}</text>
+  <view class="detail-hero" style="background: linear-gradient(135deg, {{exercise.accentColor}}, {{exercise.accentColor}}cc);">
+    <view class="detail-icon">{{exercise.icon}}</view>
+    <view class="detail-name">{{exercise.name}}</view>
     <view class="detail-tags">
       <text class="detail-tag">{{exercise.category}}</text>
       <text class="detail-tag">{{exercise.level}}</text>
@@ -13,35 +24,35 @@
 
   <view class="detail-content">
     <!-- 描述 -->
-    <view class="card" wx:if="{{exercise.description}}">
-      <view class="card-title">动作简介</view>
+    <view class="card section-card" wx:if="{{exercise.description}}">
+      <view class="section-title-text">动作简介</view>
       <text class="desc-text">{{exercise.description}}</text>
     </view>
 
     <!-- 检测模式 -->
-    <view class="card" wx:if="{{exercise.modes.length > 0}}">
-      <view class="card-title">支持模式</view>
+    <view class="card section-card" wx:if="{{exercise.modes.length > 0}}">
+      <view class="section-title-text">支持模式</view>
       <view class="mode-list">
         <view class="mode-item" wx:for="{{exercise.modes}}" wx:key="index">
-          <text>{{item}}</text>
+          {{item}}
         </view>
       </view>
     </view>
 
     <!-- 常见错误 -->
-    <view class="card" wx:if="{{exercise.errors.length > 0}}">
-      <view class="card-title">常见错误</view>
+    <view class="card section-card" wx:if="{{exercise.errors.length > 0}}">
+      <view class="section-title-text">常见错误</view>
       <view class="error-list">
         <view class="error-item" wx:for="{{exercise.errors}}" wx:key="index">
-          <text class="error-dot">•</text>
+          <view class="error-bullet">!</view>
           <text>{{item}}</text>
         </view>
       </view>
     </view>
 
     <!-- 训练统计 -->
-    <view class="card" wx:if="{{exerciseStats}}">
-      <view class="card-title">我的训练</view>
+    <view class="card section-card" wx:if="{{exerciseStats}}">
+      <view class="section-title-text">我的训练</view>
       <view class="stats-row">
         <view class="stat-item">
           <text class="stat-num">{{exerciseStats.total || 0}}</text>
