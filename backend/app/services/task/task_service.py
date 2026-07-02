@@ -36,6 +36,9 @@ class TaskService:
             db.commit()
             db.refresh(task)
             return task.to_dict()
+        except Exception:
+            db.rollback()
+            raise
         finally:
             db.close()
 
@@ -83,6 +86,9 @@ class TaskService:
             db.commit()
             db.refresh(task)
             return task.to_dict()
+        except Exception:
+            db.rollback()
+            raise
         finally:
             db.close()
 

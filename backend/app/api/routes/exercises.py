@@ -67,6 +67,9 @@ if router:
             db.commit()
             db.refresh(ex)
             return ex.to_dict()
+        except Exception:
+            db.rollback()
+            raise
         finally:
             db.close()
 
@@ -92,6 +95,9 @@ if router:
             db.commit()
             db.refresh(ex)
             return ex.to_dict()
+        except Exception:
+            db.rollback()
+            raise
         finally:
             db.close()
 
@@ -111,6 +117,9 @@ if router:
             db.delete(ex)
             db.commit()
             return {"message": "Exercise deleted", "key": exercise_key}
+        except Exception:
+            db.rollback()
+            raise
         finally:
             db.close()
 

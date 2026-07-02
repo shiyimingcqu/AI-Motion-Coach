@@ -171,6 +171,9 @@ def init_db():
     try:
         _create_default_users(db)
         _seed_exercises(db)
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -215,7 +218,11 @@ def _create_default_users(db: Session):
         )
         db.add(user)
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
 
 def _seed_exercises(db: Session):
@@ -226,4 +233,8 @@ def _seed_exercises(db: Session):
             ex = ExerciseORM(**data)
             db.add(ex)
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
