@@ -31,13 +31,13 @@ class AnalysisTests(unittest.TestCase):
             "right_ankle": NormalizedKeypoint(x=0.53, y=0.82, visibility=0.99),
         }
 
-        analyzer.analyze(down_frame)
-        result = analyzer.analyze(up_frame)
+        analyzer.analyze_frame(down_frame, {})
+        result = analyzer.analyze_frame(up_frame, {})
 
-        self.assertEqual(result.stage, "up")
-        self.assertEqual(result.count, 1)
-        self.assertEqual(result.valid_count, 1)
-        self.assertGreaterEqual(result.score, 80)
+        self.assertEqual(result["phase"], "up")
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["valid_count"], 1)
+        self.assertGreaterEqual(result["score"], 80)
 
     def test_squat_analyzer_flags_insufficient_depth(self):
         analyzer = ExerciseAnalyzer(exercise="squat")
@@ -50,10 +50,10 @@ class AnalysisTests(unittest.TestCase):
             "right_ankle": NormalizedKeypoint(x=0.53, y=0.82, visibility=0.99),
         }
 
-        result = analyzer.analyze(shallow_frame)
+        result = analyzer.analyze_frame(shallow_frame, {})
 
-        self.assertIn("下蹲深度不足", result.errors)
-        self.assertLess(result.score, 90)
+        self.assertIn("下蹲深度不足", result["issues"])
+        self.assertLess(result["score"], 90)
 
 
 if __name__ == "__main__":

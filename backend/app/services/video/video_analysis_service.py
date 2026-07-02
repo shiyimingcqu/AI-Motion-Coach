@@ -1,16 +1,14 @@
 from dataclasses import asdict
 from pathlib import Path
 from uuid import uuid4
-import time
 
 import cv2
 
 from app.core.config import settings
 from app.services.analysis.exercise_analyzer import ExerciseAnalyzer
-from app.services.analysis.angle_feature_service import extract_squat_features
-from app.services.analysis.template_service import TemplateService
 from app.services.analysis.feedback_service import FeedbackService
 from app.services.analysis.models import NormalizedKeypoint
+from app.services.analysis.template_service import TemplateService
 from app.services.session.session_service import session_service
 
 
@@ -18,16 +16,18 @@ class VideoAnalysisService:
     def __init__(self, storage_root: str):
         self.storage_root = Path(storage_root)
 
-    def analyze_video(self, source_uri: str, exercise: str) -> str:
+    def analyze_video(self, source_uri: str, exercise: str, user_id: int | None = None) -> str:
         source_path = self._resolve_source(source_uri)
         output_path = self._make_output_path(source_path)
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         capture = cv2.VideoCapture(str(source_path))
         if not capture.isOpened():
-            raise ValueError(f"Cannot open video: {source_uri}")
+            raise ValueError(f"无法打开视频文件: {source_uri}")
 
         fps = capture.get(cv2.CAP_PROP_FPS) or 24
+        frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        video_duration = int(frame_count / fps) if fps > 0 and frame_count > 0 else 0
         width = self._even_dimension(int(capture.get(cv2.CAP_PROP_FRAME_WIDTH)) or 640)
         height = self._even_dimension(int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT)) or 480)
         writer = cv2.VideoWriter(
@@ -50,10 +50,9 @@ class VideoAnalysisService:
                 break
 
             annotated = self._annotate_frame(frame, pose, exercise, frame_index)
-            
             if pose is not None:
                 self._analyze_frame(annotated, pose, analyzer)
-            
+
             if annotated.shape[1] != width or annotated.shape[0] != height:
                 annotated = cv2.resize(annotated, (width, height))
             writer.write(annotated)
@@ -66,7 +65,13 @@ class VideoAnalysisService:
             pose.close()
 
         session_summary = analyzer.get_session_summary()
-        if session_summary["total_count"] > 0:
+        if video_duration > 0:
+            session_summary["duration_seconds"] = min(
+                session_summary["duration_seconds"],
+                max(video_duration, 30),
+            )
+
+        if session_summary["total_count"] > 0 or session_summary["duration_seconds"] > 0:
             session_service.create_session(
                 exercise=session_summary["exercise"],
                 duration_seconds=session_summary["duration_seconds"],
@@ -74,6 +79,7 @@ class VideoAnalysisService:
                 valid_count=session_summary["valid_count"],
                 error_count=session_summary["error_count"],
                 average_score=session_summary["average_score"],
+                user_id=user_id,
             )
 
         return str(output_path).replace("\\", "/")
@@ -117,15 +123,9 @@ class VideoAnalysisService:
                 result = analyzer.analyze(keypoints)
                 payload = result.to_dict()
                 payload["frame_index"] = frame_index
-                payload["keypoints"] = {k: asdict(v) for k, v in keypoints.items()}
-
-                # 如果是深蹲动作，添加角度指标
-                if exercise == "squat" and keypoints:
-                    try:
-                        metrics = extract_squat_features(keypoints)
-                        payload["metrics"] = metrics
-                    except ValueError:
-                        pass
+                payload["keypoints"] = {key: asdict(value) for key, value in keypoints.items()}
+                if payload.get("features"):
+                    payload["metrics"] = payload["features"]
 
                 frame_results.append(payload)
                 frame_index += 1
@@ -134,30 +134,27 @@ class VideoAnalysisService:
             if pose is not None:
                 pose.close()
 
-        # 计算模板评分
         template_score = None
-        if exercise == "squat" and frame_results:
+        if frame_results:
             try:
-                # 提取所有帧的 metrics
                 frames_with_metrics = [
-                    frame.get("metrics", {}) for frame in frame_results
+                    frame.get("metrics", {})
+                    for frame in frame_results
                     if frame.get("metrics")
                 ]
 
                 if frames_with_metrics:
                     score_result = template_service.score_by_template(exercise, frames_with_metrics)
                     feedback = feedback_service.generate_template_feedback(score_result)
-
                     template_score = {
                         "score": score_result["score"],
                         "level": score_result["level"],
                         "detail_scores": score_result["detail_scores"],
                         "differences": score_result["differences"],
                         "errors": feedback["errors"],
-                        "suggestions": feedback["suggestions"]
+                        "suggestions": feedback["suggestions"],
                     }
             except Exception:
-                # 模板评分失败不影响整体流程
                 pass
 
         return {
@@ -193,16 +190,16 @@ class VideoAnalysisService:
             "left_index", "right_index", "left_thumb", "right_thumb",
             "left_hip", "right_hip", "left_knee", "right_knee",
             "left_ankle", "right_ankle", "left_heel", "right_heel",
-            "left_foot_index", "right_foot_index"
+            "left_foot_index", "right_foot_index",
         ]
 
-        for i, name in enumerate(landmark_names):
-            if i < len(result.pose_landmarks.landmark):
-                landmark = result.pose_landmarks.landmark[i]
+        for index, name in enumerate(landmark_names):
+            if index < len(result.pose_landmarks.landmark):
+                landmark = result.pose_landmarks.landmark[index]
                 keypoints[name] = NormalizedKeypoint(
                     x=landmark.x,
                     y=landmark.y,
-                    visibility=landmark.visibility
+                    visibility=landmark.visibility,
                 )
 
         return keypoints

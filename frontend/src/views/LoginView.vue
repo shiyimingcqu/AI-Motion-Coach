@@ -7,10 +7,41 @@
       :speed="0.7"
     />
 
-    <!-- 欢迎使用 -->
-    <div class="welcome">
-      <span class="logo">P</span>
-      <span class="text">欢迎使用</span>
+    <!-- 项目名称 + 标题 -->
+    <div class="login-header">
+      <SplitText
+        text="姿态棱镜"
+        tag="h1"
+        className="brand-title"
+        :delay="70"
+        :duration="0.8"
+        :from="{ opacity: 0, y: 60 }"
+        :to="{ opacity: 1, y: 0 }"
+        splitType="chars"
+        textAlign="center"
+      />
+      <SplitText
+        text="运动姿态评估与纠错系统"
+        tag="p"
+        className="brand-sub"
+        :delay="25"
+        :duration="0.5"
+        :from="{ opacity: 0, y: 20 }"
+        :to="{ opacity: 1, y: 0 }"
+        splitType="words"
+        textAlign="center"
+      />
+      <TextType
+        :text="['看见每一度偏差', '让每次抬手都有意义', '练对 · 比练多更重要']"
+        :typingSpeed="60"
+        :deletingSpeed="25"
+        :pauseDuration="2000"
+        :initialDelay="1500"
+        :showCursor="true"
+        cursorCharacter="▍"
+        as="p"
+        className="slogan-typing"
+      />
     </div>
 
     <!-- 登录 / 注册 切换 -->
@@ -117,6 +148,8 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import Aurora from '@/components/Aurora.vue';
 import Stepper from '@/components/Stepper.vue';
+import SplitText from '@/components/SplitText.vue';
+import TextType from '@/components/TextType.vue';
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -171,24 +204,40 @@ async function submit() {
 <style scoped>
 .login-page {
   position: relative; min-height: 100vh; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 1.5rem;
+  align-items: center; justify-content: center; gap: 2rem;
   background: #0a0a0f; padding: 24px; overflow: hidden;
 }
 
-/* ─── 欢迎使用 ─── */
-.welcome {
+/* ─── 首页头部 ─── */
+.login-header {
   position: relative; z-index: 2;
-  display: flex; align-items: center; gap: 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 1rem;
 }
-.logo {
-  width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #5227ff, #7c3aed);
-  color: #fff; font-size: 1.25rem; font-weight: 800;
-  border-radius: 12px; box-shadow: 0 8px 24px rgba(82,39,255,0.3);
+
+.login-header :deep(.brand-title) {
+  font-size: 4rem;
+  font-weight: 800;
+  color: #f0eeeb;
+  letter-spacing: 0.12em;
+  margin: 0;
+  line-height: 1.1;
 }
-.text {
-  font-size: 1.5rem; font-weight: 600; color: #f0eeeb;
-  letter-spacing: -0.02em;
+
+.login-header :deep(.brand-sub) {
+  font-size: 1.05rem;
+  color: rgba(255, 255, 255, 0.35);
+  margin: 0;
+  letter-spacing: 0.18em;
+  font-weight: 400;
+}
+
+.login-header :deep(.slogan-typing) {
+  font-size: 1.15rem;
+  color: rgba(255, 255, 255, 0.55);
+  margin: 0;
+  letter-spacing: 0.06em;
+  font-weight: 400;
+  min-height: 1.6em;
 }
 
 /* ─── 模式切换 ─── */
@@ -222,7 +271,7 @@ async function submit() {
 }
 .pg-desc strong { color: rgba(255,255,255,0.7); font-weight: 600; }
 
-/* ─── 输入框 (紫色统一) ─── */
+/* ─── 输入框 ─── */
 .field { display: flex; flex-direction: column; gap: 0.5rem; }
 .field label {
   font-size: 0.75rem; font-weight: 700;

@@ -76,7 +76,22 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   return response.json();
 }
 
-export async function apiDelete(path: string): Promise<void> {
+export async function apiPut<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    await throwRequestError(response);
+  }
+  return response.json();
+}
+
+export async function apiDelete<T = void>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     method: "DELETE",
     headers: getAuthHeaders(),
@@ -84,16 +99,45 @@ export async function apiDelete(path: string): Promise<void> {
   if (!response.ok) {
     await throwRequestError(response);
   }
-}
-
-export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers: getAuthHeaders(),
-    body: formData,
-  });
-  if (!response.ok) {
-    await throwRequestError(response);
+  if (response.status === 204) {
+    return undefined as T;
   }
   return response.json();
+}
+
+export async function apiUpload<T>(path: string, formData: FormData, timeoutMs = 600000): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: formData,
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      await throwRequestError(response);
+    }
+    return response.json();
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("请求超时，视频分析耗时较长，请稍后重试或缩短视频长度");
+    }
+    if (err instanceof TypeError) {
+      throw new Error("无法连接后端服务器，请确认后端已启动 (http://localhost:8000)");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function checkBackendHealth(): Promise<boolean> {
+  try {
+    const response = await fetch(`${API_BASE}/health`, { method: "GET" });
+    return response.ok;
+  } catch {
+    return false;
+  }
 }

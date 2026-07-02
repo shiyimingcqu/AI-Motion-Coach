@@ -1,31 +1,25 @@
-from app.services.analysis.exercise_analyzer import ExerciseAnalyzer
+"""Realtime analysis WebSocket and HTTP endpoints — multi-exercise support."""
+
+from app.api.deps import get_current_active_user
+from app.core.security import decode_access_token
+from app.db.session import SessionLocal
+from app.models.entities import UserORM
 from app.services.analysis.models import NormalizedKeypoint
-from app.services.analysis.angle_feature_service import extract_squat_features
-from app.services.analysis.template_service import TemplateService
-from app.services.analysis.feedback_service import FeedbackService
+from app.services.analysis.analyzers.registry import get_analyzer, ANALYZER_REGISTRY
 from app.services.storage.local_storage import local_storage
 from app.services.session.session_service import session_service
 from app.services.video.video_analysis_service import video_analysis_service
 
 try:
-    from fastapi import APIRouter, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+    from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect, Query
 except ModuleNotFoundError:
     APIRouter = None
-    File = None
-    Form = None
-    HTTPException = Exception
-    UploadFile = None
-    WebSocket = None
-    WebSocketDisconnect = Exception
+    File = Form = HTTPException = UploadFile = WebSocket = WebSocketDisconnect = Query = None
 
 router = APIRouter(prefix="/realtime", tags=["realtime"]) if APIRouter else None
 
-# 初始化模板服务和反馈服务
-template_service = TemplateService()
-feedback_service = FeedbackService()
 
-
-def _parse_keypoints(raw_keypoints):
+def _parse_keypoints(raw_keypoints: dict) -> dict[str, NormalizedKeypoint]:
     return {
         name: NormalizedKeypoint(
             x=value["x"],
@@ -37,123 +31,39 @@ def _parse_keypoints(raw_keypoints):
 
 
 if router:
+    @router.get("/analyzers")
+    def list_analyzers(
+        current_user=Depends(get_current_active_user) if get_current_active_user else None,
+    ):
+        """Return the list of supported exercise types."""
+        return {"items": list(ANALYZER_REGISTRY.keys())}
+
     @router.post("/analyze-frame")
-    async def analyze_frame(request: dict):
+    async def analyze_frame(
+        request: dict,
+        current_user=Depends(get_current_active_user) if get_current_active_user else None,
+    ):
         """
-        分析单帧姿态，返回角度指标
+        Analyze a single frame for any supported exercise.
 
         Request:
         {
-            "action": "squat",
-            "keypoints": {
-                "left_shoulder": {"x": 0.4, "y": 0.3, "visibility": 0.99},
-                ...
-            }
-        }
-
-        Response:
-        {
-            "action": "squat",
-            "metrics": {
-                "knee_angle": 135.0,
-                "hip_angle": 120.0,
-                "trunk_angle": 18.0,
-                "knee_symmetry_diff": 4.0
-            }
+            "exercise_type": "squat",
+            "keypoints": { ... }
         }
         """
-        action = request.get("action", "squat")
+        exercise_type = request.get("exercise_type", "squat")
         raw_keypoints = request.get("keypoints", {})
 
-        if action != "squat":
-            raise HTTPException(status_code=400, detail=f"暂不支持动作: {action}")
+        try:
+            analyzer = get_analyzer(exercise_type)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
 
         try:
             keypoints = _parse_keypoints(raw_keypoints)
-            metrics = extract_squat_features(keypoints)
-
-            return {
-                "action": action,
-                "metrics": metrics
-            }
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-    @router.post("/score-action")
-    async def score_action(request: dict):
-        """
-        根据标准模板对完整动作进行评分
-
-        Request:
-        {
-            "action": "squat",
-            "frames": [
-                {
-                    "knee_angle": 168,
-                    "hip_angle": 172,
-                    "trunk_angle": 8,
-                    "knee_symmetry_diff": 2
-                },
-                ...
-            ]
-        }
-
-        Response:
-        {
-            "action": "squat",
-            "score": 82.5,
-            "level": "good",
-            "detail_scores": {
-                "knee_angle": 76.2,
-                "hip_angle": 80.5,
-                "trunk_angle": 90.0,
-                "knee_symmetry_diff": 88.0
-            },
-            "differences": {
-                "knee_angle": 7.1,
-                "hip_angle": 5.8,
-                "trunk_angle": 3.0,
-                "knee_symmetry_diff": 3.6
-            },
-            "errors": ["下蹲幅度略不足"],
-            "suggestions": ["下蹲时继续降低重心，使膝关节弯曲更充分"]
-        }
-        """
-        action = request.get("action", "squat")
-        frames = request.get("frames", [])
-        template_id = request.get("template_id")
-
-        if action != "squat":
-            raise HTTPException(status_code=400, detail=f"暂不支持动作: {action}")
-
-        if not frames:
-            raise HTTPException(status_code=400, detail="帧数据不能为空")
-
-        try:
-            # 根据模板评分
-            if len(frames) < 2:
-                raise HTTPException(status_code=400, detail="frames must contain at least 2 items")
-
-            score_result = template_service.score_by_template(action, frames, template_id=template_id)
-            template = template_service.load_template_by_id(template_id) if template_id else template_service.load_template(action)
-            template_length = len(next(iter(template["template_sequence"].values()), []))
-
-            # 生成反馈
-            feedback = feedback_service.generate_template_feedback(score_result)
-
-            return {
-                "action": action,
-                "template_id": template_id or "default",
-                "is_partial": len(frames) < template_length,
-                "score": score_result["score"],
-                "level": score_result["level"],
-                "detail_scores": score_result["detail_scores"],
-                "differences": score_result["differences"],
-                "errors": feedback["errors"],
-                "suggestions": feedback["suggestions"]
-            }
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
+            features = analyzer.extract_features(keypoints)
+            return {"exercise_type": exercise_type, "features": features}
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -162,6 +72,7 @@ if router:
         exercise: str = Form("squat"),
         max_frames: int = Form(120),
         file: UploadFile = File(...),
+        current_user=Depends(get_current_active_user) if get_current_active_user else None,
     ):
         source_uri = await local_storage.save_upload(file)
         try:
@@ -173,10 +84,71 @@ if router:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    @router.post("/score-action", status_code=200)
+    async def score_action(
+        request: dict,
+        current_user=Depends(get_current_active_user) if get_current_active_user else None,
+    ):
+        """
+        Score a sequence of user frames against a template.
+
+        Request:
+        {
+            "action": "squat",
+            "template_id": "optional_template_id",
+            "frames": [ { "knee_angle": ..., ... } ]
+        }
+        """
+        from app.services.analysis.template_service import TemplateService
+
+        action = request.get("action", "squat")
+        template_id = request.get("template_id")
+        frames = request.get("frames", [])
+
+        if len(frames) < 2:
+            raise HTTPException(status_code=400, detail="Need at least 2 frames for scoring")
+
+        try:
+            ts = TemplateService(
+                template_dir="app/templates",
+                storage_dir="storage/templates",
+            )
+            result = ts.score_by_template(action, frames, template_id)
+            result["action"] = action
+            try:
+                tf = ts._find_template_file(action)
+                result["template_id"] = template_id or (tf.stem if tf else None)
+            except Exception:
+                result["template_id"] = template_id or None
+            result["is_partial"] = len(frames) < 50
+        except (FileNotFoundError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        return result
+
     @router.websocket("/pose")
-    async def realtime_pose(websocket: WebSocket):
+    async def realtime_pose(websocket: WebSocket, exercise_type: str = Query("squat")):
         await websocket.accept()
-        analyzer = ExerciseAnalyzer(exercise="squat")
+
+        # Extract user_id from JWT token in query params (passed from frontend)
+        token = websocket.query_params.get("token", "")
+        user_id: int | None = None
+        if token:
+            payload = decode_access_token(token)
+            if payload:
+                username = payload.get("sub")
+                if username:
+                    from app.db.session import SessionLocal
+                    db = SessionLocal()
+                    try:
+                        user = db.query(UserORM).filter(UserORM.username == username).first()
+                        if user:
+                            user_id = user.id
+                    finally:
+                        db.close()
+
+        analyzer = get_analyzer(exercise_type)
+        state: dict = {}
         running = False
         saved_session = None
 
@@ -185,17 +157,18 @@ if router:
             if saved_session is not None:
                 return saved_session
 
-            session_summary = analyzer.get_session_summary()
-            if session_summary["total_count"] <= 0:
+            summary = analyzer.get_session_summary()
+            if summary["total_count"] <= 0:
                 return None
 
             saved_session = session_service.create_session(
-                exercise=session_summary["exercise"],
-                duration_seconds=session_summary["duration_seconds"],
-                total_count=session_summary["total_count"],
-                valid_count=session_summary["valid_count"],
-                error_count=session_summary["error_count"],
-                average_score=session_summary["average_score"],
+                exercise=summary["exercise"],
+                duration_seconds=summary["duration_seconds"],
+                total_count=summary["total_count"],
+                valid_count=summary["valid_count"],
+                error_count=summary["error_count"],
+                average_score=summary["average_score"],
+                user_id=user_id,
             )
             return saved_session
 
@@ -205,21 +178,28 @@ if router:
                 message_type = payload.get("type", "frame")
 
                 if message_type == "start":
-                    exercise = payload.get("exercise", analyzer.exercise)
-                    analyzer = ExerciseAnalyzer(exercise=exercise)
+                    new_exercise = payload.get("exercise_type", exercise_type)
+                    analyzer = get_analyzer(new_exercise)
+                    state = {}
                     saved_session = None
                     running = True
-                    await websocket.send_json({"type": "status", "state": "running", "exercise": exercise})
+                    await websocket.send_json({
+                        "type": "status", "state": "running", "exercise_type": new_exercise,
+                    })
                     continue
 
                 if message_type == "pause":
                     running = False
-                    await websocket.send_json({"type": "status", "state": "paused", "exercise": analyzer.exercise})
+                    await websocket.send_json({
+                        "type": "status", "state": "paused", "exercise_type": analyzer.exercise_type,
+                    })
                     continue
 
                 if message_type == "resume":
                     running = True
-                    await websocket.send_json({"type": "status", "state": "running", "exercise": analyzer.exercise})
+                    await websocket.send_json({
+                        "type": "status", "state": "running", "exercise_type": analyzer.exercise_type,
+                    })
                     continue
 
                 if message_type == "finish":
@@ -232,29 +212,18 @@ if router:
                     })
                     continue
 
-                if payload.get("exercise") != analyzer.exercise:
-                    analyzer = ExerciseAnalyzer(exercise=payload.get("exercise", "squat"))
-                    saved_session = None
-
                 if not running:
-                    await websocket.send_json({"type": "status", "state": "idle", "exercise": analyzer.exercise})
+                    await websocket.send_json({
+                        "type": "status", "state": "idle", "exercise_type": analyzer.exercise_type,
+                    })
                     continue
 
-                result = analyzer.analyze(_parse_keypoints(payload.get("keypoints", {})))
-                response = result.to_dict()
-                response["type"] = "analysis"
+                keypoints = _parse_keypoints(payload.get("keypoints", {}))
+                result = analyzer.analyze_frame(keypoints, state)
+                result["metrics"] = result.get("features", {})
+                result["type"] = "analysis"
+                await websocket.send_json(result)
 
-                # 如果是深蹲动作，添加角度指标
-                if analyzer.exercise == "squat":
-                    try:
-                        keypoints = _parse_keypoints(payload.get("keypoints", {}))
-                        metrics = extract_squat_features(keypoints)
-                        response["metrics"] = metrics
-                    except ValueError:
-                        # 如果无法计算指标，忽略错误
-                        pass
-
-                await websocket.send_json(response)
         except WebSocketDisconnect:
             save_session_once()
             return

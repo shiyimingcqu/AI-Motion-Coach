@@ -1,4 +1,4 @@
-from app.api.deps import get_db, require_admin
+﻿from app.api.deps import get_db, require_admin
 from app.core.security import get_password_hash
 from app.models.entities import UserORM
 from app.services.session.session_service import session_service
@@ -70,9 +70,15 @@ if router and BaseModel:
         password = request.password
 
         if len(username) < 3 or len(username) > 32:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户名长度需要在 3 到 32 位之间")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="用户名长度需要在 3 到 32 位之间",
+            )
         if len(password) < 6 or len(password) > 64:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="密码长度需要在 6 到 64 位之间")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="密码长度需要在 6 到 64 位之间",
+            )
 
         existing_user = db.query(UserORM).filter(UserORM.username == username).first()
         if existing_user:
@@ -120,7 +126,10 @@ if router and BaseModel:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
 
         if user.role == "admin":
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="管理员账号不能在用户管理中禁用")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="管理员账号不能在用户管理中禁用",
+            )
 
         user.is_active = request.is_active
         db.commit()
@@ -141,7 +150,10 @@ if router and BaseModel:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
 
         if user.role == "admin":
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="管理员账号不能在用户管理中删除")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="管理员账号不能在用户管理中删除",
+            )
 
         db.delete(user)
         db.commit()

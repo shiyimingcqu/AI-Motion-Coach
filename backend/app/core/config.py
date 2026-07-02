@@ -17,6 +17,8 @@ class Settings:
 
     # JWT 配置
     secret_key: str = os.getenv("SECRET_KEY", "pose-evaluation-secret-key-dev-only")
+    # WARNING: The default fallback key is insecure.
+    # Set SECRET_KEY in your .env file (run: python3 -c "import secrets; print(secrets.token_urlsafe(48))")
     access_token_expire: timedelta = timedelta(days=int(os.getenv("ACCESS_TOKEN_EXPIRE_DAYS", "7")))
     algorithm: str = "HS256"
 
