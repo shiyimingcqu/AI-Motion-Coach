@@ -1,0 +1,57 @@
+<!-- 动作库列表页 -->
+<view class="exercises-page">
+  <!-- 顶部 -->
+  <view class="top-bar">
+    <view class="top-bar-content">
+      <text class="top-title">动作库</text>
+    </view>
+  </view>
+
+  <!-- 搜索 -->
+  <view class="search-bar">
+    <view class="search-icon">🔍</view>
+    <input class="search-input" placeholder="搜索动作..." placeholder-class="search-placeholder" value="{{keyword}}" bindinput="onSearch" />
+  </view>
+
+  <!-- 分类 Tab -->
+  <scroll-view class="category-tabs" scroll-x enhanced show-scrollbar="{{false}}">
+    <view
+      class="tab-item {{activeCategory === item ? 'tab-active' : ''}}"
+      wx:for="{{categories}}"
+      wx:key="index"
+      bindtap="switchCategory"
+      data-category="{{item}}"
+    >{{item}}</view>
+  </scroll-view>
+
+  <!-- 动作列表 -->
+  <view class="exercise-list">
+    <view
+      class="exercise-card-new"
+      wx:for="{{filteredExercises}}"
+      wx:key="key"
+      bindtap="goToDetail"
+      data-key="{{item.key}}"
+      style="background: linear-gradient(135deg, #fff 60%, {{item.accentColor || '#4f8cff'}}11 100%);"
+    >
+      <view class="exercise-thumb" style="background: linear-gradient(135deg, {{item.accentColor || '#4f8cff'}}, {{item.accentColor || '#4f8cff'}}99);">
+        <text class="exercise-thumb-icon">{{item.icon}}</text>
+      </view>
+      <view class="exercise-info">
+        <view class="exercise-name">{{item.name}}</view>
+        <view class="exercise-tags">
+          <text class="tag" style="background: {{item.accentColor || '#4f8cff'}}1a; color: {{item.accentColor || '#4f8cff'}};">{{item.level}}</text>
+          <text class="tag tag-primary">{{item.duration}}</text>
+          <text class="tag tag-warning">{{item.category}}</text>
+        </view>
+      </view>
+      <view class="exercise-arrow">›</view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty-state" wx:if="{{filteredExercises.length === 0 && !loading}}">
+    <text class="icon">🔍</text>
+    <text>没有找到匹配的动作</text>
+  </view>
+</view>

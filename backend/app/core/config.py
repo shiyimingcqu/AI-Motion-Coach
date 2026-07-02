@@ -1,6 +1,10 @@
 from dataclasses import dataclass, field
 from datetime import timedelta
 import os
+from pathlib import Path
+
+
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 
 @dataclass(frozen=True)
@@ -9,10 +13,10 @@ class Settings:
     app_version: str = "0.1.0"
     database_url: str = os.getenv(
         "DATABASE_URL",
-        "sqlite:///./pose_evaluation.db",
+        f"sqlite:///{(BACKEND_ROOT / 'pose_evaluation.db').as_posix()}",
     )
     redis_url: str = os.getenv("REDIS_URL", "redis://redis:6379/0")
-    storage_root: str = os.getenv("STORAGE_ROOT", "storage")
+    storage_root: str = os.getenv("STORAGE_ROOT", r"C:\temp\pose_evaluation_storage")
     cors_origins: list[str] = field(default_factory=lambda: ["http://localhost:5173"])
 
     # JWT 配置

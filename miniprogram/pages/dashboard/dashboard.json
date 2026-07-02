@@ -1,0 +1,7 @@
+{
+  "usingComponents": {
+    "score-ring": "/components/score-ring/score-ring",
+    "exercise-card": "/components/exercise-card/exercise-card"
+  },
+  "navigationBarTitleText": "运动姿态评估"
+}

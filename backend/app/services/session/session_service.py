@@ -65,6 +65,9 @@ class SessionService:
             db.commit()
             db.refresh(session)
             return session
+        except Exception:
+            db.rollback()
+            raise
         finally:
             db.close()
 
@@ -83,6 +86,9 @@ class SessionService:
             db.delete(session)
             db.commit()
             return True
+        except Exception:
+            db.rollback()
+            raise
         finally:
             db.close()
 

@@ -1,0 +1,8 @@
+{
+  "usingComponents": {
+    "skeleton-overlay": "/components/skeleton-overlay/skeleton-overlay"
+  },
+  "navigationBarTitleText": "训练中",
+  "navigationStyle": "custom",
+  "disableScroll": true
+}

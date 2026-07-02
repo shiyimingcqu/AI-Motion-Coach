@@ -6,7 +6,7 @@ from app.core.config import settings
 
 class LocalStorage:
     def __init__(self, root: str):
-        self.root = Path(root)
+        self.root = Path(root).resolve()
 
     async def save_upload(self, upload_file):
         upload_dir = self.root / "uploads"
@@ -15,7 +15,8 @@ class LocalStorage:
         target = upload_dir / f"{uuid4()}{suffix}"
         content = await upload_file.read()
         target.write_bytes(content)
-        return str(target).replace("\\", "/")
+        print(f"[upload] saved {len(content)} bytes to {target}")
+        return str(target.resolve()).replace("\\", "/")
 
 
 local_storage = LocalStorage(settings.storage_root)
