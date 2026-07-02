@@ -1,0 +1,147 @@
+/* 报告页 */
+.reports-page {
+  min-height: 100vh;
+  background: var(--bg);
+  padding: 24rpx;
+}
+
+/* 时间 Tab */
+.time-tabs {
+  display: flex;
+  gap: 12rpx;
+  margin-bottom: 24rpx;
+}
+
+.time-tab {
+  padding: 12rpx 28rpx;
+  border-radius: var(--radius-full);
+  font-size: 26rpx;
+  color: var(--text-secondary);
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.time-tab-active {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* 概览 */
+.overview-card {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.overview-item {
+  width: 50%;
+  padding: 20rpx 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-right: 1rpx solid var(--border);
+  border-bottom: 1rpx solid var(--border);
+  box-sizing: border-box;
+}
+
+.overview-item:nth-child(2n) {
+  border-right: none;
+}
+
+.overview-item:nth-child(3),
+.overview-item:nth-child(4) {
+  border-bottom: none;
+}
+
+.ov-value {
+  font-size: 40rpx;
+  font-weight: 700;
+}
+
+.ov-label {
+  font-size: 24rpx;
+  color: var(--text-muted);
+  margin-top: 4rpx;
+}
+
+/* 柱状图 */
+.bar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.bar-label-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8rpx;
+}
+
+.bar-name {
+  font-size: 26rpx;
+  color: var(--text);
+}
+
+.bar-score {
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
+.bar-track {
+  height: 12rpx;
+  background: #f0f0f0;
+  border-radius: 6rpx;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 6rpx;
+  transition: width 0.5s ease;
+}
+
+/* 历史列表 */
+.session-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid var(--border);
+}
+
+.session-item:last-child {
+  border-bottom: none;
+}
+
+.session-exercise {
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+.session-date {
+  font-size: 22rpx;
+  color: var(--text-muted);
+  display: block;
+  margin-top: 4rpx;
+}
+
+.session-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.session-score {
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.session-duration {
+  font-size: 22rpx;
+  color: var(--text-muted);
+  margin-top: 4rpx;
+}

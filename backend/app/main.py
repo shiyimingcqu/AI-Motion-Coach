@@ -1,3 +1,8 @@
+# 加载 .env 文件中的环境变量（必须在其他 import 之前）
+from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
 from app.api.router import create_api_router
 from app.core.config import settings
 from app.db.init_db import init_db

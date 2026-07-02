@@ -1,0 +1,21 @@
+{
+  "action": "high_knees",
+  "version": "1.0",
+  "description": "标准高抬腿动作模板，用于对比评分",
+  "weights": {
+    "knee_height": 0.40,
+    "knee_angle": 0.30,
+    "hip_angle": 0.30
+  },
+  "template_sequence": {
+    "knee_height": [0.08, 0.10, 0.14, 0.18, 0.22, 0.25, 0.25, 0.22, 0.18, 0.14, 0.10, 0.08],
+    "knee_angle": [170, 160, 145, 125, 110, 100, 100, 110, 125, 145, 160, 170],
+    "hip_angle": [170, 160, 148, 135, 125, 120, 120, 125, 135, 148, 160, 170]
+  },
+  "thresholds": {
+    "excellent": 90,
+    "good": 75,
+    "fair": 60,
+    "poor": 0
+  }
+}

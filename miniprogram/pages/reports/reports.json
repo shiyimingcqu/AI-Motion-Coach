@@ -1,0 +1,6 @@
+{
+  "usingComponents": {
+    "score-ring": "/components/score-ring/score-ring"
+  },
+  "navigationBarTitleText": "训练报告"
+}

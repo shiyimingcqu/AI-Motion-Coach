@@ -1,0 +1,170 @@
+/* Dashboard 首页 */
+.dashboard-page {
+  min-height: 100vh;
+  background: var(--bg);
+  padding: 0 24rpx;
+}
+
+/* 问候区 */
+.greeting-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 40rpx 0 24rpx;
+}
+
+.greeting-text {
+  font-size: 26rpx;
+  color: var(--text-muted);
+  display: block;
+}
+
+.greeting-name {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 4rpx;
+  display: block;
+}
+
+.avatar {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+/* 统计卡片 */
+.stats-section {
+  margin-bottom: 20rpx;
+}
+
+.stats-row-top,
+.stats-row-bottom {
+  display: flex;
+  gap: 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.stat-card {
+  flex: 1;
+  padding: 24rpx;
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-primary {
+  background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+}
+
+.stat-success {
+  background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+}
+
+.stat-warning {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+}
+
+.stat-info {
+  background: linear-gradient(135deg, #e0f2fe, #bae6fd);
+}
+
+.stat-card-value {
+  font-size: 48rpx;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.stat-card-label {
+  font-size: 24rpx;
+  color: var(--text-secondary);
+  margin-top: 8rpx;
+}
+
+/* 趋势图 */
+.trend-chart {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 180rpx;
+  padding-top: 16rpx;
+}
+
+.trend-bar-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.trend-bar-fill {
+  width: 32rpx;
+  border-radius: 8rpx 8rpx 0 0;
+  min-height: 4rpx;
+  transition: height 0.3s ease;
+}
+
+.trend-bar-label {
+  font-size: 20rpx;
+  color: var(--text-muted);
+}
+
+/* 最近训练 */
+.recent-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.recent-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid var(--border);
+}
+
+.recent-item:last-child {
+  border-bottom: none;
+}
+
+.recent-exercise {
+  font-size: 28rpx;
+  font-weight: 500;
+}
+
+.recent-date {
+  font-size: 22rpx;
+  color: var(--text-muted);
+  margin-top: 4rpx;
+  display: block;
+}
+
+.recent-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.recent-score {
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.recent-duration {
+  font-size: 22rpx;
+  color: var(--text-muted);
+  margin-top: 4rpx;
+}
+
+/* 开始训练 */
+.start-training-area {
+  padding: 32rpx 0;
+}
+
+.start-training-area .btn {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+  color: #fff;
+  box-shadow: 0 8rpx 24rpx rgba(59, 130, 246, 0.35);
+}

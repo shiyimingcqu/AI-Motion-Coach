@@ -1,0 +1,72 @@
+<!-- 训练结果页 -->
+<view class="result-page">
+  <!-- 头部 - 得分环 -->
+  <view class="result-header" style="background: {{exerciseConfig.accentColor}}">
+    <view class="header-bg"></view>
+    <text class="exercise-tag">{{exerciseConfig.name}}</text>
+
+    <view class="score-ring-wrapper">
+      <score-ring score="{{averageScore}}" size="200" lineWidth="12"></score-ring>
+    </view>
+
+    <text class="result-message">{{resultMessage}}</text>
+  </view>
+
+  <!-- 训练数据卡片 -->
+  <view class="result-content">
+    <view class="card stats-card">
+      <view class="stats-grid">
+        <view class="stat-box">
+          <text class="stat-number">{{durationText}}</text>
+          <text class="stat-desc">训练时长</text>
+        </view>
+        <view class="stat-box">
+          <text class="stat-number">{{totalCount}}</text>
+          <text class="stat-desc">总次数</text>
+        </view>
+        <view class="stat-box">
+          <text class="stat-number" style="color: #22c55e">{{validCount}}</text>
+          <text class="stat-desc">有效次数</text>
+        </view>
+        <view class="stat-box">
+          <text class="stat-number" style="color: #ef4444">{{errorCount}}</text>
+          <text class="stat-desc">错误次数</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 动作要点回顾 -->
+    <view class="card tips-card" wx:if="{{exerciseConfig.phases}}">
+      <view class="card-title">动作阶段</view>
+      <view class="phases-row">
+        <view class="phase-badge" wx:for="{{exerciseConfig.phases}}" wx:key="index">
+          {{item}}
+        </view>
+      </view>
+    </view>
+
+    <!-- 提示信息 -->
+    <view class="card improve-card" wx:if="{{averageScore < 90}}">
+      <view class="card-title">💡 改进建议</view>
+      <view class="improve-list">
+        <text class="improve-item">• 保持动作标准，注意关键角度控制</text>
+        <text class="improve-item">• 控制动作节奏，避免过快或过慢</text>
+        <text class="improve-item" wx:if="{{errorCount > 0}}">• 关注错误提示，针对性改进薄弱环节</text>
+      </view>
+    </view>
+
+    <view class="card improve-card" wx:if="{{averageScore >= 90}}">
+      <view class="card-title">🎉 太棒了！</view>
+      <view class="improve-list">
+        <text class="improve-item">• 动作标准度很高，继续保持！</text>
+        <text class="improve-item">• 可以尝试增加训练次数或提高难度</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 底部按钮 -->
+  <view class="result-footer">
+    <button class="btn btn-outline" bindtap="goBack">返回首页</button>
+    <button class="btn btn-primary" bindtap="trainAgain">再来一次</button>
+  </view>
+</view>

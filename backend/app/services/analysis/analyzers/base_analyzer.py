@@ -36,6 +36,18 @@ class BaseExerciseAnalyzer:
         self.previous_stage = "ready"
         self.stage_stability_counter = 0
 
+    def reset(self):
+        """Reset all internal state for a new training session."""
+        self.feature_history.clear()
+        self.start_time = time.time()
+        self.stage = "ready"
+        self.count = 0
+        self.valid_count = 0
+        self._last_down_was_valid = False
+        self.scores_history.clear()
+        self.previous_stage = "ready"
+        self.stage_stability_counter = 0
+
     # ─── abstract methods ────────────────────────────────────
 
     def extract_features(self, landmarks: Keypoints) -> dict[str, float]:

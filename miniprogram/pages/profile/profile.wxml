@@ -1,0 +1,59 @@
+<!-- 个人中心 -->
+<scroll-view class="profile-page" scroll-y enhanced show-scrollbar="{{false}}">
+  <!-- 用户信息 -->
+  <view class="profile-header">
+    <image class="profile-avatar" src="{{userInfo.avatarUrl || '/assets/icons/profile.png'}}" mode="aspectFill"></image>
+    <text class="profile-name">{{userInfo.username || '用户'}}</text>
+    <text class="profile-role">{{userInfo.role === 'admin' ? '管理员' : '普通用户'}}</text>
+  </view>
+
+  <!-- 统计数据 -->
+  <view class="profile-stats card">
+    <view class="pstat-item">
+      <text class="pstat-value">{{stats.totalSessions}}</text>
+      <text class="pstat-label">总训练</text>
+    </view>
+    <view class="pstat-divider"></view>
+    <view class="pstat-item">
+      <text class="pstat-value" style="color: #3b82f6">{{stats.averageScore}}</text>
+      <text class="pstat-label">平均分</text>
+    </view>
+    <view class="pstat-divider"></view>
+    <view class="pstat-item">
+      <text class="pstat-value">{{stats.totalDuration}}</text>
+      <text class="pstat-label">总时长(分)</text>
+    </view>
+  </view>
+
+  <!-- 菜单列表 -->
+  <view class="menu-section">
+    <view class="menu-item" bindtap="goToReports">
+      <text class="menu-icon">📊</text>
+      <text class="menu-text">我的训练数据</text>
+      <text class="menu-arrow">›</text>
+    </view>
+
+    <view class="menu-item" bindtap="goToSettings">
+      <text class="menu-icon">⚙️</text>
+      <text class="menu-text">设置</text>
+      <text class="menu-arrow">›</text>
+    </view>
+
+    <view class="menu-item">
+      <text class="menu-icon">❓</text>
+      <text class="menu-text">使用帮助</text>
+      <text class="menu-arrow">›</text>
+    </view>
+
+    <view class="menu-item">
+      <text class="menu-icon">ℹ️</text>
+      <text class="menu-text">关于我们</text>
+      <text class="menu-arrow">›</text>
+    </view>
+  </view>
+
+  <!-- 退出登录 -->
+  <view class="logout-area">
+    <button class="btn btn-outline" bindtap="handleLogout">退出登录</button>
+  </view>
+</scroll-view>
