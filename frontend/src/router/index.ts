@@ -12,6 +12,8 @@ import MotionQualityView from "../views/MotionQualityView.vue";
 import ExerciseRulesView from "../views/ExerciseRulesView.vue";
 import ProfileView from "../views/ProfileView.vue";
 import SettingsView from "../views/SettingsView.vue";
+import ReferenceVideosView from "../views/ReferenceVideosView.vue";
+import TrainingResultView from "../views/TrainingResultView.vue";
 import UserManagementView from "../views/UserManagementView.vue";
 import ExportReportsView from "../views/ExportReportsView.vue";
 import ExerciseLibraryView from "../views/ExerciseLibraryView.vue";
@@ -46,6 +48,8 @@ export const router = createRouter({
     { path: "/users", component: UserManagementView, meta: { adminOnly: true } },
     { path: "/profile", component: ProfileView, meta: { userOnly: true } },
     { path: "/settings", component: SettingsView, meta: { userOnly: true } },
+    { path: "/reference-videos", component: ReferenceVideosView, meta: { userOnly: true } },
+    { path: "/training-result", component: TrainingResultView, meta: { userOnly: true } },
     { path: "/admin", component: AdminDashboardView, meta: { adminOnly: true } },
     { path: "/admin/users", component: AdminUsersView, meta: { adminOnly: true } },
     { path: "/admin/admins", component: AdminAdminsView, meta: { adminOnly: true } },

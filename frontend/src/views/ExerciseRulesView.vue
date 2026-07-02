@@ -41,7 +41,7 @@
             <h2>{{ exercise.name }}</h2>
           </div>
           <p>{{ exercise.description }}</p>
-          <p>推荐时长 {{ exercise.duration }}，支持 {{ exercise.modes.join(" / ") }}。</p>
+          <p>难度 {{ exercise.level }} | 推荐时长 {{ exercise.duration }}，支持 {{ exercise.modes.join(" / ") }}。</p>
           <div class="error-chips compact">
             <span v-for="error in exercise.errors" :key="error">{{ error }}</span>
           </div>
@@ -52,7 +52,7 @@
               v-if="authStore.isAdmin"
               class="template-button"
               type="button"
-              @click="openTemplateModal(exercise)"
+              @click="goToTemplateUpload(exercise.key)"
             >
               <Upload :size="16" />
               添加标准动作
@@ -122,47 +122,6 @@
         </form>
       </div>
     </div>
-
-    <div v-if="showTemplateModal" class="modal-overlay" @click.self="closeTemplateModal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>添加标准动作模板 - {{ templateTarget?.name }}</h3>
-          <button class="close-button" type="button" @click="closeTemplateModal"><X :size="20" /></button>
-        </div>
-        <div v-if="templateUploadSuccess" class="success-message">
-          <CheckCircle :size="48" class="success-icon" />
-          <h4>模板生成成功</h4>
-          <p>有效帧数：{{ templateResult.valid_frames }} 帧</p>
-          <p>模板路径：{{ templateResult.template_path }}</p>
-          <button class="primary-button" type="button" @click="closeTemplateModal">确定</button>
-        </div>
-        <form v-else class="template-form" @submit.prevent="submitTemplate">
-          <label class="form-field">
-            <span>模板名称</span>
-            <input v-model="templateForm.name" type="text" placeholder="例如：标准侧面深蹲" required />
-          </label>
-          <label class="form-field">
-            <span>拍摄角度</span>
-            <select v-model="templateForm.view">
-              <option value="side">侧面</option>
-              <option value="front">正面</option>
-              <option value="diagonal">斜侧面</option>
-            </select>
-          </label>
-          <label class="file-upload" :class="{ 'has-file': templateForm.videoFile }">
-            <input ref="fileInput" type="file" accept="video/*" required @change="handleFileChange" />
-            <Upload :size="32" />
-            <span>{{ templateForm.videoFile ? templateForm.videoFile.name : "点击上传标准动作视频" }}</span>
-            <small>支持 MP4、MOV、AVI 等常见格式</small>
-          </label>
-          <div v-if="templateError" class="error-message">{{ templateError }}</div>
-          <button class="primary-button" type="submit" :disabled="isUploading || !templateForm.videoFile">
-            <Loader2 v-if="isUploading" :size="18" class="spin" />
-            <span v-else>生成模板</span>
-          </button>
-        </form>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -171,7 +130,6 @@ import { computed, onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 import { useTrainingStore } from "@/stores/training";
-import { apiUpload } from "@/api/client";
 import {
   createExercise,
   deleteExercise,
@@ -179,7 +137,7 @@ import {
   updateExercise,
   type ExerciseItem,
 } from "@/api/exercises";
-import { CheckCircle, Dumbbell, Loader2, Plus, Upload, X } from "lucide-vue-next";
+import { Dumbbell, Plus, Upload, X } from "lucide-vue-next";
 import StateDisplay from "@/components/StateDisplay.vue";
 
 const router = useRouter();
@@ -290,58 +248,8 @@ async function handleDelete(exercise: ExerciseItem) {
   }
 }
 
-const showTemplateModal = ref(false);
-const templateTarget = ref<ExerciseItem | null>(null);
-const isUploading = ref(false);
-const templateUploadSuccess = ref(false);
-const templateError = ref("");
-const templateResult = reactive({ valid_frames: 0, template_path: "", curve_count: 0 });
-const templateForm = reactive({ name: "", view: "side", videoFile: null as File | null });
-const fileInput = ref<HTMLInputElement | null>(null);
-
-function openTemplateModal(exercise: ExerciseItem) {
-  templateTarget.value = exercise;
-  templateForm.name = `标准${exercise.name}`;
-  templateForm.view = "side";
-  templateForm.videoFile = null;
-  fileInput.value = null;
-  templateError.value = "";
-  templateUploadSuccess.value = false;
-  showTemplateModal.value = true;
-}
-
-function closeTemplateModal() {
-  showTemplateModal.value = false;
-}
-
-function handleFileChange(event: Event) {
-  const input = event.target as HTMLInputElement;
-  templateForm.videoFile = input.files?.[0] ?? null;
-}
-
-async function submitTemplate() {
-  if (!templateForm.videoFile || !templateTarget.value) return;
-  isUploading.value = true;
-  templateError.value = "";
-  try {
-    const form = new FormData();
-    form.append("video", templateForm.videoFile);
-    form.append("name", templateForm.name);
-    form.append("view", templateForm.view);
-    form.append("version", "v1");
-    const result = await apiUpload<any>(
-      `/exercises/${templateTarget.value.key}/templates/from-video`,
-      form
-    );
-    templateResult.valid_frames = result.valid_frames || 0;
-    templateResult.template_path = result.template_path || "";
-    templateResult.curve_count = result.curve_count || 0;
-    templateUploadSuccess.value = true;
-  } catch (err) {
-    templateError.value = err instanceof Error ? err.message : "模板生成失败";
-  } finally {
-    isUploading.value = false;
-  }
+function goToTemplateUpload(exerciseKey: string) {
+  router.push({ path: "/admin/templates", query: { exercise: exerciseKey } });
 }
 
 async function loadExercises() {

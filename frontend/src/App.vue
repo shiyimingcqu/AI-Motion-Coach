@@ -161,11 +161,6 @@ const pageTitleMap: Record<string, string> = {
 };
 
 const pageTitle = computed(() => pageTitleMap[route.path] ?? "Pose Training AI");
-const pageSubtitle = computed(() =>
-  authStore.isAdmin
-    ? "System Management / 管理后台"
-    : "Student Training Workspace / 学生训练工作台"
-);
 
 const roleText = computed(() =>
   authStore.isAdmin ? "管理员" : "学生用户"
@@ -275,5 +270,4 @@ function handleLogout() {
   border-color: #ef4444;
   color: #ef4444;
 }
-
 </style>

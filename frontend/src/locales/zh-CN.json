@@ -1,0 +1,63 @@
+{
+  "settings": {
+    "title": "系统设置",
+    "description": "配置系统偏好设置和管理您的账户",
+    "profile": {
+      "title": "个人资料",
+      "username": "用户名",
+      "role": "角色",
+      "roleAdmin": "管理员",
+      "roleUser": "用户",
+      "nickname": "昵称",
+      "nicknamePlaceholder": "设置昵称",
+      "save": "保存资料",
+      "saving": "保存中...",
+      "saved": "资料已保存",
+      "saveFailed": "保存失败"
+    },
+    "password": {
+      "title": "修改密码",
+      "current": "当前密码",
+      "currentPlaceholder": "输入当前密码",
+      "new": "新密码",
+      "newPlaceholder": "输入新密码（至少6位）",
+      "confirm": "确认密码",
+      "confirmPlaceholder": "再次输入新密码",
+      "change": "修改密码",
+      "changing": "修改中...",
+      "changed": "密码已修改",
+      "changeFailed": "修改失败",
+      "fillAll": "请填写所有密码字段",
+      "notMatch": "两次输入的新密码不一致",
+      "tooShort": "新密码至少6位"
+    },
+    "notifications": {
+      "title": "通知设置",
+      "trainingReminders": "训练提醒",
+      "achievementAlerts": "成就提醒",
+      "errorNotifications": "错误通知",
+      "weeklyReports": "周报"
+    },
+    "data": {
+      "title": "数据与存储",
+      "storageUsed": "已使用存储",
+      "sessions": "{count} 次",
+      "minutes": "{count} 分钟",
+      "autoBackup": "自动备份"
+    }
+  },
+  "common": {
+    "language": "语言",
+    "english": "英语",
+    "chinese": "中文",
+    "privacy": "隐私",
+    "dataAnalytics": "数据分析",
+    "shareProgress": "分享进度",
+    "systemInfo": "系统信息",
+    "version": "版本",
+    "lastUpdated": "最近更新",
+    "aiModel": "AI模型",
+    "save": "保存",
+    "cancel": "取消"
+  }
+}

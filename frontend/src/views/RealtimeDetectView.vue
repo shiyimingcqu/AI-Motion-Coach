@@ -202,6 +202,7 @@ import {
   type BackendKeypoints,
   toBackendKeypoints,
 } from "../services/poseLandmarker";
+import { pendingVideoFile } from "../composables/usePendingVideo";
 import { useTrainingStore } from "../stores/training";
 
 type TrainingState = "idle" | "connecting" | "running" | "paused" | "finished" | "error";
@@ -520,6 +521,7 @@ function resetTraining() {
   resetDynamicTemplateState(true);
   resetFinishState();
   trainingStartedAt.value = null;
+  pendingVideoFile.value = null;
   clearPoseCanvas(overlayRef.value);
 
   if (socket?.readyState === WebSocket.OPEN) {
@@ -630,15 +632,29 @@ function handleRealtimeMessage(message: Record<string, any>) {
       scoreByTemplate();
     }
 
-    const session = message.session as { session_id?: string; total_count?: number } | undefined;
+    const session = message.session as { session_id?: string; total_count?: number; duration_seconds?: number; valid_count?: number; error_count?: number; average_score?: number } | undefined;
     lastSessionId.value = session?.session_id ?? "";
 
-    if (session?.session_id) {
-      savedMessage.value = "训练已结束，正在跳转到本次反馈。";
-      void router.push({ path: "/feedback", query: { session: session.session_id, from: "realtime" } });
-    } else {
-      void recoverAndRouteAfterFinish("训练已结束，已恢复本次训练记录并准备跳转反馈页。");
+    // 计算训练时长
+    const durationSeconds = trainingStartedAt.value
+      ? Math.max(1, Math.round((Date.now() - trainingStartedAt.value) / 1000))
+      : (session?.duration_seconds ?? 0);
+
+    // 跳转到训练结果页面
+    const params: Record<string, string> = {
+      session_id: session?.session_id ?? "",
+      exercise: store.currentExercise,
+      total_count: String(session?.total_count ?? store.count ?? 0),
+      valid_count: String(session?.valid_count ?? store.validCount ?? 0),
+      error_count: String(session?.error_count ?? Math.max(0, (store.count ?? 0) - (store.validCount ?? 0))),
+      average_score: String(session?.average_score ?? store.score ?? 0),
+      duration_seconds: String(durationSeconds),
+      has_video: pendingVideoFile.value ? "1" : "0",
+    };
+    if (pendingVideoFile.value) {
+      params.video_name = pendingVideoFile.value.name;
     }
+    void router.push({ path: "/training-result", query: params });
   }
 }
 
@@ -702,6 +718,9 @@ async function handleVideoTestFile(event: Event) {
   const file = input.files?.[0];
   input.value = "";
   if (!file) return;
+
+  // 暂存视频文件，供训练结束后保存
+  pendingVideoFile.value = file;
 
   stopPoseLoop();
   stopVideoTestPlayback();
@@ -830,7 +849,20 @@ async function recoverAndRouteAfterFinish(successMessage: string) {
       resetFinishState();
       trainingState.value = "finished";
       savedMessage.value = successMessage;
-      await router.push({ path: "/feedback", query: { session: existingSession.session_id, from: "realtime" } });
+      await router.push({
+        path: "/training-result",
+        query: {
+          session_id: existingSession.session_id,
+          exercise: payload.exercise,
+          total_count: String(payload.total_count),
+          valid_count: String(payload.valid_count),
+          error_count: String(payload.error_count),
+          average_score: String(payload.average_score),
+          duration_seconds: String(payload.duration_seconds),
+          has_video: pendingVideoFile.value ? "1" : "0",
+          ...(pendingVideoFile.value ? { video_name: pendingVideoFile.value.name } : {}),
+        },
+      });
       return;
     }
 
@@ -857,7 +889,20 @@ async function saveSessionFallback(successMessage: string) {
     resetFinishState();
     trainingState.value = "finished";
     savedMessage.value = successMessage;
-    await router.push({ path: "/feedback", query: { session: session.session_id, from: "realtime" } });
+    await router.push({
+      path: "/training-result",
+      query: {
+        session_id: session.session_id,
+        exercise: payload.exercise,
+        total_count: String(payload.total_count),
+        valid_count: String(payload.valid_count),
+        error_count: String(payload.error_count),
+        average_score: String(payload.average_score),
+        duration_seconds: String(payload.duration_seconds),
+        has_video: pendingVideoFile.value ? "1" : "0",
+        ...(pendingVideoFile.value ? { video_name: pendingVideoFile.value.name } : {}),
+      },
+    });
   } catch (error) {
     console.error("训练记录补存失败:", error);
     resetFinishState();
@@ -980,6 +1025,7 @@ function updateMetricsFromFrame(frame: VideoTestFrame) {
     valid_count: Number(frame.valid_count ?? 0),
     score: Number(frame.score ?? 0),
     errors: Array.isArray(frame.errors) ? frame.errors : [],
+    feedback: [],
   });
 }
 

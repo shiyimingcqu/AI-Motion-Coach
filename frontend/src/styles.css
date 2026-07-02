@@ -1262,6 +1262,11 @@ h3 {
   color: #137a47;
 }
 
+.status-pill.saving {
+  background: #e0ecff;
+  color: #3b62b0;
+}
+
 .status-pill.idle {
   background: #fff3d8;
   color: #9a6100;
@@ -1688,6 +1693,11 @@ html.theme-dark .date-chip {
 html.theme-dark .status-pill.good {
   background: #1a3d2e;
   color: #7dcea0;
+}
+
+html.theme-dark .status-pill.saving {
+  background: #1e2950;
+  color: #a0b8f0;
 }
 
 html.theme-dark .status-pill.idle {
@@ -3096,11 +3106,30 @@ body {
   border: 1px solid #cfd6e3;
   border-radius: 8px;
   background: #ffffff;
+  color: #1e293b;
+  font-weight: 500;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.upload-exercise-select select option {
+  color: #1e293b;
+  background: #ffffff;
 }
 
 .upload-start-button {
   min-height: 39px;
   font-size: 15px;
+}
+
+.upload-info-before-send {
+  margin-top: 12px;
+  padding: 6px 14px;
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .upload-preview-video {

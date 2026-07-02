@@ -1,0 +1,63 @@
+{
+  "settings": {
+    "title": "Settings",
+    "description": "Configure system preferences and manage your account",
+    "profile": {
+      "title": "Profile",
+      "username": "Username",
+      "role": "Role",
+      "roleAdmin": "Admin",
+      "roleUser": "User",
+      "nickname": "Nickname",
+      "nicknamePlaceholder": "Set nickname",
+      "save": "Save Profile",
+      "saving": "Saving...",
+      "saved": "Profile saved",
+      "saveFailed": "Save failed"
+    },
+    "password": {
+      "title": "Change Password",
+      "current": "Current Password",
+      "currentPlaceholder": "Enter current password",
+      "new": "New Password",
+      "newPlaceholder": "Enter new password (min 6 characters)",
+      "confirm": "Confirm Password",
+      "confirmPlaceholder": "Re-enter new password",
+      "change": "Change Password",
+      "changing": "Changing...",
+      "changed": "Password changed",
+      "changeFailed": "Change failed",
+      "fillAll": "Please fill in all password fields",
+      "notMatch": "New passwords do not match",
+      "tooShort": "New password must be at least 6 characters"
+    },
+    "notifications": {
+      "title": "Notifications",
+      "trainingReminders": "Training reminders",
+      "achievementAlerts": "Achievement alerts",
+      "errorNotifications": "Error notifications",
+      "weeklyReports": "Weekly reports"
+    },
+    "data": {
+      "title": "Data & Storage",
+      "storageUsed": "Storage Used",
+      "sessions": "{count} sessions",
+      "minutes": "{count} min",
+      "autoBackup": "Auto-backup"
+    }
+  },
+  "common": {
+    "language": "Language",
+    "english": "English",
+    "chinese": "Chinese",
+    "privacy": "Privacy",
+    "dataAnalytics": "Data analytics",
+    "shareProgress": "Share progress",
+    "systemInfo": "System Info",
+    "version": "Version",
+    "lastUpdated": "Last Updated",
+    "aiModel": "AI Model",
+    "save": "Save",
+    "cancel": "Cancel"
+  }
+}

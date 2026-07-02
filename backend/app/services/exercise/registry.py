@@ -52,26 +52,6 @@ EXERCISES = [
         core_angles=get_core_angle_labels("jumping_jack"),
         core_feature_keys=get_core_feature_keys("jumping_jack"),
     ),
-    ExerciseDefinition(
-        key="lunge", name="弓步蹲", description="评估膝关节角度、髋部控制和躯干稳定性。",
-        supported_metrics=["count","valid_count","score"],
-        core_angles=get_core_angle_labels("lunge"), core_feature_keys=get_core_feature_keys("lunge"),
-    ),
-    ExerciseDefinition(
-        key="glute_bridge", name="臀桥", description="评估髋部伸展幅度和身体直线。",
-        supported_metrics=["count","valid_count","score"],
-        core_angles=get_core_angle_labels("glute_bridge"), core_feature_keys=get_core_feature_keys("glute_bridge"),
-    ),
-    ExerciseDefinition(
-        key="high_knees", name="高抬腿", description="评估抬膝高度和节奏。",
-        supported_metrics=["count","valid_count","score"],
-        core_angles=get_core_angle_labels("high_knees"), core_feature_keys=get_core_feature_keys("high_knees"),
-    ),
-    ExerciseDefinition(
-        key="burpee", name="波比跳", description="评估髋肩角度和身体控制。",
-        supported_metrics=["count","valid_count","score"],
-        core_angles=get_core_angle_labels("burpee"), core_feature_keys=get_core_feature_keys("burpee"),
-    ),
 ]
 
 

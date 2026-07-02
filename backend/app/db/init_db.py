@@ -2,7 +2,7 @@ from sqlalchemy import inspect, text
 
 from app.db.session import engine
 from app.core.security import get_password_hash
-from app.models.entities import Base, UserORM, ExerciseORM
+from app.models.entities import Base, UserORM, ExerciseORM, ReferenceVideoORM
 
 try:
     from sqlalchemy.orm import Session
@@ -171,9 +171,6 @@ def init_db():
     try:
         _create_default_users(db)
         _seed_exercises(db)
-    except Exception:
-        db.rollback()
-        raise
     finally:
         db.close()
 
@@ -189,6 +186,16 @@ def _migrate_legacy_schema():
     if "user_id" not in session_columns:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE sessions ADD COLUMN user_id INTEGER"))
+    if "feedback_summary" not in session_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE sessions ADD COLUMN feedback_summary TEXT"))
+
+    # Add camera_view column to analysis_tasks
+    if "analysis_tasks" in inspector.get_table_names():
+        task_columns = {column["name"] for column in inspector.get_columns("analysis_tasks")}
+        if "camera_view" not in task_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE analysis_tasks ADD COLUMN camera_view VARCHAR(16) DEFAULT 'front'"))
 
 
 def _create_default_users(db: Session):
@@ -218,11 +225,7 @@ def _create_default_users(db: Session):
         )
         db.add(user)
 
-    try:
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
+    db.commit()
 
 
 def _seed_exercises(db: Session):
@@ -233,8 +236,4 @@ def _seed_exercises(db: Session):
             ex = ExerciseORM(**data)
             db.add(ex)
 
-    try:
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
+    db.commit()

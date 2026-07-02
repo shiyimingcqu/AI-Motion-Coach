@@ -52,6 +52,12 @@ if router:
             existing = db.query(ExerciseORM).filter(ExerciseORM.key == data.get("key")).first()
             if existing:
                 raise HTTPException(status_code=400, detail="动作 key 已存在")
+            errors_val = data.get("errors", "")
+            if isinstance(errors_val, list):
+                errors_val = ",".join(str(e).strip() for e in errors_val if str(e).strip())
+            modes_val = data.get("modes", "摄像头实时检测,视频上传分析")
+            if isinstance(modes_val, list):
+                modes_val = ",".join(str(m).strip() for m in modes_val if str(m).strip())
             ex = ExerciseORM(
                 key=data.get("key"),
                 name=data.get("name", data.get("key")),
@@ -59,8 +65,8 @@ if router:
                 level=data.get("level", "中级"),
                 duration=data.get("duration", "10 分钟"),
                 description=data.get("description", ""),
-                modes=data.get("modes", "摄像头实时检测,视频上传分析"),
-                errors=data.get("errors", ""),
+                modes=modes_val,
+                errors=errors_val,
                 accent=data.get("accent", "#3b82f6"),
             )
             db.add(ex)
@@ -87,9 +93,14 @@ if router:
             ex = db.query(ExerciseORM).filter(ExerciseORM.key == exercise_key).first()
             if not ex:
                 raise HTTPException(status_code=404, detail="动作不存在")
+            list_fields = {"modes", "errors"}
             for field in ("name", "category", "level", "duration", "description", "modes", "errors", "accent", "is_active"):
                 if field in data:
-                    setattr(ex, field, data[field])
+                    value = data[field]
+                    # 前端发送的是数组，后端存储为逗号分隔字符串
+                    if field in list_fields and isinstance(value, list):
+                        value = ",".join(str(v).strip() for v in value if str(v).strip())
+                    setattr(ex, field, value)
             from datetime import datetime, timezone
             ex.updated_at = datetime.now(timezone.utc)
             db.commit()

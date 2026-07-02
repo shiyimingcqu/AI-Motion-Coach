@@ -69,7 +69,7 @@
                 <span>{{ exerciseName(s.exercise) }}</span>
               </div>
             </td>
-            <td>{{ Math.round(s.duration_seconds / 60) }} min</td>
+            <td>{{ formatDuration(s.duration_seconds) }}</td>
             <td>{{ s.total_count }}</td>
             <td>
               <div class="score-progress">
@@ -203,15 +203,30 @@ function scoreTone(score: number) {
   return "progress-orange";
 }
 
+function toLocal(iso?: string): Date | null {
+  if (!iso) return null;
+  // 后端返回 UTC 时间（带 Z 后缀），转为本地时间
+  return new Date(iso);
+}
+
+function formatDuration(seconds: number): string {
+  if (!seconds || seconds <= 0) return "0 秒";
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m > 0) return `${m} 分 ${s} 秒`;
+  return `${s} 秒`;
+}
+
 function formatDate(iso?: string): string {
-  if (!iso) return "";
-  return iso.slice(0, 10);
+  const d = toLocal(iso);
+  if (!d) return "";
+  return d.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
 }
 
 function formatTime(iso?: string): string {
-  if (!iso) return "";
-  const m = iso.match(/T(\d{2}:\d{2})/);
-  return m?.[1] ?? "";
+  const d = toLocal(iso);
+  if (!d) return "";
+  return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 function viewSession(session_id: string) {

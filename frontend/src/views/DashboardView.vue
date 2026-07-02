@@ -50,6 +50,12 @@
       </div>
 
       <div class="th-actions">
+        <button class="btn-outline" @click="router.push('/reference-videos')" style="margin-right:10px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="2" width="20" height="20" rx="3" /><polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none" />
+          </svg>
+          标准视频
+        </button>
         <button class="btn-primary" @click="router.push('/exercises')">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
             <polygon points="5,3 19,12 5,21" />
@@ -71,8 +77,8 @@
               <h2>深蹲动作评估</h2>
             </div>
             <div class="phase-badge">
-              <span class="phase-dot pulse-blue"></span>
-              当前阶段：<strong>下蹲阶段</strong>
+              <span class="phase-dot" :class="hasLatestAnalysis ? 'pulse-blue' : ''"></span>
+              当前阶段：<strong>{{ hasLatestAnalysis ? exerciseDisplayName(latestExercise) + '分析完成' : '暂无分析数据' }}</strong>
             </div>
             <span class="status-pill warn">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -95,16 +101,31 @@
 
         <div class="skel-area">
           <div class="skel-grid"></div>
-          <div class="skel-stage-label">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10" />
-              <polyline points="12 6 12 12 16 14" />
-            </svg>
-            下蹲阶段 · 膝关节角度 73°
-          </div>
+          <select
+            v-if="completedVideos.length > 0"
+            class="video-selector video-selector--standalone"
+            :value="selectedVideoIndex"
+            @change="switchToVideo(Number(($event.target as HTMLSelectElement).value))"
+          >
+            <option v-for="(v, i) in completedVideos" :key="v.task_id" :value="i">
+              {{ v.label }}
+            </option>
+          </select>
 
           <div class="skel-layout">
-            <svg viewBox="0 0 300 520" class="pose-skeleton">
+            <video
+              v-if="latestVideoUrl"
+              :key="latestVideoUrl"
+              :src="latestVideoUrl"
+              class="pose-video"
+              autoplay
+              loop
+              muted
+              playsinline
+              @loadedmetadata="onVideoMetadata"
+              @timeupdate="onVideoTimeUpdate"
+            />
+            <svg v-else viewBox="0 0 300 520" class="pose-skeleton breathing-skel">
               <circle cx="150" cy="42" r="20" fill="none" stroke="#3b82f6" stroke-width="2.5" />
               <line x1="150" y1="62" x2="150" y2="90" stroke="#3b82f6" stroke-width="2.5" />
               <line x1="150" y1="90" x2="150" y2="210" stroke="#3b82f6" stroke-width="2.5" />
@@ -152,7 +173,7 @@
           </div>
 
           <div class="score-card-overlay">
-            <div class="score-ring-big">
+            <div class="score-ring-big" :style="{ '--ring-pct': `${scoreValueForRing}%` }">
               <span class="score-ring-num">{{ scoreValueForRing }}</span>
               <span class="score-ring-label">综合评分</span>
             </div>
@@ -166,32 +187,30 @@
           </div>
 
           <div class="view-strip">
-            <button class="view-angle active">正面</button>
-            <button class="view-angle">侧面</button>
-            <button class="view-angle">后面</button>
-            <button class="view-angle disabled">3D</button>
+            <button :class="['view-angle', { active: activeView === 'front' }]" @click="switchView('front')">正面</button>
+            <button :class="['view-angle', { active: activeView === 'side' }]" @click="switchView('side')">侧面</button>
           </div>
         </div>
 
         <div class="phase-flow-bar">
-          <div class="phase-flow">
+          <p v-if="!hasLatestAnalysis" class="phase-no-data">暂无分析数据，上传视频完成分析后此处将显示动作阶段</p>
+          <div v-else class="phase-flow">
             <div
               v-for="(phase, index) in phases"
               :key="phase"
               class="phase-step"
-              :class="{ active: index === 1, done: index < 1 }"
+              :class="{ done: index < phaseDoneCount }"
             >
               <div class="phase-circle">
-                <svg v-if="index < 1" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <svg v-if="index < phaseDoneCount" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
                 <span v-else>{{ index + 1 }}</span>
               </div>
               <span class="phase-label">{{ phase }}</span>
-              <span v-if="index === 1" class="phase-now">当前</span>
             </div>
             <div class="phase-connector">
-              <div class="phase-connector-fill" style="width: 30%"></div>
+              <div class="phase-connector-fill" :style="{ width: hasLatestAnalysis ? '100%' : '0%' }"></div>
             </div>
           </div>
 
@@ -203,15 +222,10 @@
             </button>
             <div class="timeline-mini">
               <div class="tl-track">
-                <div class="tl-fill" style="width: 38%"></div>
-                <div class="tl-thumb" style="left: 38%"></div>
+                <div class="tl-fill" :style="{ width: `${timelineProgress}%` }"></div>
+                <div class="tl-thumb" :style="{ left: `${timelineProgress}%` }"></div>
               </div>
-              <div class="tl-labels"><span>00:12</span><span>03:45</span></div>
-            </div>
-            <div class="speed-mini">
-              <button v-for="speed in ['0.5x', '1.0x', '1.5x']" :key="speed" :class="{ active: speed === '1.0x' }">
-                {{ speed }}
-              </button>
+              <div class="tl-labels"><span>{{ timelineStart }}</span><span>{{ timelineEnd }}</span></div>
             </div>
           </div>
         </div>
@@ -397,6 +411,7 @@ import { CanvasRenderer } from "echarts/renderers";
 import { useAuthStore } from "@/stores/auth";
 import { getDashboardStats } from "../api/dashboard";
 import { getFeedbacks, type FeedbackItem } from "../api/feedback";
+import { apiGet } from "../api/client";
 
 echarts.use([
   BarChart,
@@ -438,6 +453,17 @@ const authStore = useAuthStore();
 const statsData = ref<any>(null);
 const statsLoading = ref(true);
 const feedbackItems = ref<FeedbackItem[]>([]);
+const latestVideoUrl = ref<string>("");
+const latestVideoLabel = ref<string>("最近分析结果");
+const hasLatestAnalysis = ref(false);
+const videoDuration = ref(0); // seconds
+const videoCurrentTime = ref(0); // seconds
+const latestExercise = ref("squat");
+
+type VideoItem = { task_id: string; output_uri: string; exercise: string; created_at?: string; label: string; camera_view?: string };
+const completedVideos = ref<VideoItem[]>([]);
+const selectedVideoIndex = ref(0);
+const activeView = ref<"front" | "side">("front");
 
 const trendChartRef = ref<HTMLDivElement | null>(null);
 const radarChartRef = ref<HTMLDivElement | null>(null);
@@ -448,6 +474,33 @@ const activeTab = ref<"problems" | "advice">("problems");
 const selectedProblem = ref<number | null>(0);
 const openAccordion = ref<number | null>(0);
 const phases = ["准备阶段", "下蹲阶段", "底部停顿", "起身阶段", "结束阶段"];
+
+// How many phases are "done" based on whether we have real analysis data
+const phaseDoneCount = computed(() => hasLatestAnalysis.value ? phases.length : 0);
+
+function exerciseDisplayName(key: string) {
+  const names: Record<string, string> = {
+    squat: "深蹲", pushup: "俯卧撑", jumping_jack: "开合跳", plank: "平板支撑"
+  };
+  return names[key] ?? key;
+}
+
+// Timeline helper
+function formatTime(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+const timelineStart = computed(() => formatTime(videoCurrentTime.value));
+const timelineEnd = computed(() => {
+  if (!videoDuration.value) return "--:--";
+  return formatTime(videoDuration.value);
+});
+const timelineProgress = computed(() => {
+  if (!videoDuration.value) return 0;
+  return (videoCurrentTime.value / videoDuration.value) * 100;
+});
 
 const feedbackDescriptions: Record<string, string> = {
   下蹲深度不足: "下蹲深度不够，说明髋膝协同和动作控制还可以继续优化。",
@@ -602,6 +655,10 @@ const totalDeduction = computed(() => problems.value.reduce((sum, item) => sum +
 
 function toggleAccordion(index: number) {
   openAccordion.value = openAccordion.value === index ? null : index;
+}
+
+function encodeFilePath(path: string) {
+  return path.replace(/\\/g, "/").split("/").map(encodeURIComponent).join("/");
 }
 
 function disposeCharts() {
@@ -763,6 +820,96 @@ function buildCharts() {
   }
 }
 
+function onVideoMetadata(e: Event) {
+  const video = e.target as HTMLVideoElement;
+  if (video && video.duration && isFinite(video.duration)) {
+    videoDuration.value = video.duration;
+  }
+}
+
+function onVideoTimeUpdate(e: Event) {
+  const video = e.target as HTMLVideoElement;
+  videoCurrentTime.value = video.currentTime;
+}
+
+async function loadVideoBlob(outputUri: string): Promise<string | null> {
+  const fileUrl = `/api/files/${encodeFilePath(outputUri)}`;
+  const token = authStore.token;
+  const res = await fetch(fileUrl, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) return null;
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
+async function switchToVideo(index: number) {
+  if (index === selectedVideoIndex.value) return;
+  const item = completedVideos.value[index];
+  if (!item) return;
+  // Revoke old blob
+  if (latestVideoUrl.value && latestVideoUrl.value.startsWith("blob:")) {
+    URL.revokeObjectURL(latestVideoUrl.value);
+  }
+  const url = await loadVideoBlob(item.output_uri);
+  if (!url) return;
+  selectedVideoIndex.value = index;
+  latestVideoUrl.value = url;
+  latestVideoLabel.value = item.label;
+  latestExercise.value = item.exercise || "squat";
+  // Reset timeline state for new video
+  videoDuration.value = 0;
+  videoCurrentTime.value = 0;
+}
+
+async function loadCompletedVideos() {
+  // Revoke old blob
+  if (latestVideoUrl.value && latestVideoUrl.value.startsWith("blob:")) {
+    URL.revokeObjectURL(latestVideoUrl.value);
+  }
+  latestVideoUrl.value = "";
+  hasLatestAnalysis.value = false;
+  completedVideos.value = [];
+  selectedVideoIndex.value = 0;
+  videoDuration.value = 0;
+  videoCurrentTime.value = 0;
+
+  try {
+    const data = await apiGet<{ items: Array<{ task_id: string; status: string; output_uri?: string | null; exercise: string; created_at?: string; camera_view?: string }> }>("/analysis/tasks");
+    const completed = (data.items || [])
+      .filter(t => (t.status === "success" || t.status === "completed") && t.output_uri && (t.camera_view || "front") === activeView.value)
+      .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+    completedVideos.value = completed.map(t => {
+      const d = t.created_at ? new Date(t.created_at) : null;
+      const timeStr = d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}` : "";
+      return {
+        task_id: t.task_id,
+        output_uri: t.output_uri!,
+        exercise: t.exercise || "squat",
+        created_at: t.created_at,
+        camera_view: t.camera_view || "front",
+        label: `${exerciseDisplayName(t.exercise || "squat")} · ${timeStr}`,
+      };
+    });
+    if (completedVideos.value.length > 0) {
+      const latest = completedVideos.value[0];
+      hasLatestAnalysis.value = true;
+      latestExercise.value = latest.exercise || "squat";
+      latestVideoLabel.value = latest.label;
+      const url = await loadVideoBlob(latest.output_uri);
+      if (url) latestVideoUrl.value = url;
+    }
+  } catch {
+    // no video available
+  }
+}
+
+async function switchView(view: "front" | "side") {
+  if (activeView.value === view) return;
+  activeView.value = view;
+  await loadCompletedVideos();
+}
+
 onMounted(async () => {
   try {
     const [statsResult, feedbackResult] = await Promise.allSettled([
@@ -787,12 +934,18 @@ onMounted(async () => {
     buildCharts();
   }
 
+  // Load all completed skeleton videos for the selector
+  await loadCompletedVideos();
+
   window.addEventListener("resize", resizeCharts);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("resize", resizeCharts);
   disposeCharts();
+  if (latestVideoUrl.value && latestVideoUrl.value.startsWith("blob:")) {
+    URL.revokeObjectURL(latestVideoUrl.value);
+  }
 });
 </script>
 
@@ -968,6 +1121,24 @@ onBeforeUnmount(() => {
   box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
 }
 
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: 1.5px solid #3b82f6;
+  border-radius: 10px;
+  background: transparent;
+  color: #3b82f6;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+.btn-outline:hover {
+  background: #eff6ff;
+}
+
 .core-row {
   display: grid;
   grid-template-columns: 1.38fr 1fr;
@@ -1124,6 +1295,41 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
+  max-width: calc(100% - 28px);
+  flex-wrap: wrap;
+}
+
+.video-selector--standalone {
+  position: absolute;
+  z-index: 5;
+  top: 10px;
+  left: 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  max-width: calc(100% - 28px);
+}
+
+.video-selector {
+  margin-left: 4px;
+  padding: 3px 8px;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #93c5fd;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  max-width: 200px;
+  text-overflow: ellipsis;
+}
+.video-selector:focus {
+  border-color: #3b82f6;
+}
+.video-selector option {
+  background: #0f172a;
+  color: #e2e8f0;
 }
 
 .skel-layout {
@@ -1139,8 +1345,32 @@ onBeforeUnmount(() => {
   display: block;
 }
 
+.pose-video {
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+  border-radius: 8px;
+  display: block;
+  object-fit: contain;
+}
+
+.breathing-skel {
+  animation: breathe 4s ease-in-out infinite;
+  transform-origin: center center;
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+
 .warning-anim {
   animation: pulseWarn 1.8s ease-in-out infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 0.6; r: 5; }
+  50% { opacity: 1; r: 6.2; }
 }
 
 .score-card-overlay {
@@ -1163,8 +1393,14 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   background:
     radial-gradient(circle, rgba(8, 13, 26, 0.9) 38%, transparent 39%),
-    conic-gradient(#34d399 0 86%, rgba(255, 255, 255, 0.04) 86% 100%);
+    conic-gradient(#34d399 0 var(--ring-pct, 0%), rgba(255, 255, 255, 0.04) var(--ring-pct, 0%) 100%);
   border: 2px solid rgba(52, 211, 153, 0.2);
+  animation: ringPulse 3s ease-in-out infinite;
+}
+
+@keyframes ringPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.25); }
+  50% { box-shadow: 0 0 16px 4px rgba(52, 211, 153, 0.15); }
 }
 
 .score-ring-label {
@@ -1301,6 +1537,14 @@ onBeforeUnmount(() => {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  transition: width 0.6s ease;
+}
+
+.phase-no-data {
+  text-align: center;
+  color: #64748b;
+  font-size: 13px;
+  padding: 8px 0;
 }
 
 .play-controls {
@@ -1335,6 +1579,7 @@ onBeforeUnmount(() => {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, #60a5fa, #a78bfa);
+  transition: width 0.6s ease;
 }
 
 .tl-thumb {
@@ -1345,10 +1590,11 @@ onBeforeUnmount(() => {
   height: 11px;
   border-radius: 50%;
   background: #f8fafc;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  transition: left 0.6s ease;
 }
 
 .tl-labels,
-.speed-mini,
 .tab-bar,
 .pi-title-row,
 .pi-meta,

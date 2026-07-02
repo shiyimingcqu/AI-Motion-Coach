@@ -74,7 +74,7 @@
         <p class="pg-desc"><strong>{{ login.user }}</strong>，请输入密码。</p>
         <div class="field">
           <label>密码</label>
-          <input v-model="login.pass" type="password" placeholder="••••••••" autocomplete="off" />
+          <input v-model="login.pass" type="password" placeholder="••••••••" autocomplete="off" :readonly="passReadonly" @focus="onPassFocus" />
         </div>
       </div>
     </Stepper>
@@ -103,7 +103,7 @@
         <p class="pg-desc">至少6个字符。</p>
         <div class="field">
           <label>密码</label>
-          <input v-model="reg.pass" type="password" placeholder="创建密码" minlength="6" autocomplete="off" />
+          <input v-model="reg.pass" type="password" placeholder="创建密码" minlength="6" autocomplete="new-password" :readonly="passReadonly" @focus="onPassFocus" />
         </div>
       </div>
       <div class="page">
@@ -111,7 +111,7 @@
         <p class="pg-desc">确认密码并选择角色。</p>
         <div class="field">
           <label>确认密码</label>
-          <input v-model="reg.confirm" type="password" placeholder="再次输入密码" autocomplete="off" />
+          <input v-model="reg.confirm" type="password" placeholder="再次输入密码" autocomplete="new-password" :readonly="passReadonly" @focus="onPassFocus" />
         </div>
         <div class="field">
           <label>账号类型</label>
@@ -143,7 +143,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue';
+import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '@/stores/auth';
 import Aurora from '@/components/Aurora.vue';
@@ -163,6 +163,21 @@ let timer: ReturnType<typeof setTimeout> | null = null;
 const login = reactive({ user: '', pass: '' });
 const reg   = reactive({ user: '', pass: '', confirm: '', role: 'user' as 'user'|'admin' });
 
+// 防止浏览器自动填充：密码框初始 readonly，聚焦后解除
+const passReadonly = ref(true);
+
+function onPassFocus() {
+  passReadonly.value = false;
+}
+
+// 每次进入页面重置 readonly 状态
+onMounted(() => {
+  passReadonly.value = true;
+  login.pass = '';
+  reg.pass = '';
+  reg.confirm = '';
+});
+
 function flash(text: string, type: 'err'|'ok') {
   if (timer) clearTimeout(timer);
   msg.value = text; msgType.value = type;
@@ -173,6 +188,7 @@ function switchTo(m: string) {
   mode.value = m; msg.value = '';
   login.user = ''; login.pass = '';
   reg.user = ''; reg.pass = ''; reg.confirm = ''; reg.role = 'user';
+  passReadonly.value = true;
 }
 
 async function submit() {

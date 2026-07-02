@@ -29,6 +29,14 @@
           </select>
         </label>
 
+        <label class="upload-exercise-select">
+          <span>Camera View / 视角</span>
+          <select v-model="selectedCameraView">
+            <option value="front">正面 Front</option>
+            <option value="side">侧面 Side</option>
+          </select>
+        </label>
+
         <input
           ref="fileInput"
           class="hidden-input"
@@ -39,6 +47,9 @@
         <button class="blue-action-button" type="button" @click="openFilePicker">
           Browse Files / 选择文件
         </button>
+        <div class="upload-info-before-send" v-if="selectedFile">
+          即将上传: {{ exerciseDisplayName(selectedExercise) }} · {{ selectedCameraView === 'side' ? '侧面' : '正面' }}
+        </div>
         <button
           v-if="selectedFile"
           class="blue-action-button upload-start-button"
@@ -63,7 +74,7 @@
       </header>
 
       <div class="analysis-list">
-        <article v-for="item in analysisHistory" :key="item.id" class="analysis-row">
+        <article v-for="item in analysisHistory" :key="item.id" class="analysis-row" :class="{ 'analysis-row--completed': item.status === 'completed' }">
           <button class="play-button" type="button">
             <Play :size="27" />
           </button>
@@ -76,6 +87,10 @@
           </div>
 
           <template v-if="item.status === 'completed'">
+            <span class="completed-badge">
+              <CheckCircle2 :size="14" />
+              已完成
+            </span>
             <div class="analysis-stat">
               <span>Score</span>
               <strong class="stat-score">{{ item.score }}</strong>
@@ -100,10 +115,24 @@
             </button>
           </template>
 
+          <span v-else-if="item.status === 'failed'" class="failed-pill">
+            <XCircle :size="19" />
+            失败
+          </span>
+
           <span v-else class="processing-pill">
             <LoaderCircle :size="19" />
-            Processing...
+            处理中
           </span>
+
+          <button
+            class="delete-button"
+            type="button"
+            title="删除此记录"
+            @click.stop="handleDeleteTask(item.id)"
+          >
+            <Trash2 :size="16" />
+          </button>
         </article>
       </div>
     </section>
@@ -131,10 +160,13 @@ import {
   FileText,
   LoaderCircle,
   Play,
-  Upload
+  Trash2,
+  Upload,
+  XCircle
 } from "lucide-vue-next";
 
-import { apiGet, apiUpload } from "../api/client";
+import { apiDelete, apiGet, apiUpload } from "../api/client";
+import { useAuthStore } from "../stores/auth";
 import { exercises } from "../stores/training";
 
 interface AnalysisTask {
@@ -143,6 +175,7 @@ interface AnalysisTask {
   source_uri: string;
   status: string;
   output_uri?: string | null;
+  created_at?: string;
 }
 
 interface UploadResponse {
@@ -157,13 +190,14 @@ interface HistoryItem {
   duration: string;
   score?: number;
   errors?: number;
-  status: "completed" | "processing";
+  status: "completed" | "processing" | "failed";
   reportUrl?: string;
 }
 
 const fileInput = ref<HTMLInputElement | null>(null);
 const selectedFile = ref<File | null>(null);
 const selectedExercise = ref("squat");
+const selectedCameraView = ref("front");
 const isDragging = ref(false);
 const uploadState = ref<"idle" | "ready" | "uploading" | "success" | "failed">("idle");
 const message = ref("");
@@ -172,13 +206,23 @@ const localPreviewUrl = ref("");
 const allTasks = ref<AnalysisTask[]>([]);
 const tasksLoading = ref(true);
 
+const authStore = useAuthStore();
+const isAdmin = computed(() => authStore.user?.role === "admin");
+
+function formatTime(iso?: string): string {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 const analysisHistory = computed<HistoryItem[]>(() => {
   const items: HistoryItem[] = (allTasks.value || []).map(t => ({
     id: t.task_id,
     name: t.source_uri?.split("/").pop() || t.task_id.slice(0, 12) + ".mp4",
-    date: "uploaded",
+    date: formatTime(t.created_at),
     duration: "-",
-    status: t.status === "pending" || t.status === "processing" ? "processing" : "completed",
+    status: t.status === "success" || t.status === "completed" ? "completed" : t.status === "failed" ? "failed" : "processing",
     reportUrl: t.output_uri ? `/api/files/${t.output_uri.replace(/\\/g, "/").split("/").map(encodeURIComponent).join("/")}` : undefined,
   }));
 
@@ -276,7 +320,9 @@ async function uploadVideo() {
 
   const formData = new FormData();
   formData.append("exercise", selectedExercise.value);
+  formData.append("camera_view", selectedCameraView.value);
   formData.append("file", selectedFile.value);
+  console.log("[Upload] camera_view:", selectedCameraView.value, "exercise:", selectedExercise.value);
 
   try {
     const result = await apiUpload<UploadResponse>("/videos/upload", formData);
@@ -301,6 +347,16 @@ async function loadTasks() {
     allTasks.value = [];
   } finally {
     tasksLoading.value = false;
+  }
+}
+
+async function handleDeleteTask(task_id: string) {
+  if (!confirm("确定删除此分析记录？此操作不可撤销。")) return;
+  try {
+    await apiDelete(`/analysis/tasks/${task_id}`);
+    allTasks.value = allTasks.value.filter(t => t.task_id !== task_id);
+  } catch (err: any) {
+    alert("删除失败: " + (err.message || "网络错误"));
   }
 }
 
