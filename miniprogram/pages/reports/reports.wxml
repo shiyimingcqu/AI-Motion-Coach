@@ -1,5 +1,12 @@
 <!-- 训练报告页 -->
-<scroll-view class="reports-page" scroll-y enhanced show-scrollbar="{{false}}">
+<view class="reports-page">
+  <!-- 顶部 -->
+  <view class="top-bar">
+    <view class="top-bar-content">
+      <text class="top-title">训练报告</text>
+    </view>
+  </view>
+
   <!-- 时间范围 Tab -->
   <view class="time-tabs">
     <view
@@ -12,14 +19,14 @@
   </view>
 
   <!-- 概览统计 -->
-  <view class="overview-section">
-    <view class="overview-card card">
+  <view class="card section-card">
+    <view class="overview-grid">
       <view class="overview-item">
         <text class="ov-value">{{summary.totalSessions}}</text>
         <text class="ov-label">训练次数</text>
       </view>
       <view class="overview-item">
-        <text class="ov-value" style="color: #3b82f6">{{summary.averageScore}}</text>
+        <text class="ov-value" style="color: var(--primary)">{{summary.averageScore}}</text>
         <text class="ov-label">平均得分</text>
       </view>
       <view class="overview-item">
@@ -27,40 +34,49 @@
         <text class="ov-label">训练时长(分)</text>
       </view>
       <view class="overview-item">
-        <text class="ov-value" style="color: #22c55e">{{summary.accuracy}}%</text>
+        <text class="ov-value" style="color: var(--success)">{{summary.accuracy}}%</text>
         <text class="ov-label">正确率</text>
       </view>
     </view>
   </view>
 
   <!-- 各项运动表现 -->
-  <view class="card" wx:if="{{exerciseStats.length > 0}}">
-    <view class="card-title">各项运动表现</view>
+  <view class="card section-card" wx:if="{{exerciseStats.length > 0}}">
+    <view class="section-title-text">各项运动表现</view>
     <view class="bar-chart">
       <view class="bar-item" wx:for="{{exerciseStats}}" wx:key="key">
         <view class="bar-label-row">
           <text class="bar-name">{{item.name}}</text>
-          <text class="bar-score">{{item.score}}</text>
+          <text class="bar-score" style="color: {{item.color}}">{{item.score}}分</text>
         </view>
         <view class="bar-track">
-          <view class="bar-fill" style="width: {{item.score}}%; background: {{item.color}}"></view>
+          <view class="bar-fill" style="width: {{item.score}}%; background: linear-gradient(90deg, {{item.color}}, {{item.color}}cc);"></view>
         </view>
       </view>
     </view>
   </view>
 
   <!-- 训练历史 -->
-  <view class="card" wx:if="{{sessions.length > 0}}">
-    <view class="card-title">训练历史</view>
+  <view class="card section-card" wx:if="{{sessions.length > 0}}">
+    <view class="section-title-text">训练历史</view>
     <view class="session-list">
       <view class="session-item" wx:for="{{sessions}}" wx:key="session_id">
-        <view class="session-left">
-          <text class="session-exercise">{{item.exercise_name}}</text>
-          <text class="session-date">{{item.date}}</text>
+        <view class="session-thumb">
+          <text class="session-thumb-icon">{{item.icon}}</text>
+        </view>
+        <view class="session-mid">
+          <text class="session-name">{{item.exercise_name}}训练</text>
+          <view class="session-meta">
+            <text class="session-time-icon">⏱</text>
+            <text class="session-time">{{item.date}}</text>
+            <text class="session-dot">·</text>
+            <text class="session-duration-icon">⏳</text>
+            <text class="session-duration">{{item.duration}}</text>
+          </view>
         </view>
         <view class="session-right">
-          <text class="session-score" style="color: {{item.scoreColor}}">{{item.score}}</text>
-          <text class="session-duration">{{item.duration}}</text>
+          <text class="session-score" style="color: {{item.scoreColor}}">{{item.score}}分</text>
+          <text class="session-status">已完成</text>
         </view>
       </view>
     </view>
@@ -74,4 +90,4 @@
   </view>
 
   <view style="height: 40rpx;"></view>
-</scroll-view>
+</view>
