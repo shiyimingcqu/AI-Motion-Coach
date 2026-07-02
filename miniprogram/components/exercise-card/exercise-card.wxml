@@ -1,0 +1,13 @@
+<!-- 动作卡片组件 -->
+<view class="exercise-card" style="border-left: 6rpx solid {{exercise.accentColor}}">
+  <view class="card-left">
+    <text class="card-icon">{{exercise.icon}}</text>
+  </view>
+  <view class="card-center">
+    <text class="card-name">{{exercise.name}}</text>
+    <text class="card-desc">{{exercise.category}} · {{exercise.level}} · {{exercise.duration}}</text>
+  </view>
+  <view class="card-right">
+    <text class="card-arrow">›</text>
+  </view>
+</view>

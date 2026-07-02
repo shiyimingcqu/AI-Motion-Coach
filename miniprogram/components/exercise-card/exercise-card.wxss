@@ -1,0 +1,38 @@
+/* 动作卡片 */
+.exercise-card {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-radius: var(--radius-lg);
+  padding: 24rpx;
+  box-shadow: var(--shadow);
+}
+
+.card-left {
+  margin-right: 20rpx;
+}
+
+.card-icon {
+  font-size: 48rpx;
+}
+
+.card-center {
+  flex: 1;
+}
+
+.card-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  display: block;
+  margin-bottom: 6rpx;
+}
+
+.card-desc {
+  font-size: 24rpx;
+  color: var(--text-muted);
+}
+
+.card-arrow {
+  font-size: 36rpx;
+  color: var(--text-muted);
+}

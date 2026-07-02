@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+
+# IDE
+.vscode/
+.idea/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Runtime storage
+storage/uploads/*
+storage/outputs/*
+storage/reports/*
+backend/storage/outputs/*
+!storage/uploads/.gitkeep
+!storage/outputs/.gitkeep
+!storage/reports/.gitkeep
+!backend/storage/outputs/.gitkeep
+
+# Models / large files
+*.pt
+*.pth
+*.onnx
+*.mp4
+*.avi
+*.mov
+
+# Logs
+*.log
+logs/
+
+# WorkBuddy workspace data
+.workbuddy/
+
+# Trae IDE
+.trae/
+
+# OS
+.DS_Store
+Thumbs.db
+
+db_stdout.txt
