@@ -1,10 +1,10 @@
-<template>
-  <div class="page">
+﻿<template>
+  <div class="page admin-page">
     <header class="page-header">
       <div>
-        <p class="eyebrow">Exercise Library</p>
-        <h1>动作训练库与规则配置</h1>
-        <p class="subtle">按动作类型、难度和支持方式筛选训练，并查看检测规则。</p>
+        <p class="eyebrow">Rule Management</p>
+        <h1>动作规则管理</h1>
+        <p class="subtle">维护动作检测规则、评分阈值、错误提示和标准动作模板。</p>
       </div>
       <button v-if="authStore.isAdmin" class="primary-button" type="button" @click="openNewExerciseModal">
         <Plus :size="18" />
@@ -12,7 +12,7 @@
       </button>
     </header>
 
-    <StateDisplay v-if="loading" type="loading" skeleton="card" text="加载动作库..." />
+    <StateDisplay v-if="loading" type="loading" skeleton="cards" text="加载动作库..." />
 
     <section v-else class="split-layout">
       <aside class="filter-panel">
@@ -29,12 +29,6 @@
             {{ exercise.name }}
           </button>
         </div>
-        <div class="filter-group">
-          <strong>难度</strong>
-          <button type="button">初级</button>
-          <button type="button">中级</button>
-          <button type="button">高级</button>
-        </div>
       </aside>
 
       <section class="exercise-grid">
@@ -43,7 +37,7 @@
             <Dumbbell :size="34" />
           </div>
           <div>
-            <span>{{ exercise.category }} · {{ exercise.level }}</span>
+            <p class="eyebrow">{{ exercise.category }}</p>
             <h2>{{ exercise.name }}</h2>
           </div>
           <p>{{ exercise.description }}</p>
@@ -76,12 +70,11 @@
       </section>
     </section>
 
-    <!-- 编辑/新增弹窗 -->
     <div v-if="showFormModal" class="modal-overlay" @click.self="closeFormModal">
       <div class="modal-content">
         <div class="modal-header">
-          <h3>{{ editingExercise ? '编辑动作' : '新增动作' }}</h3>
-          <button class="close-button" @click="closeFormModal"><X :size="20" /></button>
+          <h3>{{ editingExercise ? "编辑动作" : "新增动作" }}</h3>
+          <button class="close-button" type="button" @click="closeFormModal"><X :size="20" /></button>
         </div>
         <form class="template-form" @submit.prevent="submitExerciseForm">
           <label class="form-field">
@@ -124,18 +117,17 @@
           </label>
           <div v-if="formError" class="error-message">{{ formError }}</div>
           <button class="primary-button" type="submit" :disabled="formSubmitting">
-            {{ editingExercise ? '保存修改' : '创建动作' }}
+            {{ editingExercise ? "保存修改" : "创建动作" }}
           </button>
         </form>
       </div>
     </div>
 
-    <!-- 添加模板弹窗 -->
     <div v-if="showTemplateModal" class="modal-overlay" @click.self="closeTemplateModal">
       <div class="modal-content">
         <div class="modal-header">
           <h3>添加标准动作模板 - {{ templateTarget?.name }}</h3>
-          <button class="close-button" @click="closeTemplateModal"><X :size="20" /></button>
+          <button class="close-button" type="button" @click="closeTemplateModal"><X :size="20" /></button>
         </div>
         <div v-if="templateUploadSuccess" class="success-message">
           <CheckCircle :size="48" class="success-icon" />
@@ -158,9 +150,9 @@
             </select>
           </label>
           <label class="file-upload" :class="{ 'has-file': templateForm.videoFile }">
-            <input ref="fileInput" type="file" accept="video/*" @change="handleFileChange" required />
+            <input ref="fileInput" type="file" accept="video/*" required @change="handleFileChange" />
             <Upload :size="32" />
-            <span>{{ templateForm.videoFile ? templateForm.videoFile.name : '点击上传标准动作视频' }}</span>
+            <span>{{ templateForm.videoFile ? templateForm.videoFile.name : "点击上传标准动作视频" }}</span>
             <small>支持 MP4、MOV、AVI 等常见格式</small>
           </label>
           <div v-if="templateError" class="error-message">{{ templateError }}</div>
@@ -181,13 +173,13 @@ import { useAuthStore } from "@/stores/auth";
 import { useTrainingStore } from "@/stores/training";
 import { apiUpload } from "@/api/client";
 import {
-  getExerciseLibrary,
   createExercise,
-  updateExercise,
   deleteExercise,
+  getExerciseLibrary,
+  updateExercise,
   type ExerciseItem,
 } from "@/api/exercises";
-import { Dumbbell, Plus, Upload, X, CheckCircle, Loader2 } from "lucide-vue-next";
+import { CheckCircle, Dumbbell, Loader2, Plus, Upload, X } from "lucide-vue-next";
 import StateDisplay from "@/components/StateDisplay.vue";
 
 const router = useRouter();
@@ -200,16 +192,22 @@ const selectedKey = ref("");
 
 const visibleExercises = computed(() =>
   selectedKey.value
-    ? exercises.value.filter(e => e.key === selectedKey.value)
+    ? exercises.value.filter((exercise) => exercise.key === selectedKey.value)
     : exercises.value
 );
+
+function splitErrors(value: string) {
+  return value
+    .split(/[,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
 function start(exerciseKey: string) {
   trainingStore.setExercise(exerciseKey);
   router.push("/realtime");
 }
 
-// ─── 编辑/新增 ───
 const showFormModal = ref(false);
 const editingExercise = ref<ExerciseItem | null>(null);
 const formSubmitting = ref(false);
@@ -258,48 +256,40 @@ function closeFormModal() {
 async function submitExerciseForm() {
   formSubmitting.value = true;
   formError.value = "";
+  const payload = {
+    name: formData.name,
+    category: formData.category,
+    level: formData.level,
+    duration: formData.duration,
+    description: formData.description,
+    errors: splitErrors(formData.errors),
+  };
+
   try {
     if (editingExercise.value) {
-      await updateExercise(editingExercise.value.key, {
-        name: formData.name,
-        category: formData.category,
-        level: formData.level,
-        duration: formData.duration,
-        description: formData.description,
-        errors: formData.errors,
-      });
+      await updateExercise(editingExercise.value.key, payload);
     } else {
-      await createExercise({
-        key: formData.key,
-        name: formData.name,
-        category: formData.category,
-        level: formData.level,
-        duration: formData.duration,
-        description: formData.description,
-        errors: formData.errors,
-      });
+      await createExercise({ key: formData.key, ...payload });
     }
     closeFormModal();
     await loadExercises();
-  } catch (err: any) {
-    formError.value = err.message || "操作失败";
+  } catch (err) {
+    formError.value = err instanceof Error ? err.message : "操作失败";
   } finally {
     formSubmitting.value = false;
   }
 }
 
-// ─── 删除 ───
 async function handleDelete(exercise: ExerciseItem) {
   if (!confirm(`确定删除动作「${exercise.name}」？`)) return;
   try {
     await deleteExercise(exercise.key);
-    exercises.value = exercises.value.filter(e => e.key !== exercise.key);
-  } catch (err: any) {
-    alert("删除失败: " + (err.message || "网络错误"));
+    exercises.value = exercises.value.filter((item) => item.key !== exercise.key);
+  } catch (err) {
+    alert("删除失败: " + (err instanceof Error ? err.message : "网络错误"));
   }
 }
 
-// ─── 模板 ───
 const showTemplateModal = ref(false);
 const templateTarget = ref<ExerciseItem | null>(null);
 const isUploading = ref(false);
@@ -314,6 +304,7 @@ function openTemplateModal(exercise: ExerciseItem) {
   templateForm.name = `标准${exercise.name}`;
   templateForm.view = "side";
   templateForm.videoFile = null;
+  fileInput.value = null;
   templateError.value = "";
   templateUploadSuccess.value = false;
   showTemplateModal.value = true;
@@ -325,9 +316,7 @@ function closeTemplateModal() {
 
 function handleFileChange(event: Event) {
   const input = event.target as HTMLInputElement;
-  if (input.files && input.files.length > 0) {
-    templateForm.videoFile = input.files[0];
-  }
+  templateForm.videoFile = input.files?.[0] ?? null;
 }
 
 async function submitTemplate() {
@@ -348,8 +337,8 @@ async function submitTemplate() {
     templateResult.template_path = result.template_path || "";
     templateResult.curve_count = result.curve_count || 0;
     templateUploadSuccess.value = true;
-  } catch (err: any) {
-    templateError.value = err.message || "模板生成失败";
+  } catch (err) {
+    templateError.value = err instanceof Error ? err.message : "模板生成失败";
   } finally {
     isUploading.value = false;
   }
@@ -370,7 +359,6 @@ onMounted(loadExercises);
 </script>
 
 <style scoped>
-/* ── existing styles from ExerciseRulesView ── */
 .page { display: grid; gap: 24px; }
 .split-layout { display: grid; grid-template-columns: 210px 1fr; gap: 24px; align-items: start; }
 .filter-panel { background: rgba(15,23,42,0.96); border: 1px solid rgba(59,130,246,0.1); border-radius: 14px; padding: 20px; display: grid; gap: 18px; }
@@ -379,7 +367,6 @@ onMounted(loadExercises);
 .filter-group strong { color: #64748b; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
 .filter-group button { padding: 8px 14px; border: 1px solid rgba(59,130,246,0.06); border-radius: 8px; background: rgba(8,13,26,0.5); color: #94a3b8; font-size: 13px; cursor: pointer; text-align: left; }
 .filter-group button.active, .filter-group button:hover { background: rgba(59,130,246,0.12); border-color: rgba(59,130,246,0.2); color: #93c5fd; }
-
 .exercise-grid { display: grid; gap: 16px; }
 .exercise-card { padding: 20px; border-radius: 14px; background: linear-gradient(180deg, rgba(15,23,42,0.96), rgba(8,13,26,0.98)); border: 1px solid rgba(59,130,246,0.1); display: grid; gap: 10px; }
 .exercise-visual { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 12px; background: var(--accent); color: #fff; }
@@ -394,8 +381,6 @@ onMounted(loadExercises);
 .card-actions .secondary-button.danger:hover { background: rgba(239,68,68,0.08); }
 .template-button { min-height: 34px; padding: 0 14px; border: 1px solid rgba(59,130,246,0.1); border-radius: 8px; background: rgba(8,13,26,0.4); color: #cbd5e1; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .template-button:hover { background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.2); }
-
-/* ── modals ── */
 .modal-overlay { position: fixed; inset: 0; z-index: 999; background: rgba(0,0,0,0.65); display: grid; place-items: center; padding: 24px; }
 .modal-content { width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; background: #0f172a; border: 1px solid rgba(59,130,246,0.15); border-radius: 16px; padding: 28px; }
 .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
@@ -416,8 +401,6 @@ onMounted(loadExercises);
 .success-message h4 { color: #34d399; margin: 0; }
 .success-message p { color: #94a3b8; }
 .success-icon { color: #34d399; }
-
-/* ── page header ── */
 .page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
 .page-header h1 { color: #f8fafc; font-size: 28px; margin: 0; }
 .page-header p { margin: 4px 0 0; color: #64748b; }
@@ -426,6 +409,5 @@ onMounted(loadExercises);
 .eyebrow { color: #60a5fa; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-
 @media (max-width: 900px) { .split-layout { grid-template-columns: 1fr; } }
 </style>

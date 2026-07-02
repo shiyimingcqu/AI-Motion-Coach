@@ -29,7 +29,7 @@
     <StateDisplay
       v-if="loading"
       type="loading"
-      skeleton="card"
+      skeleton="cards"
       text="加载数据中..."
     />
 
@@ -214,7 +214,16 @@ async function quickExport(format: string) {
 onMounted(async () => {
   try {
     const data = await getPersonalReport();
-    summary.value = data;
+    summary.value = {
+      total_sessions: data.total_sessions || 0,
+      average_score: data.average_score || 0,
+      total_duration_minutes: data.total_duration_minutes || 0,
+      total_count: (data as any).total_count || 0,
+      valid_count: (data as any).valid_count || 0,
+      error_count: (data as any).error_count || 0,
+      trend: (data as any).trend || (data as any).recent_trend || [],
+      recent_sessions: (data as any).recent_sessions || [],
+    };
   } catch {
     summary.value = {
       total_sessions: 0, average_score: 0, total_duration_minutes: 0,

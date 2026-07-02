@@ -79,9 +79,16 @@ const sessions = ref<SessionRecord[]>([]);
 const statsData = ref<any>(null);
 const loading = ref(true);
 
-const trendData = computed(() => statsData.value?.recent_trend || []);
+interface TrendPoint {
+  x: number;
+  y: number;
+  label: string;
+  score: number;
+}
 
-const trendPoints = computed(() => {
+const trendData = computed<Array<{ date?: string; score: number }>>(() => statsData.value?.recent_trend || []);
+
+const trendPoints = computed<TrendPoint[]>(() => {
   const data = trendData.value;
   if (!data || data.length < 2) return [];
   const width = 1000;
