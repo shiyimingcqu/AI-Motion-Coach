@@ -1,31 +1,5 @@
 <template>
   <div class="export-page">
-    <header class="section-page-header">
-      <div>
-        <h1>{{ $t("exportReports.title") }}</h1>
-        <p>Generate and download customized reports from your training data</p>
-      </div>
-    </header>
-
-    <section class="summary-card-grid">
-      <article class="summary-card">
-        <span>{{ $t("exportReports.summary_total") }}</span>
-        <strong class="tone-text-blue">{{ summary.total_sessions }}</strong>
-      </article>
-      <article class="summary-card">
-        <span>{{ $t("exportReports.summary_avg") }}</span>
-        <strong class="tone-text-green">{{ summary.average_score }}</strong>
-      </article>
-      <article class="summary-card">
-        <span>{{ $t("exportReports.summary_duration") }}</span>
-        <strong class="tone-text-purple">{{ summary.total_duration_minutes }} min</strong>
-      </article>
-      <article class="summary-card">
-        <span>{{ $t("exportReports.summary_rate") }}</span>
-        <strong class="tone-text-orange">{{ validRate }}</strong>
-      </article>
-    </section>
-
     <StateDisplay
       v-if="loading"
       type="loading"
@@ -33,10 +7,10 @@
       :text="$t('exportReports.loading')"
     />
 
-    <section v-else class="export-layout">
+    <div v-else class="export-layout">
       <div class="export-main">
-        <article class="export-card">
-          <h2>{{ $t("exportReports.exportFormat") }}</h2>
+        <section class="export-card">
+          <h2 class="section-title">{{ $t("exportReports.exportFormat") }}</h2>
           <div class="format-grid">
             <button
               v-for="fmt in formats"
@@ -46,36 +20,60 @@
               :class="{ selected: selectedFormat === fmt.value }"
               @click="selectedFormat = fmt.value"
             >
-              <span class="settings-icon" :class="fmt.color">
-                <component :is="fmt.icon" :size="25" />
+              <span class="format-icon" :class="fmt.color">
+                <component :is="fmt.icon" :size="24" />
               </span>
-              <div>
+              <div class="format-info">
                 <strong>{{ fmt.title }}</strong>
                 <small>{{ fmt.desc }}</small>
               </div>
             </button>
           </div>
-        </article>
+        </section>
 
-        <article class="export-card">
-          <h2>{{ $t("exportReports.reportConfig") }}</h2>
-          <label class="export-field">
-            {{ $t("exportReports.dateRange") }}
-            <div class="date-range-row">
-              <input v-model="dateFrom" type="date" class="date-input" />
-              <span>—</span>
-              <input v-model="dateTo" type="date" class="date-input" />
-            </div>
-          </label>
-          <div class="include-list">
-            <span>{{ $t("exportReports.includeSections") }}</span>
-            <label v-for="item in sections" :key="item.key">
-              <input v-model="item.enabled" type="checkbox" />
-              {{ item.label }}
+        <section class="export-card">
+          <h2 class="section-title">{{ $t("exportReports.filterConfig") }}</h2>
+
+          <div class="filter-grid">
+            <label class="filter-field">
+              <span>{{ $t("exportReports.timeRange") }}</span>
+              <div class="select-wrap">
+                <select v-model="timeRange" class="dark-select">
+                  <option value="last7">{{ $t("exportReports.last7Days") }}</option>
+                  <option value="last30">{{ $t("exportReports.last30Days") }}</option>
+                  <option value="all">{{ $t("exportReports.allTime") }}</option>
+                </select>
+                <ChevronDown :size="16" class="select-arrow" />
+              </div>
+            </label>
+
+            <label class="filter-field">
+              <span>{{ $t("exportReports.exerciseType") }}</span>
+              <div class="select-wrap">
+                <select v-model="selectedExercise" class="dark-select">
+                  <option value="">{{ $t("exportReports.allExercises") }}</option>
+                  <option v-for="ex in exercises" :key="ex.key" :value="ex.key">
+                    {{ ex.name }}
+                  </option>
+                </select>
+                <ChevronDown :size="16" class="select-arrow" />
+              </div>
             </label>
           </div>
+
+          <div class="include-section">
+            <span class="include-title">{{ $t("exportReports.includeContent") }}</span>
+            <div class="include-list">
+              <label v-for="item in includeItems" :key="item.key">
+                <input v-model="item.enabled" type="checkbox" />
+                <span class="checkmark" />
+                {{ item.label }}
+              </label>
+            </div>
+          </div>
+
           <button
-            class="primary-button"
+            class="download-button"
             type="button"
             :disabled="exporting || summary.total_sessions === 0"
             @click="handleExport"
@@ -84,61 +82,129 @@
             {{ exporting ? $t("exportReports.generating") : $t("exportReports.download") }}
           </button>
           <div v-if="error" class="error-message">{{ error }}</div>
-        </article>
+          <div v-if="summary.total_sessions === 0 && !error" class="no-data-hint">
+            {{ $t("exportReports.noData") }}
+          </div>
+        </section>
       </div>
 
-      <aside class="quick-export-card">
-        <h2>{{ $t("exportReports.quickExport") }}</h2>
-        <button class="quick-button" :class="{ active: selectedFormat === 'pdf' }" type="button" :disabled="summary.total_sessions === 0" @click="quickExport('pdf')">
-          <FileText :size="20" />
-          {{ $t("exportReports.pdfReport") }}
-        </button>
-        <button class="quick-button" :class="{ active: selectedFormat === 'csv' }" type="button" :disabled="summary.total_sessions === 0" @click="quickExport('csv')">
-          <FileSpreadsheet :size="20" />
-          {{ $t("exportReports.csvData") }}
-        </button>
+      <aside class="export-side">
+        <section class="export-card">
+          <h2 class="section-title">{{ $t("exportReports.quickExport") }}</h2>
+          <div class="quick-list">
+            <button
+              class="quick-button"
+              type="button"
+              :disabled="summary.total_sessions === 0"
+              @click="quickExport('pdf', 'last7')"
+            >
+              <FileText :size="18" />
+              {{ $t("exportReports.quick7DaysPdf") }}
+            </button>
+            <button
+              class="quick-button"
+              type="button"
+              :disabled="summary.total_sessions === 0"
+              @click="quickExport('pdf', 'all')"
+            >
+              <FileText :size="18" />
+              {{ $t("exportReports.quickAllPdf") }}
+            </button>
+            <button
+              class="quick-button"
+              type="button"
+              :disabled="summary.total_sessions === 0"
+              @click="quickExport('csv', 'all')"
+            >
+              <FileSpreadsheet :size="18" />
+              {{ $t("exportReports.quickAllCsv") }}
+            </button>
+          </div>
+        </section>
 
-        <div class="recent-export-box">
-          <h3>{{ $t("exportReports.summaryPreview") }}</h3>
-          <div v-if="summary.total_sessions > 0" class="preview-stats">
-            <div><span>Sessions</span><strong>{{ summary.total_sessions }}</strong></div>
-            <div><span>Avg Score</span><strong>{{ summary.average_score }}</strong></div>
-            <div><span>Duration</span><strong>{{ summary.total_duration_minutes }}m</strong></div>
-            <div><span>Trend</span><strong>{{ trendDir }}</strong></div>
+        <section class="export-card desc-card">
+          <h2 class="section-title">{{ $t("exportReports.reportDesc") }}</h2>
+          <p class="desc-text">{{ $t("exportReports.reportDescText") }}</p>
+
+          <div class="preview-table-wrap">
+            <table class="preview-table">
+              <thead>
+                <tr>
+                  <th>{{ $t("exportReports.previewHeaderScope") }}</th>
+                  <th>{{ $t("exportReports.previewHeaderExercise") }}</th>
+                  <th>{{ $t("exportReports.previewHeaderSessions") }}</th>
+                  <th>{{ $t("exportReports.previewHeaderAvgScore") }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in previewRows" :key="row.exercise">
+                  <td>{{ row.scope }}</td>
+                  <td>{{ row.exerciseName }}</td>
+                  <td>{{ row.sessions }}</td>
+                  <td>{{ row.avgScore }}</td>
+                </tr>
+                <tr v-if="previewRows.length === 0">
+                  <td colspan="4" class="no-data">—</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          <div v-else class="preview-empty">
-            <p>{{ $t("exportReports.noData") }}</p>
-          </div>
-        </div>
+        </section>
       </aside>
-    </section>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { Download, FileDown, FileSpreadsheet, FileText } from "lucide-vue-next";
+import { useAuthStore } from "@/stores/auth";
+import {
+  ChevronDown,
+  Download,
+  FileSpreadsheet,
+  FileText,
+} from "lucide-vue-next";
 import StateDisplay from "@/components/StateDisplay.vue";
 import { getPersonalReport } from "@/api/reports";
+import { getSimpleExercises } from "@/api/exercises";
 
 const { t } = useI18n();
 
-interface SectionItem {
+interface ExerciseOption {
+  key: string;
+  name: string;
+}
+
+interface IncludeItem {
   key: string;
   label: string;
   enabled: boolean;
 }
 
 const formats = [
-  { value: "pdf", title: "PDF Document", desc: "Printable report with charts & stats", icon: FileText, color: "tone-red" },
-  { value: "csv", title: "CSV File", desc: "Raw session data in spreadsheet format", icon: FileSpreadsheet, color: "tone-green" },
+  {
+    value: "pdf",
+    title: computed(() => t("exportReports.pdfComprehensive")),
+    desc: computed(() => t("exportReports.pdfComprehensiveDesc")),
+    icon: FileText,
+    color: "tone-red",
+  },
+  {
+    value: "csv",
+    title: computed(() => t("exportReports.csvData")),
+    desc: computed(() => t("exportReports.csvDataDesc")),
+    icon: FileSpreadsheet,
+    color: "tone-green",
+  },
 ];
 
-const sections = ref<SectionItem[]>([
-  { key: "summary", label: t("exportReports.scoreSummary"), enabled: true },
-  { key: "sessions", label: t("exportReports.sessionList"), enabled: true },
-  { key: "trend", label: t("exportReports.scoreTrend"), enabled: true },
+const includeItems = ref<IncludeItem[]>([
+  { key: "summary", label: t("exportReports.includeSummary"), enabled: true },
+  { key: "charts", label: t("exportReports.includeCharts"), enabled: true },
+  { key: "sessions", label: t("exportReports.includeSessions"), enabled: true },
+  { key: "dimensions", label: t("exportReports.includeDimensions"), enabled: true },
+  { key: "suggestions", label: t("exportReports.includeSuggestions"), enabled: true },
 ]);
 
 const summary = ref({
@@ -148,60 +214,117 @@ const summary = ref({
   total_count: 0,
   valid_count: 0,
   error_count: 0,
-  trend: [] as { date: string; score: number }[],
-  recent_sessions: [] as { session_id: string; exercise: string; score: number; created_at: string }[],
+  by_exercise: [] as {
+    exercise: string;
+    sessions: number;
+    avg_score: number;
+  }[],
 });
 
+const exercises = ref<ExerciseOption[]>([]);
 const selectedFormat = ref("pdf");
-const dateFrom = ref("");
-const dateTo = ref("");
+const timeRange = ref("last7");
+const selectedExercise = ref("");
 const loading = ref(true);
 const exporting = ref(false);
 const error = ref("");
 
-const validRate = computed(() => {
-  const t = summary.value.total_count;
-  const v = summary.value.valid_count;
-  if (t === 0) return "0%";
-  return `${Math.round((v / t) * 100)}%`;
-});
-
-const trendDir = computed(() => {
-  const t = summary.value.trend;
-  if (t.length < 2) return "—";
-  const last = t[t.length - 1].score;
-  const first = t[0].score;
-  return last >= first ? "↑ Improving" : "↓ Declining";
-});
-
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
-function buildExportUrl(format: string): string {
+const previewRows = computed(() => {
+  const scopeMap: Record<string, string> = {
+    last7: t("exportReports.last7Days"),
+    last30: t("exportReports.last30Days"),
+    all: t("exportReports.allTime"),
+  };
+  const scope = scopeMap[timeRange.value] || scopeMap.all;
+  if (selectedExercise.value) {
+    const item = summary.value.by_exercise.find(
+      (it) => it.exercise === selectedExercise.value
+    );
+    if (!item) return [];
+    return [
+      {
+        scope,
+        exercise: item.exercise,
+        exerciseName: t(`exercises.${item.exercise}`) || item.exercise,
+        sessions: item.sessions,
+        avgScore: Number(item.avg_score).toFixed(1),
+      },
+    ];
+  }
+  return summary.value.by_exercise.map((item) => ({
+    scope,
+    exercise: item.exercise,
+    exerciseName: t(`exercises.${item.exercise}`) || item.exercise,
+    sessions: item.sessions,
+    avgScore: Number(item.avg_score).toFixed(1),
+  }));
+});
+
+function computeDateRange(range: string): { dateFrom: string; dateTo: string } {
+  const today = new Date();
+  const toStr = today.toISOString().slice(0, 10);
+  if (range === "all") return { dateFrom: "", dateTo: "" };
+  const days = range === "last30" ? 30 : 7;
+  const from = new Date(today);
+  from.setDate(from.getDate() - days);
+  return { dateFrom: from.toISOString().slice(0, 10), dateTo: toStr };
+}
+
+function buildExportUrl(format: string, range: string, exercise: string): string {
   const params = new URLSearchParams();
   params.set("format", format);
-  if (dateFrom.value) params.set("date_from", dateFrom.value);
-  if (dateTo.value) params.set("date_to", dateTo.value);
+  const { dateFrom, dateTo } = computeDateRange(range);
+  if (dateFrom) params.set("date_from", dateFrom);
+  if (dateTo) params.set("date_to", dateTo);
+  if (exercise) params.set("exercise", exercise);
   return `${API_BASE}/reports/export?${params.toString()}`;
 }
 
-function downloadFile(url: string, filename: string) {
+async function downloadFile(url: string, filename: string) {
+  const authStore = useAuthStore();
+  if (!authStore.token) {
+    throw new Error("未登录，请重新登录后再试");
+  }
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${authStore.token}` },
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(`下载失败 (${response.status}): ${text || response.statusText}`);
+  }
+  const contentType = response.headers.get("Content-Type") || "";
+  if (!contentType.includes("application/pdf") && !contentType.includes("text/csv")) {
+    const text = await response.text();
+    throw new Error(`服务器返回了非文件内容: ${text.slice(0, 200)}`);
+  }
+  const blob = await response.blob();
+  const blobUrl = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url;
+  a.href = blobUrl;
   a.download = filename;
-  a.target = "_blank";
+  a.style.display = "none";
   document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+  }, 1000);
 }
 
 async function handleExport() {
   exporting.value = true;
   error.value = "";
   try {
-    const url = buildExportUrl(selectedFormat.value);
+    const url = buildExportUrl(
+      selectedFormat.value,
+      timeRange.value,
+      selectedExercise.value
+    );
     const ext = selectedFormat.value;
     const dateStr = new Date().toISOString().slice(0, 10);
-    downloadFile(url, `training_report_${dateStr}.${ext}`);
+    await downloadFile(url, `training_report_${dateStr}.${ext}`);
   } catch (err: any) {
     error.value = err.message || t("exportReports.exportFailed");
   } finally {
@@ -209,14 +332,35 @@ async function handleExport() {
   }
 }
 
-async function quickExport(format: string) {
+async function quickExport(format: string, range: string) {
   selectedFormat.value = format;
+  timeRange.value = range;
   await handleExport();
+}
+
+function normalizeByExercise(data: Record<string, unknown>) {
+  const legacy = data.by_exercise as { exercise: string; sessions: number; avg_score: number }[] | undefined;
+  if (legacy?.length) return legacy;
+
+  const breakdown = (data.exercise_breakdown || []) as {
+    exercise: string;
+    count?: number;
+    sessions?: number;
+    avg_score: number;
+  }[];
+  return breakdown.map((item) => ({
+    exercise: item.exercise,
+    sessions: item.sessions ?? item.count ?? 0,
+    avg_score: item.avg_score,
+  }));
 }
 
 onMounted(async () => {
   try {
-    const data = await getPersonalReport();
+    const [data, exRaw] = await Promise.all([
+      getPersonalReport(),
+      getSimpleExercises().catch(() => ({ items: [] })),
+    ]);
     summary.value = {
       total_sessions: data.total_sessions || 0,
       average_score: data.average_score || 0,
@@ -224,14 +368,24 @@ onMounted(async () => {
       total_count: (data as any).total_count || 0,
       valid_count: (data as any).valid_count || 0,
       error_count: (data as any).error_count || 0,
-      trend: (data as any).trend || (data as any).recent_trend || [],
-      recent_sessions: (data as any).recent_sessions || [],
+      by_exercise: normalizeByExercise(data as Record<string, unknown>),
     };
-  } catch {
+    // /exercises/simple 返回 { items: [...] }，兼容处理
+    const rawList = Array.isArray(exRaw) ? exRaw : (exRaw as any).items ?? [];
+    exercises.value = rawList.map((it: any) => ({
+      key: it.key,
+      name: it.name || t(`exercises.${it.key}`) || it.key,
+    }));
+  } catch (err: any) {
+    error.value = err?.message || "加载数据失败";
     summary.value = {
-      total_sessions: 0, average_score: 0, total_duration_minutes: 0,
-      total_count: 0, valid_count: 0, error_count: 0,
-      trend: [], recent_sessions: [],
+      total_sessions: 0,
+      average_score: 0,
+      total_duration_minutes: 0,
+      total_count: 0,
+      valid_count: 0,
+      error_count: 0,
+      by_exercise: [],
     };
   } finally {
     loading.value = false;
@@ -240,63 +394,339 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.export-page { display: grid; gap: 24px; }
+.export-page {
+  display: grid;
+  gap: 24px;
+}
 
-.summary-card-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-.summary-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; display: grid; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
-.summary-card span { color: #94a3b8; font-size: 12px; }
-.summary-card strong { font-size: 26px; font-weight: 900; }
-.tone-text-blue { color: #5b8cff; }
-.tone-text-green { color: #25b87b; }
-.tone-text-purple { color: #8b5cf6; }
-.tone-text-orange { color: #f97316; }
+.export-layout {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
 
-.export-layout { display: grid; grid-template-columns: 1.6fr 1fr; gap: 24px; align-items: start; }
-.export-main { display: grid; gap: 20px; }
+.export-main {
+  display: grid;
+  gap: 20px;
+}
 
-.export-card { padding: 24px; border-radius: 14px; background: #ffffff; border: 1px solid #e2e8f0; display: grid; gap: 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
-.export-card h2 { color: #0f172a; font-size: 16px; margin: 0; }
+.export-side {
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
 
-.format-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.format-option { display: flex; align-items: flex-start; gap: 12px; padding: 16px; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fbff; cursor: pointer; text-align: left; color: #64748b; }
-.format-option:hover { border-color: #5b8cff; background: rgba(91,140,255,0.04); }
-.format-option.selected { border-color: #5b8cff; background: rgba(91,140,255,0.06); }
-.format-option strong { display: block; color: #0f172a; font-size: 14px; margin-bottom: 2px; }
-.format-option small { font-size: 11px; color: #94a3b8; }
-.settings-icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; flex-shrink: 0; }
-.tone-red { background: rgba(239,68,68,0.1); color: #ef4444; }
-.tone-green { background: rgba(37,184,123,0.1); color: #25b87b; }
+.export-card {
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(59, 130, 246, 0.12);
+  border-radius: 16px;
+  padding: 24px;
+  display: grid;
+  gap: 18px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(8px);
+}
 
-.export-field { display: grid; gap: 8px; color: #475569; font-size: 13px; font-weight: 600; }
-.date-range-row { display: flex; align-items: center; gap: 8px; }
-.date-input { flex: 1; padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fbff; color: #0f172a; font-size: 14px; }
+.section-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #f8fafc;
+}
 
-.include-list { display: grid; gap: 8px; }
-.include-list > span { color: #475569; font-size: 13px; font-weight: 600; }
-.include-list label { display: flex; align-items: center; gap: 8px; color: #64748b; font-size: 13px; cursor: pointer; }
-.include-list input { accent-color: #5b8cff; }
+.format-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
 
-.primary-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 24px; border: none; border-radius: 9px; background: linear-gradient(135deg, #5b8cff, #4f46e5); color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; }
-.primary-button:disabled { opacity: 0.5; cursor: not-allowed; }
-.error-message { color: #ef4444; background: rgba(239,68,68,0.06); padding: 10px 14px; border-radius: 8px; font-size: 13px; }
+.format-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(59, 130, 246, 0.12);
+  border-radius: 12px;
+  background: rgba(8, 13, 26, 0.5);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
 
-.quick-export-card { padding: 24px; border-radius: 14px; background: #ffffff; border: 1px solid #e2e8f0; display: grid; gap: 12px; align-content: start; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
-.quick-export-card h2 { color: #0f172a; font-size: 16px; margin: 0; }
-.quick-button { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 9px; background: #f8fbff; color: #64748b; font-size: 13px; font-weight: 600; cursor: pointer; }
-.quick-button.active { border-color: #5b8cff; background: rgba(91,140,255,0.06); color: #5b8cff; }
-.quick-button:disabled { opacity: 0.4; cursor: not-allowed; }
-.quick-button:hover:not(:disabled) { background: rgba(91,140,255,0.04); border-color: #5b8cff; }
+.format-option:hover {
+  border-color: rgba(59, 130, 246, 0.3);
+  background: rgba(59, 130, 246, 0.08);
+}
 
-.recent-export-box { margin-top: 12px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
-.recent-export-box h3 { color: #94a3b8; font-size: 12px; margin: 0 0 10px; }
-.preview-stats { display: grid; gap: 8px; }
-.preview-stats div { display: flex; justify-content: space-between; color: #64748b; font-size: 13px; }
-.preview-stats strong { color: #0f172a; }
-.preview-empty p { color: #94a3b8; font-size: 13px; margin: 0; }
+.format-option.selected {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.format-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.tone-red {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+}
+
+.tone-green {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+}
+
+.format-info {
+  display: grid;
+  gap: 4px;
+}
+
+.format-info strong {
+  color: #f8fafc;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.format-info small {
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.filter-field {
+  display: grid;
+  gap: 8px;
+}
+
+.filter-field > span {
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.select-wrap {
+  position: relative;
+}
+
+.dark-select {
+  width: 100%;
+  appearance: none;
+  padding: 12px 36px 12px 14px;
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: 10px;
+  background: rgba(8, 13, 26, 0.6);
+  color: #f8fafc;
+  font-size: 14px;
+  cursor: pointer;
+  outline: none;
+}
+
+.dark-select:focus {
+  border-color: #3b82f6;
+}
+
+.dark-select option {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+.select-arrow {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.include-section {
+  display: grid;
+  gap: 12px;
+}
+
+.include-title {
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.include-list {
+  display: grid;
+  gap: 10px;
+}
+
+.include-list label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #cbd5e1;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.include-list input[type="checkbox"] {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 4px;
+  background: rgba(8, 13, 26, 0.5);
+  position: relative;
+  cursor: pointer;
+}
+
+.include-list input[type="checkbox"]:checked {
+  background: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.include-list input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 5px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.download-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 24px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.download-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.download-button:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+.no-data-hint {
+  padding: 12px 16px;
+  color: #94a3b8;
+  font-size: 13px;
+  background: rgba(239, 68, 68, 0.06);
+  border-radius: 10px;
+  border: 1px solid rgba(239, 68, 68, 0.15);
+}
+
+.error-message {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.08);
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.quick-list {
+  display: grid;
+  gap: 10px;
+}
+
+.quick-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid rgba(59, 130, 246, 0.12);
+  border-radius: 10px;
+  background: rgba(8, 13, 26, 0.4);
+  color: #cbd5e1;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.quick-button:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.25);
+}
+
+.quick-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.desc-card {
+  gap: 14px;
+}
+
+.desc-text {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.preview-table-wrap {
+  overflow-x: auto;
+}
+
+.preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.preview-table th,
+.preview-table td {
+  padding: 10px 8px;
+  text-align: left;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.1);
+}
+
+.preview-table th {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.preview-table td {
+  color: #cbd5e1;
+}
+
+.preview-table .no-data {
+  text-align: center;
+  color: #64748b;
+  padding: 20px 8px;
+}
 
 @media (max-width: 1000px) {
-  .export-layout { grid-template-columns: 1fr; }
-  .summary-card-grid { grid-template-columns: repeat(2, 1fr); }
-  .format-grid { grid-template-columns: 1fr; }
+  .export-layout {
+    grid-template-columns: 1fr;
+  }
+  .format-grid,
+  .filter-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
