@@ -53,6 +53,30 @@ EXERCISE_CORE_METRICS: dict[str, list[CoreMetricDefinition]] = {
         CoreMetricDefinition(label="身体直线角", feature_key="body_line_angle"),
         CoreMetricDefinition(label="手腕高度", feature_key="wrist_height"),
     ],
+    "mountain_climber": [
+        CoreMetricDefinition(label="身体直线角", feature_key="body_line_angle"),
+        CoreMetricDefinition(label="髋角", feature_key="hip_angle"),
+        CoreMetricDefinition(label="提膝高度", feature_key="knee_raise"),
+    ],
+    "pull_up": [
+        CoreMetricDefinition(label="肘角", feature_key="elbow_angle"),
+        CoreMetricDefinition(label="身体摆动", feature_key="body_line_angle"),
+        CoreMetricDefinition(label="左右对称差", feature_key="symmetry_diff"),
+    ],
+    "dumbbell_curl": [
+        CoreMetricDefinition(label="肘角", feature_key="elbow_angle"),
+        CoreMetricDefinition(label="肩角", feature_key="shoulder_angle"),
+        CoreMetricDefinition(label="左右对称差", feature_key="symmetry_diff"),
+    ],
+    "dumbbell_press": [
+        CoreMetricDefinition(label="肘角", feature_key="elbow_angle"),
+        CoreMetricDefinition(label="肩角", feature_key="shoulder_angle"),
+        CoreMetricDefinition(label="左右对称差", feature_key="symmetry_diff"),
+    ],
+    "russian_twist": [
+        CoreMetricDefinition(label="旋转幅度", feature_key="rotation_offset"),
+        CoreMetricDefinition(label="躯干角", feature_key="trunk_angle"),
+    ],
 }
 
 

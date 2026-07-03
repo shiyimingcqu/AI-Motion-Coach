@@ -110,27 +110,25 @@
 
         <aside class="metric-rail">
           <div>
-            <p class="eyebrow">Live Metrics</p>
-            <h2>实时数据面板</h2>
+            <p class="eyebrow">Analysis Metrics</p>
+            <h2>分析数据面板</h2>
           </div>
           <MetricTile label="当前动作" :value="exerciseMeta.name" :hint="selectedExercise" />
           <MetricTile label="阶段" :value="store.stage" hint="当前动作阶段" />
-          <MetricTile label="次数" :value="store.count" hint="total count" />
-          <MetricTile label="有效次数" :value="store.validCount" hint="valid count" />
-          <MetricTile label="评分" :value="store.score" hint="实时评分" />
+          <MetricTile label="评分" :value="store.score" hint="分析评分" />
 
           <div v-if="message" class="alert-line">{{ message }}</div>
           <div v-if="cameraError" class="alert-line danger">{{ cameraError }}</div>
 
-          <div class="error-stack">
+          <div class="error-stack error-stack--errors">
             <strong>错误提示</strong>
-            <span v-if="store.errors.length === 0">暂无错误</span>
+            <span v-if="store.errors.length === 0" class="stack-empty">暂无错误</span>
             <span v-for="error in store.errors" :key="error">{{ error }}</span>
           </div>
 
-          <div class="error-stack">
-            <strong>实时建议</strong>
-            <span v-if="store.feedbacks.length === 0">暂无建议</span>
+          <div class="error-stack error-stack--advice">
+            <strong>动作建议</strong>
+            <span v-if="store.feedbacks.length === 0" class="stack-empty">暂无建议</span>
             <span v-for="advice in store.feedbacks" :key="advice">{{ advice }}</span>
           </div>
 
@@ -283,8 +281,8 @@ onBeforeUnmount(() => {
   padding: 0 12px;
   border: 1px solid var(--line, #d5ded2);
   border-radius: 6px;
-  background: #fffdf2;
-  color: var(--ink, #16211b);
+  background: var(--panel, #111827);
+  color: var(--ink, #e6edf7);
   font-size: 14px;
 }
 

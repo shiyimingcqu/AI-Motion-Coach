@@ -2,6 +2,7 @@ import json
 import os
 import time
 from pathlib import Path
+import urllib.error
 import urllib.request
 
 from app.services.analysis.unified_feedback_service import UnifiedFeedbackResult
@@ -39,10 +40,20 @@ def generate_ai_advice(payload: dict) -> dict:
             {
                 "role": "system",
                 "content": (
-                    "你是专业健身动作教练，基于系统提供的结构化反馈数据，"
-                    "用中文给出语言流畅、鼓励性强的训练建议。"
-                    "不要添加系统未提及的问题，不要编造数据。"
-                    "重点放在：1)肯定优点 2)解释问题原因 3)给出可执行的改进方法。"
+                    "你是一位亲切、专业的健身动作教练，擅长把系统检测到的动作问题转化为温暖、易懂、有行动力的训练建议。\n"
+                    "写作要求：\n"
+                    "1. 仅基于用户提供的「检测到的问题」和「系统建议」作答，不编造未提及的问题。\n"
+                    "2. 语气积极鼓励，措辞自然流畅，避免生硬说教或机械罗列。\n"
+                    "3. 使用 Markdown 排版，四个固定小节标题分别为：\n"
+                    "   ## 🌟 整体评价\n"
+                    "   ## ⚠️ 主要问题\n"
+                    "   ## 💡 改进建议\n"
+                    "   ## 🎯 下次训练重点\n"
+                    "4. 每个小节标题保留 emoji；正文可适度使用 emoji 点缀（每节 1-3 个），但不要堆砌。\n"
+                    "5. 「改进建议」用有序列表（1. 2. 3.），每条建议具体可执行，聚焦动作细节（姿态、深度、节奏、发力等）。\n"
+                    "6. 「下次训练重点」控制在 1-2 句话，简洁有力。\n"
+                    "7. 禁止提及完成次数、有效次数、计数、评分、百分比等任何统计数据；"
+                    "只谈动作质量本身及如何改进。"
                 ),
             },
             {"role": "user", "content": prompt},
@@ -60,8 +71,17 @@ def generate_ai_advice(payload: dict) -> dict:
         },
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        data = json.loads(response.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        error_body = exc.read().decode("utf-8", "ignore").strip()
+        print(f"AI advice HTTPError: status={exc.code}, reason={exc.reason}, body={error_body}")
+        detail = error_body[:300] if error_body else exc.reason
+        raise ValueError(f"AI advice failed: provider returned {exc.code}, detail={detail}") from exc
+    except urllib.error.URLError as exc:
+        print(f"AI advice URLError: reason={exc.reason}")
+        raise ValueError(f"AI advice failed: network error, detail={exc.reason}") from exc
     text = (
         data.get("choices", [{}])[0]
         .get("message", {})
@@ -76,30 +96,19 @@ def generate_ai_advice(payload: dict) -> dict:
 
 
 def build_prompt_from_unified_feedback(payload: dict) -> str:
-    """从统一反馈格式构建 prompt。
-
-    统一反馈格式由 unified_feedback_service.format_for_ai() 生成：
-    - errors: 主要问题列表
-    - feedbacks: 改进建议列表
-    - metrics: 关键指标
-    - score: 综合评分
-    - level: 等级
-    - total_reps/valid_reps: 动作次数统计
-    """
+    """从统一反馈格式构建 prompt，仅传递动作问题与建议，不含次数/评分。"""
     exercise = payload.get("exercise", "squat")
     errors = payload.get("errors", [])
     feedbacks = payload.get("feedbacks", [])
-    metrics = payload.get("metrics", {})
-    score = payload.get("score", 0)
-    level = payload.get("level", "unknown")
-    total_reps = payload.get("total_reps", 0)
-    valid_reps = payload.get("valid_reps", 0)
 
-    # 构建结构化提示
-    sections = [
-        f"【动作类型】{exercise}",
-        f"【完成情况】完成 {total_reps} 次，有效 {valid_reps} 次，综合评分 {score} 分（{level}）",
-    ]
+    exercise_label = {
+        "squat": "深蹲",
+        "push_up": "俯卧撑",
+        "plank": "平板支撑",
+        "jumping_jack": "开合跳",
+    }.get(exercise, exercise)
+
+    sections = [f"【动作类型】{exercise_label}"]
 
     if errors:
         sections.append(f"【检测到的问题】{'; '.join(errors)}")
@@ -109,15 +118,19 @@ def build_prompt_from_unified_feedback(payload: dict) -> str:
     if feedbacks:
         sections.append(f"【系统建议】{'; '.join(feedbacks)}")
 
-    if metrics:
-        metrics_str = ", ".join([f"{k}: {v}" for k, v in metrics.items()])
-        sections.append(f"【关键指标】{metrics_str}")
-
-    sections.append("\n请基于以上数据，输出一份专业的动作评估与改进建议：")
-    sections.append("1. 【整体评价】先肯定做得好的地方")
-    sections.append("2. 【主要问题】解释检测到的具体问题及可能原因")
-    sections.append("3. 【改进建议】给出可执行的改进方法（用有序列表）")
-    sections.append("4. 【下次训练重点】用1-2句话总结优先级")
+    sections.append(
+        "\n请基于以上动作问题与建议，用 Markdown 输出一份美观、温暖、可执行的动作指导报告。"
+        "只讨论动作形态与改进方法，不要提及次数、有效次数、评分或任何统计数据。"
+        "严格按以下四个小节输出，标题必须完全一致："
+    )
+    sections.append("## 🌟 整体评价")
+    sections.append("（2-3 句话，肯定训练态度或做得好的方面，语气真诚）")
+    sections.append("## ⚠️ 主要问题")
+    sections.append("（解释检测到的动作问题及可能原因，通俗易懂，不夸大）")
+    sections.append("## 💡 改进建议")
+    sections.append("（用有序列表给出 3-4 条具体、可落地的动作改进方法）")
+    sections.append("## 🎯 下次训练重点")
+    sections.append("（1-2 句话，说明下次最应优先改善的动作细节）")
 
     return "\n".join(sections)
 

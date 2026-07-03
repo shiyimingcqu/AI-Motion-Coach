@@ -72,6 +72,36 @@ EXERCISES = [
         supported_metrics=["count","valid_count","score"],
         core_angles=get_core_angle_labels("burpee"), core_feature_keys=get_core_feature_keys("burpee"),
     ),
+    ExerciseDefinition(
+        key="mountain_climber", name="登山跑", description="评估平板姿势、提膝高度和核心稳定。",
+        supported_metrics=["count", "valid_count", "score"],
+        core_angles=get_core_angle_labels("mountain_climber"),
+        core_feature_keys=get_core_feature_keys("mountain_climber"),
+    ),
+    ExerciseDefinition(
+        key="pull_up", name="引体向上", description="评估上拉幅度、身体控制和左右对称。",
+        supported_metrics=["count", "valid_count", "score"],
+        core_angles=get_core_angle_labels("pull_up"),
+        core_feature_keys=get_core_feature_keys("pull_up"),
+    ),
+    ExerciseDefinition(
+        key="dumbbell_curl", name="哑铃弯举", description="评估弯举幅度和上臂稳定性。",
+        supported_metrics=["count", "valid_count", "score"],
+        core_angles=get_core_angle_labels("dumbbell_curl"),
+        core_feature_keys=get_core_feature_keys("dumbbell_curl"),
+    ),
+    ExerciseDefinition(
+        key="dumbbell_press", name="哑铃推举", description="评估推举幅度和肩部控制。",
+        supported_metrics=["count", "valid_count", "score"],
+        core_angles=get_core_angle_labels("dumbbell_press"),
+        core_feature_keys=get_core_feature_keys("dumbbell_press"),
+    ),
+    ExerciseDefinition(
+        key="russian_twist", name="俄罗斯转体", description="评估躯干旋转幅度和核心控制。",
+        supported_metrics=["count", "valid_count", "score"],
+        core_angles=get_core_angle_labels("russian_twist"),
+        core_feature_keys=get_core_feature_keys("russian_twist"),
+    ),
 ]
 
 

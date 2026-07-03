@@ -1,9 +1,14 @@
 # Python
 __pycache__/
 *.py[cod]
+.pytest_cache/
 .venv/
 venv/
 .env
+.env.local
+
+# 本地说明，不上传
+README.md
 
 # Node / frontend
 node_modules/

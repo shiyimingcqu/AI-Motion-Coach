@@ -11,6 +11,57 @@ except ModuleNotFoundError:
 
 router = APIRouter(prefix="/feedback", tags=["feedback"]) if APIRouter else None
 
+_SEVERITY_TO_API = {
+    "error": "high",
+    "warning": "medium",
+    "info": "info",
+    "high": "high",
+    "medium": "medium",
+    "low": "low",
+}
+
+
+def _map_severity(raw: str) -> str:
+    return _SEVERITY_TO_API.get(raw, "medium")
+
+
+def _fallback_feedback_items(sess: SessionORM) -> list[dict]:
+    """当 feedback_summary 无结构化 items 时的兜底逻辑。"""
+    total = sess.total_count or 0
+    valid = sess.valid_count or 0
+
+    if total <= 0:
+        return [{
+            "id": f"fb-{sess.session_id}-none",
+            "session_id": sess.session_id,
+            "exercise": sess.exercise,
+            "issue": "未检测到完成的动作",
+            "severity": "medium",
+            "suggestion": "请确保身体完整出现在画面中，并完成至少一次完整动作",
+            "created_at": sess.created_at.isoformat(),
+        }]
+
+    if valid > 0:
+        return [{
+            "id": f"fb-{sess.session_id}-ok",
+            "session_id": sess.session_id,
+            "exercise": sess.exercise,
+            "issue": "",
+            "severity": "info",
+            "suggestion": "动作完成良好，继续保持良好的动作质量！",
+            "created_at": sess.created_at.isoformat(),
+        }]
+
+    return [{
+        "id": f"fb-{sess.session_id}-invalid",
+        "session_id": sess.session_id,
+        "exercise": sess.exercise,
+        "issue": "动作未达到有效标准",
+        "severity": "medium",
+        "suggestion": "关注动作深度、身体姿态与节奏，优先保证每次动作质量",
+        "created_at": sess.created_at.isoformat(),
+    }]
+
 
 if router:
 
@@ -29,7 +80,6 @@ if router:
             query = db.query(SessionORM).order_by(SessionORM.created_at.desc())
             user_id = current_user.id if current_user else None
 
-            # Non-admin users only see their own feedback
             if user_id and current_user.role != "admin":
                 query = query.filter(SessionORM.user_id == user_id)
 
@@ -40,41 +90,47 @@ if router:
             items: list[dict] = []
 
             for sess in sessions:
-                # 优先使用 session 中保存的真实反馈摘要
-                if sess.feedback_summary:
-                    try:
-                        import json
-                        fb_data = json.loads(sess.feedback_summary)
-                        issues = fb_data.get("issues", [])
-                        suggestions = fb_data.get("suggestions", [])
+                if not sess.feedback_summary:
+                    items.extend(_fallback_feedback_items(sess))
+                    continue
 
-                        # 如果没有问题，显示正面反馈
-                        if not issues:
-                            items.append({
-                                "id": f"fb-{sess.session_id}-ok",
-                                "session_id": sess.session_id,
-                                "exercise": sess.exercise,
-                                "issue": "动作完成良好",
-                                "severity": "low",
-                                "suggestion": suggestions[0] if suggestions else "继续保持良好的动作质量！",
-                                "created_at": sess.created_at.isoformat(),
-                            })
-                        else:
-                            # 显示真实的问题和建议
-                            for i, (issue, suggestion) in enumerate(zip(issues, suggestions)):
-                                severity = "high" if i == 0 else "medium" if i == 1 else "low"
-                                items.append({
-                                    "id": f"fb-{sess.session_id}-{i}",
-                                    "session_id": sess.session_id,
-                                    "exercise": sess.exercise,
-                                    "issue": issue,
-                                    "severity": severity,
-                                    "suggestion": suggestion,
-                                    "created_at": sess.created_at.isoformat(),
-                                })
-                        continue
-                    except Exception:
-                        pass  # 解析失败时跳过，不再使用预设假数据
+                try:
+                    import json
+                    fb_data = json.loads(sess.feedback_summary)
+                except Exception:
+                    items.extend(_fallback_feedback_items(sess))
+                    continue
+
+                structured_items = fb_data.get("items") or []
+                if structured_items:
+                    for index, entry in enumerate(structured_items):
+                        items.append({
+                            "id": f"fb-{sess.session_id}-{index}",
+                            "session_id": sess.session_id,
+                            "exercise": sess.exercise,
+                            "issue": entry.get("issue", ""),
+                            "severity": _map_severity(entry.get("severity", "warning")),
+                            "suggestion": entry.get("suggestion", ""),
+                            "created_at": sess.created_at.isoformat(),
+                        })
+                    continue
+
+                issues = fb_data.get("issues", [])
+                suggestions = fb_data.get("suggestions", [])
+
+                if issues:
+                    for index, (issue, suggestion) in enumerate(zip(issues, suggestions)):
+                        items.append({
+                            "id": f"fb-{sess.session_id}-{index}",
+                            "session_id": sess.session_id,
+                            "exercise": sess.exercise,
+                            "issue": issue,
+                            "severity": "high" if index == 0 else "medium" if index == 1 else "low",
+                            "suggestion": suggestion,
+                            "created_at": sess.created_at.isoformat(),
+                        })
+                else:
+                    items.extend(_fallback_feedback_items(sess))
 
             return {"items": items, "total": len(items)}
         finally:

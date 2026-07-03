@@ -160,10 +160,8 @@ if router:
                 return saved_session
 
             summary = analyzer.get_session_summary()
-            if summary["total_count"] <= 0:
-                return None
 
-            # 创建 session
+            # 即使未计次也保存 session，便于跳转反馈页展示分析建议
             saved_session = session_service.create_session(
                 exercise=summary["exercise"],
                 duration_seconds=summary["duration_seconds"],
@@ -174,31 +172,26 @@ if router:
                 user_id=user_id,
             )
 
-            # 保存反馈摘要
+            # 保存反馈摘要（含 AI 建议，生成失败则仅保存结构化反馈）
             try:
                 from app.services.analysis.unified_feedback_service import (
                     build_unified_feedback_from_analyzer,
                     unified_feedback_service,
                 )
+                from app.services.session.feedback_persistence import (
+                    build_feedback_data,
+                    save_session_feedback_summary,
+                )
+
                 unified_feedback = build_unified_feedback_from_analyzer(analyzer)
                 formatted = unified_feedback_service.format_for_ai(unified_feedback)
-                feedback_data = {
-                    "issues": formatted["errors"],
-                    "suggestions": formatted["feedbacks"],
-                    "metrics": formatted["metrics"],
-                    "score": formatted["score"],
-                    "level": formatted["level"],
-                }
-                db = SessionLocal()
-                try:
-                    sess = db.query(SessionORM).filter(
-                        SessionORM.session_id == saved_session.session_id
-                    ).first()
-                    if sess:
-                        sess.feedback_summary = json.dumps(feedback_data, ensure_ascii=False)
-                        db.commit()
-                finally:
-                    db.close()
+                feedback_data = build_feedback_data(unified_feedback, formatted)
+                save_session_feedback_summary(
+                    saved_session.session_id,
+                    feedback_data,
+                    generate_ai=True,
+                    exercise=summary["exercise"],
+                )
             except Exception:
                 pass  # 反馈保存失败不影响主流程
 
@@ -253,6 +246,8 @@ if router:
                 keypoints = _parse_keypoints(payload.get("keypoints", {}))
                 result = analyzer.analyze_frame(keypoints, state)
                 result["metrics"] = result.get("features", {})
+                result["stage"] = result.get("stage") or result.get("phase", "")
+                result["errors"] = result.get("errors") or result.get("issues", [])
                 result["type"] = "analysis"
                 await websocket.send_json(result)
 

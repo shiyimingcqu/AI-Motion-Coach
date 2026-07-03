@@ -10,6 +10,7 @@ export interface SessionRecord {
   error_count: number;
   average_score: number;
   created_at: string;
+  feedback_summary?: string | null;
 }
 
 export interface SessionsResponse {

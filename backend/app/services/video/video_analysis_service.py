@@ -224,7 +224,12 @@ class VideoAnalysisService:
             )
             session_id = session.session_id
             try:
-                self._save_feedback_summary(session_id, formatted_feedback)
+                self._save_feedback_summary(
+                    session_id,
+                    formatted_feedback,
+                    unified_feedback,
+                    session_summary["exercise"],
+                )
             except Exception:
                 pass
 
@@ -251,24 +256,25 @@ class VideoAnalysisService:
             },
         }
 
-    def _save_feedback_summary(self, session_id: str, formatted_feedback: dict) -> None:
-        feedback_data = {
-            "issues": formatted_feedback["errors"],
-            "suggestions": formatted_feedback["feedbacks"],
-            "metrics": formatted_feedback["metrics"],
-            "score": formatted_feedback["score"],
-            "level": formatted_feedback["level"],
-        }
-        db = SessionLocal()
-        try:
-            sess = db.query(SessionORM).filter(
-                SessionORM.session_id == session_id
-            ).first()
-            if sess:
-                sess.feedback_summary = json.dumps(feedback_data, ensure_ascii=False)
-                db.commit()
-        finally:
-            db.close()
+    def _save_feedback_summary(
+        self,
+        session_id: str,
+        formatted_feedback: dict,
+        unified_feedback: dict | None = None,
+        exercise: str = "squat",
+    ) -> None:
+        from app.services.session.feedback_persistence import (
+            build_feedback_data,
+            save_session_feedback_summary,
+        )
+
+        feedback_data = build_feedback_data(unified_feedback or {}, formatted_feedback)
+        save_session_feedback_summary(
+            session_id,
+            feedback_data,
+            generate_ai=True,
+            exercise=exercise,
+        )
 
     @staticmethod
     def _iter_capture_frames(capture: cv2.VideoCapture, limit: int):

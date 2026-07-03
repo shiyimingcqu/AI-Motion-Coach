@@ -99,24 +99,33 @@ if router:
         )
 
         if body.issues or body.suggestions:
-            import json
             from app.db.session import SessionLocal
+            from app.services.session.feedback_persistence import (
+                build_feedback_data,
+                save_session_feedback_summary,
+            )
 
-            feedback_data = {
-                "issues": body.issues,
-                "suggestions": body.suggestions,
+            formatted = {
+                "errors": body.issues or [],
+                "feedbacks": body.suggestions or [],
                 "metrics": {},
                 "score": body.average_score,
                 "level": "unknown",
             }
+            unified = {"items": []}
+            feedback_data = build_feedback_data(unified, formatted)
+            save_session_feedback_summary(
+                session.session_id,
+                feedback_data,
+                generate_ai=True,
+                exercise=body.exercise,
+            )
             db = SessionLocal()
             try:
                 sess = db.query(SessionORM).filter(
                     SessionORM.session_id == session.session_id
                 ).first()
                 if sess:
-                    sess.feedback_summary = json.dumps(feedback_data, ensure_ascii=False)
-                    db.commit()
                     db.refresh(sess)
                     session = sess
             finally:

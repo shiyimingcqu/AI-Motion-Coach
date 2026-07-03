@@ -6,7 +6,6 @@ export interface AiAdvicePayload {
   stage?: string;
   errors: string[];
   feedbacks: string[];
-  metrics?: Record<string, number | string>;
 }
 
 export interface AiAdviceResult {
@@ -35,7 +34,6 @@ export function useAiAdvice() {
         stage: payload.stage || "completed",
         errors: payload.errors,
         feedbacks: payload.feedbacks,
-        metrics: payload.metrics || {},
       });
 
       aiAdvice.value = response.text;

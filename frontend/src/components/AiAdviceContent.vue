@@ -6,9 +6,11 @@ const props = withDefaults(
   defineProps<{
     content: string;
     placeholder?: string;
+    theme?: "light" | "dark";
   }>(),
   {
     placeholder: "暂无 AI 建议。",
+    theme: "dark",
   }
 );
 
@@ -16,21 +18,41 @@ const html = computed(() => (props.content?.trim() ? renderMarkdown(props.conten
 </script>
 
 <template>
-  <div v-if="html" class="ai-advice-markdown" v-html="html" />
-  <p v-else class="ai-advice-markdown ai-advice-markdown--empty">{{ placeholder }}</p>
+  <div
+    class="ai-advice-markdown"
+    :class="[`ai-advice-markdown--${theme}`, { 'ai-advice-markdown--empty-state': !html }]"
+  >
+    <div v-if="html" v-html="html" />
+    <p v-else>{{ placeholder }}</p>
+  </div>
 </template>
 
 <style scoped>
 .ai-advice-markdown {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #cbd5e1;
+  font-size: 14px;
+  line-height: 1.75;
   word-break: break-word;
 }
 
-.ai-advice-markdown--empty {
+.ai-advice-markdown--dark {
+  color: #cbd5e1;
+}
+
+.ai-advice-markdown--light {
+  color: #334155;
+}
+
+.ai-advice-markdown--empty-state p {
+  margin: 0;
+}
+
+.ai-advice-markdown--dark.ai-advice-markdown--empty-state p {
   color: #94a3b8;
+}
+
+.ai-advice-markdown--light.ai-advice-markdown--empty-state p {
+  color: #64748b;
 }
 
 .ai-advice-markdown :deep(p) {
@@ -41,18 +63,33 @@ const html = computed(() => (props.content?.trim() ? renderMarkdown(props.conten
   margin-bottom: 0;
 }
 
-.ai-advice-markdown :deep(strong) {
+.ai-advice-markdown--dark :deep(strong) {
   color: #f1f5f9;
   font-weight: 600;
 }
 
-.ai-advice-markdown :deep(h1),
-.ai-advice-markdown :deep(h2),
-.ai-advice-markdown :deep(h3),
-.ai-advice-markdown :deep(h4) {
+.ai-advice-markdown--light :deep(strong) {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.ai-advice-markdown--dark :deep(h1),
+.ai-advice-markdown--dark :deep(h2),
+.ai-advice-markdown--dark :deep(h3),
+.ai-advice-markdown--dark :deep(h4) {
   margin: 0.9em 0 0.5em;
   color: #e2e8f0;
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ai-advice-markdown--light :deep(h1),
+.ai-advice-markdown--light :deep(h2),
+.ai-advice-markdown--light :deep(h3),
+.ai-advice-markdown--light :deep(h4) {
+  margin: 1em 0 0.55em;
+  color: #0f172a;
+  font-size: 15px;
   font-weight: 600;
 }
 
@@ -73,10 +110,18 @@ const html = computed(() => (props.content?.trim() ? renderMarkdown(props.conten
   margin-bottom: 0.35em;
 }
 
-.ai-advice-markdown :deep(code) {
+.ai-advice-markdown--dark :deep(code) {
   padding: 0.1em 0.35em;
   border-radius: 4px;
   background: rgba(148, 163, 184, 0.15);
+  font-size: 12px;
+}
+
+.ai-advice-markdown--light :deep(code) {
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: #eef2ff;
+  color: #3730a3;
   font-size: 12px;
 }
 

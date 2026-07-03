@@ -162,6 +162,140 @@ class AnalysisTests(unittest.TestCase):
 
         self.assertIn("下蹲深度整体偏浅", issues)
 
+    def test_push_up_summarize_rep_uses_minimum_elbow_angle(self):
+        analyzer = get_analyzer("push_up")
+        samples = [
+            {"elbow_angle": 150.0, "body_line_angle": 5.0, "hip_sag_angle": 4.0, "symmetry_diff": 3.0},
+            {"elbow_angle": 88.0, "body_line_angle": 8.0, "hip_sag_angle": 6.0, "symmetry_diff": 4.0},
+            {"elbow_angle": 120.0, "body_line_angle": 6.0, "hip_sag_angle": 5.0, "symmetry_diff": 3.0},
+        ]
+
+        summary = analyzer.summarize_rep(samples)
+
+        self.assertEqual(summary["elbow_angle"], 88.0)
+
+    def test_push_up_rep_summary_flags_shallow_depth(self):
+        analyzer = get_analyzer("push_up")
+        summary = {
+            "elbow_angle": 115.0,
+            "body_line_angle": 8.0,
+            "hip_sag_angle": 6.0,
+            "symmetry_diff": 4.0,
+            "max_elbow_angle_step": 8.0,
+        }
+
+        result = analyzer.score_rep(summary)
+
+        self.assertIn("下降幅度不足", result["issues"])
+        self.assertLess(result["score"], 90)
+
+    def test_jumping_jack_summarize_rep_uses_peak_spread(self):
+        analyzer = get_analyzer("jumping_jack")
+        samples = [
+            {"spread_ratio": 2.0, "wrist_height": 0.10, "shoulder_abduction_angle": 90.0, "arm_angle_diff": 4.0},
+            {"spread_ratio": 4.5, "wrist_height": 0.28, "shoulder_abduction_angle": 155.0, "arm_angle_diff": 5.0},
+            {"spread_ratio": 3.2, "wrist_height": 0.20, "shoulder_abduction_angle": 120.0, "arm_angle_diff": 6.0},
+        ]
+
+        summary = analyzer.summarize_rep(samples)
+
+        self.assertEqual(summary["spread_ratio"], 4.5)
+
+    def test_jumping_jack_rep_summary_flags_insufficient_arm_raise(self):
+        analyzer = get_analyzer("jumping_jack")
+        summary = {
+            "spread_ratio": 4.0,
+            "wrist_height": 0.08,
+            "shoulder_abduction_angle": 100.0,
+            "arm_angle_diff": 5.0,
+            "max_spread_step": 0.5,
+        }
+
+        result = analyzer.score_rep(summary)
+
+        self.assertIn("手臂上举幅度不足", result["issues"])
+        self.assertLess(result["score"], 85)
+
+    def test_plank_score_rep_flags_poor_body_line(self):
+        analyzer = get_analyzer("plank")
+        summary = {
+            "body_line_angle": 22.0,
+            "hip_sag_angle": 18.0,
+            "elbow_offset": 0.04,
+            "max_body_jitter": 6.0,
+        }
+
+        result = analyzer.score_rep(summary)
+
+        self.assertIn("塌腰或撅臀明显，身体未保持直线", result["issues"])
+        self.assertLess(result["score"], 80)
+
+    def test_plank_holding_phase_scores_positive(self):
+        analyzer = get_analyzer("plank")
+        features = {
+            "body_line_angle": 5.0,
+            "hip_sag_angle": 7.0,
+            "elbow_offset": 0.03,
+            "neck_angle": 55.0,
+        }
+
+        result = analyzer.score_frame(features, "holding")
+
+        self.assertGreaterEqual(result["score"], 75)
+        self.assertEqual(result["issues"], [])
+
+    def test_registry_includes_all_exercises(self):
+        expected = {
+            "squat", "push_up", "jumping_jack", "plank",
+            "lunge", "glute_bridge", "high_knees", "burpee",
+            "mountain_climber", "pull_up", "dumbbell_curl",
+            "dumbbell_press", "russian_twist",
+        }
+        from app.services.analysis.analyzers.registry import ANALYZER_CLASSES
+
+        self.assertEqual(set(ANALYZER_CLASSES.keys()), expected)
+        for key in expected:
+            analyzer = get_analyzer(key)
+            self.assertEqual(analyzer.exercise_type, key)
+
+    def test_lunge_rep_summary_flags_shallow_depth(self):
+        analyzer = get_analyzer("lunge")
+        result = analyzer.score_rep({
+            "knee_angle": 115.0,
+            "max_trunk_angle": 14.0,
+            "max_knee_symmetry_diff": 12.0,
+            "max_knee_angle_step": 12.0,
+        })
+        self.assertIn("弓步下蹲深度不足", result["issues"])
+
+    def test_glute_bridge_rep_summary_flags_low_extension(self):
+        analyzer = get_analyzer("glute_bridge")
+        result = analyzer.score_rep({
+            "hip_angle": 145.0,
+            "min_body_line_angle": 6.0,
+            "max_hip_angle_step": 15.0,
+        })
+        self.assertIn("抬臀高度不足", result["issues"])
+
+    def test_high_knees_rep_summary_flags_low_height(self):
+        analyzer = get_analyzer("high_knees")
+        result = analyzer.score_rep({
+            "knee_height": 0.08,
+            "knee_angle": 110.0,
+            "max_left_knee_h": 0.09,
+            "max_right_knee_h": 0.08,
+            "max_height_step": 0.05,
+        })
+        self.assertIn("抬膝高度不足", result["issues"])
+
+    def test_burpee_rep_summary_flags_shallow_squat(self):
+        analyzer = get_analyzer("burpee")
+        result = analyzer.score_rep({
+            "min_hip_angle": 130.0,
+            "plank_body_line_angle": 18.0,
+            "max_wrist_height": 0.20,
+        })
+        self.assertIn("下蹲阶段深度不足", result["issues"])
 
 
 if __name__ == "__main__":
