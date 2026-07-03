@@ -43,8 +43,8 @@ export const router = createRouter({
     { path: "/export", component: ExportReportsView, meta: { userOnly: true } },
     { path: "/reference-videos", component: ReferenceVideosView, meta: { userOnly: true } },
     { path: "/training-result", component: TrainingResultView, meta: { userOnly: true } },
-    { path: "/profile", component: ProfileView, meta: { userOnly: true, layoutTransition: "layout-slide-up" } },
-    { path: "/settings", component: SettingsView, meta: { userOnly: true, layoutTransition: "layout-slide-up" } },
+    { path: "/profile", component: ProfileView, meta: { userOnly: true, layoutTransition: "page-soft-forward" } },
+    { path: "/settings", component: SettingsView, meta: { userOnly: true, layoutTransition: "page-soft-forward" } },
 
     // 兼容 main 分支的管理路由（重定向到 admin 后台）
     { path: "/rules", redirect: "/admin/rules" },
