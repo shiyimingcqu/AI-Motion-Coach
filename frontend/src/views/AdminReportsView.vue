@@ -12,6 +12,17 @@
       </button>
     </header>
 
+    <!-- 用户筛选 -->
+    <section class="panel filter-bar">
+      <label class="filter-label">
+        <span>筛选用户</span>
+        <select v-model="selectedUserId" class="filter-select" @change="loadReports">
+          <option :value="null">全部用户</option>
+          <option v-for="u in userList" :key="u.id" :value="u.id">{{ u.username }}</option>
+        </select>
+      </label>
+    </section>
+
     <section class="admin-grid">
       <article class="panel">
         <div class="section-title">
@@ -58,6 +69,10 @@
         </div>
         <dl class="info-list info-list-readonly">
           <div>
+            <dt>用户</dt>
+            <dd>{{ selectedReport.user }}</dd>
+          </div>
+          <div>
             <dt>报告标题</dt>
             <dd>{{ selectedReport.title }}</dd>
           </div>
@@ -99,22 +114,39 @@ interface AdminReport {
   error_count: number;
 }
 
+interface UserItem {
+  id: number;
+  username: string;
+}
+
 const reports = ref<AdminReport[]>([]);
 const highlights = ref<string[]>([]);
 const loading = ref(true);
 const loadError = ref("");
 const selectedReport = ref<AdminReport | null>(null);
+const selectedUserId = ref<number | null>(null);
+const userList = ref<UserItem[]>([]);
 
 function formatDate(value: string) {
-  return value ? value.slice(0, 10) : "-";
+  if (!value) return "-";
+  return new Date(value).toLocaleDateString("zh-CN");
+}
+
+async function loadUsers() {
+  try {
+    const data = await apiGet<{ items: UserItem[] }>("/admin/users");
+    userList.value = data.items ?? [];
+  } catch {
+    // ignore
+  }
 }
 
 async function loadReports() {
   loading.value = true;
   loadError.value = "";
-
   try {
-    const data = await apiGet<{ items: AdminReport[]; highlights: string[] }>("/admin/reports");
+    const query = selectedUserId.value !== null ? `?user_id=${selectedUserId.value}` : "";
+    const data = await apiGet<{ items: AdminReport[]; highlights: string[] }>(`/admin/reports${query}`);
     reports.value = data.items ?? [];
     highlights.value = data.highlights ?? [];
   } catch (error) {
@@ -124,5 +156,41 @@ async function loadReports() {
   }
 }
 
-onMounted(loadReports);
+onMounted(async () => {
+  await loadUsers();
+  await loadReports();
+});
 </script>
+
+<style scoped>
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  margin-bottom: 0.5rem;
+}
+.filter-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff !important;
+}
+.filter-select {
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  border: 2px solid #3b82f6;
+  background: #fff;
+  color: #16211b !important;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-width: 140px;
+}
+.filter-select option {
+  color: #16211b;
+  background: #fff;
+}
+</style>

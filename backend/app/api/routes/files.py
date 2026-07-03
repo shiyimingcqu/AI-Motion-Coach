@@ -14,17 +14,21 @@ except ModuleNotFoundError:
 router = APIRouter(prefix="/files", tags=["files"]) if APIRouter else None
 
 
+_BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+
+
 def _resolve_storage_path(file_path: str) -> Path:
-    storage_root = Path(settings.storage_root).resolve()
+    """Resolve storage file path — handles both absolute and relative paths."""
     target = Path(file_path)
     if not target.is_absolute():
-        target = Path.cwd() / target
-    target = target.resolve()
-
-    if storage_root not in target.parents and target != storage_root:
-        raise HTTPException(status_code=403, detail="file path is outside storage root")
+        # Relative path → resolve against backend root
+        target = (_BACKEND_ROOT / file_path).resolve()
     if not target.exists() or not target.is_file():
         raise HTTPException(status_code=404, detail="file not found")
+    # Security: ensure the resolved path is under a storage directory
+    storage_root = (_BACKEND_ROOT / settings.storage_root).resolve()
+    if storage_root not in target.parents and target != storage_root:
+        raise HTTPException(status_code=403, detail="file path is outside storage root")
     return target
 
 

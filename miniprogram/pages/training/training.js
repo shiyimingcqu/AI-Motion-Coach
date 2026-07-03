@@ -20,44 +20,28 @@ Page({
     cameraPosition: 'front',   // front | back
     cameraPosLabel: '前置',
 
-    // 评分与计数
+    // 评分
     currentScore: 0,
     totalCount: 0,
     validCount: 0,
     errorCount: 0,
-    calories: 0,
     currentPhase: '',
     issues: [],
     feedback: [],
 
-    // 三项关键角度指标
-    metrics: {
-      knee: '--',
-      hip: '--',
-      torso: '--'
-    },
-
     // 骨架
     currentKeypoints: null,
-    scoreColor: '#4f8cff',
+    scoreColor: '#3b82f6',
     phaseLabel: '',
 
-    // 底部快速切换动作
-    quickActions: [
-      { key: 'squat', name: '深蹲', icon: '🦵' },
-      { key: 'push_up', name: '俯卧撑', icon: '💪' },
-      { key: 'jumping_jack', name: '开合跳', icon: '🤸' },
-      { key: 'plank', name: '平板支撑', icon: '🧘' },
-    ],
-
     // 调试信息
-    debugFrames: 0,
-    debugOkFrames: 0,
-    debugErrors: 0,
-    debugWsStatus: '未连接',
-    debugLastError: '',
-    debugFrameSize: '',
-    showDebug: false,
+    debugFrames: 0,         // 已发送帧数
+    debugOkFrames: 0,       // 成功返回关键点的帧数
+    debugErrors: 0,         // 错误次数
+    debugWsStatus: '未连接', // WebSocket 状态
+    debugLastError: '',     // 最后错误信息
+    debugFrameSize: '',     // 帧尺寸
+    showDebug: true,        // 显示调试面板
 
     // 内部
     startTime: 0,
@@ -66,7 +50,7 @@ Page({
     isDemoMode: false,
     demoVideoSrc: '',
     demoProgress: '',
-    _errorCountTotal: 0,
+    _errorCountTotal: 0,    // 用于限制 toast 频率
   },
 
   // WebSocket 相关
@@ -235,35 +219,16 @@ Page({
         const phase = data.phase || data.current_phase || '';
         const phaseLabel = phase ? '当前阶段: ' + phase : '';
 
-        // 三项关键角度（兼容多种字段名）
-        const metrics = this.data.metrics;
-        const newMetrics = {
-          knee: data.knee_angle != null ? Math.round(data.knee_angle)
-                : (data.metrics && data.metrics.knee) != null ? Math.round(data.metrics.knee)
-                : metrics.knee,
-          hip:  data.hip_angle  != null ? Math.round(data.hip_angle)
-                : (data.metrics && data.metrics.hip)  != null ? Math.round(data.metrics.hip)
-                : metrics.hip,
-          torso: data.torso_angle != null ? Math.round(data.torso_angle)
-                : (data.metrics && data.metrics.torso) != null ? Math.round(data.metrics.torso)
-                : metrics.torso,
-        };
-
-        // 卡路里估算：基于动作次数，假定每次 5.6 kcal（与设计稿 12 次 68kcal 一致）
-        const calories = Math.round(totalCount * 5.6);
-
         this.setData({
           currentScore: score,
           scoreColor: level.color,
           totalCount,
           validCount,
           errorCount,
-          calories,
           currentPhase: phase,
           phaseLabel,
           issues,
           feedback,
-          metrics: newMetrics,
         });
 
         if (score > 0) {
@@ -276,37 +241,6 @@ Page({
         this.onTrainingFinished(data.session || data);
         break;
     }
-  },
-
-  // 切换动作（底部 tab）
-  switchExercise(e) {
-    const key = e.currentTarget.dataset.key;
-    if (!key || key === this.data.exerciseKey) return;
-    if (this.data.state === 'running' || this.data.state === 'paused') {
-      wx.showModal({
-        title: '切换动作',
-        content: '切换动作会结束当前训练，确定继续吗？',
-        success: (res) => {
-          if (res.confirm) this._doFinishThenRedirect(key);
-        }
-      });
-    } else {
-      const config = EXERCISE_CONFIG[key] || {};
-      this.setData({ exerciseKey: key, exerciseName: config.name || '训练' });
-    }
-  },
-
-  _doFinishThenRedirect(nextKey) {
-    this._doFinish();
-    setTimeout(() => {
-      wx.redirectTo({ url: `/pages/training/training?exercise=${nextKey}` });
-    }, 1500);
-  },
-
-  // 暂停/继续（设计稿大按钮）
-  togglePause() {
-    if (this.data.state === 'running') this.pauseTraining();
-    else if (this.data.state === 'paused') this.resumeTraining();
   },
 
   // ========== 帧处理 ==========

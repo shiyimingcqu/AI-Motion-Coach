@@ -1,100 +1,72 @@
-<!-- 训练结果/评估报告页 -->
+<!-- 训练结果页 -->
 <view class="result-page">
-  <!-- 顶部导航 -->
-  <view class="top-bar" style="padding-top: {{statusBarHeight}}px;">
-    <view class="top-bar-content">
-      <view class="back-btn" bindtap="goBack">
-        <text class="back-arrow">‹</text>
+  <!-- 头部 - 得分环 -->
+  <view class="result-header" style="background: {{exerciseConfig.accentColor}}">
+    <view class="header-bg"></view>
+    <text class="exercise-tag">{{exerciseConfig.name}}</text>
+
+    <view class="score-ring-wrapper">
+      <score-ring score="{{averageScore}}" size="200" lineWidth="12"></score-ring>
+    </view>
+
+    <text class="result-message">{{resultMessage}}</text>
+  </view>
+
+  <!-- 训练数据卡片 -->
+  <view class="result-content">
+    <view class="card stats-card">
+      <view class="stats-grid">
+        <view class="stat-box">
+          <text class="stat-number">{{durationText}}</text>
+          <text class="stat-desc">训练时长</text>
+        </view>
+        <view class="stat-box">
+          <text class="stat-number">{{totalCount}}</text>
+          <text class="stat-desc">总次数</text>
+        </view>
+        <view class="stat-box">
+          <text class="stat-number" style="color: #22c55e">{{validCount}}</text>
+          <text class="stat-desc">有效次数</text>
+        </view>
+        <view class="stat-box">
+          <text class="stat-number" style="color: #ef4444">{{errorCount}}</text>
+          <text class="stat-desc">错误次数</text>
+        </view>
       </view>
-      <text class="top-title">评估报告</text>
-      <view class="share-btn" bindtap="onShare">↗</view>
+    </view>
+
+    <!-- 动作要点回顾 -->
+    <view class="card tips-card" wx:if="{{exerciseConfig.phases}}">
+      <view class="card-title">动作阶段</view>
+      <view class="phases-row">
+        <view class="phase-badge" wx:for="{{exerciseConfig.phases}}" wx:key="index">
+          {{item}}
+        </view>
+      </view>
+    </view>
+
+    <!-- 提示信息 -->
+    <view class="card improve-card" wx:if="{{averageScore < 90}}">
+      <view class="card-title">💡 改进建议</view>
+      <view class="improve-list">
+        <text class="improve-item">• 保持动作标准，注意关键角度控制</text>
+        <text class="improve-item">• 控制动作节奏，避免过快或过慢</text>
+        <text class="improve-item" wx:if="{{errorCount > 0}}">• 关注错误提示，针对性改进薄弱环节</text>
+      </view>
+    </view>
+
+    <view class="card improve-card" wx:if="{{averageScore >= 90}}">
+      <view class="card-title">🎉 太棒了！</view>
+      <view class="improve-list">
+        <text class="improve-item">• 动作标准度很高，继续保持！</text>
+        <text class="improve-item">• 可以尝试增加训练次数或提高难度</text>
+      </view>
     </view>
   </view>
 
-  <scroll-view class="result-scroll" scroll-y enhanced show-scrollbar="{{false}}">
-    <!-- 综合评分卡 -->
-    <view class="score-hero">
-      <view class="score-hero-row">
-        <view class="score-hero-left">
-          <text class="score-hero-label">综合评分</text>
-          <view class="score-hero-num">
-            <text class="score-hero-value">{{averageScore}}</text>
-            <text class="score-hero-unit">分</text>
-          </view>
-        </view>
-        <view class="score-hero-right">
-          <view class="score-tag">{{levelLabel}}</view>
-          <view class="score-stars">
-            <text wx:for="{{stars}}" wx:key="index" class="star">★</text>
-          </view>
-        </view>
-      </view>
-      <view class="score-meta">
-        <text>评估时长：{{durationText}}</text>
-        <text class="dot-sep">·</text>
-        <text>完成时间：{{finishedAt}}</text>
-      </view>
-    </view>
-
-    <!-- 雷达图 -->
-    <view class="card section-card">
-      <view class="radar-wrap">
-        <view class="radar-svg-wrap">
-          <rich-text nodes="{{radarSVG}}" class="radar-rich"></rich-text>
-          <view class="radar-labels">
-            <text class="radar-label radar-label-top">动作完成度 {{radar.completion}}</text>
-            <text class="radar-label radar-label-right">稳定性 {{radar.stability}}</text>
-            <text class="radar-label radar-label-bottom">节奏控制 {{radar.tempo}}</text>
-            <text class="radar-label radar-label-left">标准度 {{radar.standard}}</text>
-            <text class="radar-label radar-label-left-bottom">移动速度 {{radar.speed}}</text>
-          </view>
-        </view>
-        <view class="radar-legend">
-          <view class="legend-dot legend-blue"></view>
-          <text>本次表现</text>
-          <view class="legend-dot legend-gray" style="margin-left: 24rpx;"></view>
-          <text>标准水平</text>
-        </view>
-      </view>
-    </view>
-
-    <!-- 关键问题分析 -->
-    <view class="card section-card">
-      <view class="section-title-text">关键问题分析</view>
-      <view class="issue-list">
-        <view class="issue-item" wx:for="{{issues}}" wx:key="index">
-          <view class="issue-bullet">{{item.level === 'major' ? '!' : (item.level === 'minor' ? 'i' : '·')}}</view>
-          <view class="issue-content">
-            <view class="issue-title">{{item.title}}</view>
-            <view class="issue-desc">{{item.desc}}</view>
-          </view>
-          <view class="issue-tag {{item.level === 'major' ? 'issue-tag-major' : 'issue-tag-minor'}}">
-            {{item.level === 'major' ? '主要问题' : '次要问题'}}
-          </view>
-        </view>
-      </view>
-    </view>
-
-    <!-- 改进建议 -->
-    <view class="card section-card">
-      <view class="section-title-text">改进建议</view>
-      <view class="suggest-list">
-        <view class="suggest-item" wx:for="{{suggestions}}" wx:key="index">
-          <view class="suggest-icon {{item.iconClass}}">{{item.icon}}</view>
-          <view class="suggest-text">
-            <view class="suggest-title">{{item.title}}</view>
-            <view class="suggest-desc">{{item.desc}}</view>
-          </view>
-        </view>
-      </view>
-    </view>
-
-    <view style="height: 40rpx;"></view>
-  </scroll-view>
-
   <!-- 底部按钮 -->
   <view class="result-footer">
-    <button class="btn btn-outline footer-btn" bindtap="onShare">↗ 分享报告</button>
-    <button class="btn btn-primary footer-btn" bindtap="onSave">↓ 保存报告</button>
+    <button class="btn btn-outline" bindtap="goBack">返回首页</button>
+    <button class="btn btn-primary" bindtap="trainAgain">再来一次</button>
   </view>
 </view>

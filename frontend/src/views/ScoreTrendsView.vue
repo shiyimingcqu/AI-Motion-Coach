@@ -3,10 +3,29 @@
   <div v-else class="score-trends-page">
     <header class="section-page-header">
       <div>
-        <h1>Score Trends / 分数趋势</h1>
-        <p>Analyze performance trends and patterns over time</p>
+        <h1>{{ $t("scoreTrends.title") }}</h1>
+        <p>{{ $t("scoreTrends.subtitle") }}</p>
       </div>
     </header>
+
+    <section class="filter-card trend-filter-card">
+      <label>
+        <span>{{ $t("scoreTrends.exerciseFilter") }}</span>
+        <select v-model="exerciseFilter" @change="loadData">
+          <option value="">{{ $t("scoreTrends.allExercises") }}</option>
+          <option v-for="ex in EXERCISE_OPTIONS" :key="ex.key" :value="ex.key">{{ ex.name }}</option>
+        </select>
+      </label>
+      <label>
+        <span>{{ $t("scoreTrends.timeRange") }}</span>
+        <select v-model="rangePreset" @change="applyRange">
+          <option value="7d">{{ $t("scoreTrends.last7Days") }}</option>
+          <option value="all">{{ $t("scoreTrends.allTime") }}</option>
+        </select>
+      </label>
+    </section>
+
+    <p v-if="loadError" class="trend-load-error">{{ loadError }}</p>
 
     <section class="summary-card-grid">
       <article v-for="item in stats" :key="item.label" class="summary-card compact-summary">
@@ -16,53 +35,65 @@
       </article>
     </section>
 
-    <section class="progress-card">
-      <header class="chart-card-header">
-        <h2>7-Day Score Trend / 7天分数趋势</h2>
-        <select><option>Last 7 Days</option></select>
-      </header>
-      <div class="wide-line-chart score-line-chart">
-        <svg v-if="trendPoints.length" viewBox="0 0 1000 240" preserveAspectRatio="none">
-          <polyline :points="trendPolyline" fill="none" stroke="#4f7df3" stroke-width="3" />
-          <g fill="#4f7df3">
-            <circle v-for="(p, i) in trendPoints" :key="i" :cx="p.x" :cy="p.y" r="6" />
-          </g>
-        </svg>
-        <div v-if="trendLabels.length" class="chart-axis">
-          <span v-for="(label, i) in trendLabels" :key="i">{{ label }}</span>
-        </div>
-        <StateDisplay v-if="!trendPoints.length" type="empty" title="暂无趋势数据" text="完成训练后趋势图表将自动生成" />
+    <ReportCharts
+      v-if="hasChartData"
+      :charts="displayCharts"
+      :trend-series="trendSeries"
+      :radar-subtitle="radarSubtitle"
+      :trend-subtitle="trendSubtitle"
+    />
+
+    <section class="progress-card comparison-card">
+      <h2>{{ $t("scoreTrends.comparisonTitle") }}</h2>
+      <div v-if="comparisonRows.length" class="comparison-table-wrap">
+        <table class="comparison-table">
+          <thead>
+            <tr>
+              <th>{{ $t("scoreTrends.tableHead_exercise") }}</th>
+              <th>{{ $t("scoreTrends.tableHead_sessions") }}</th>
+              <th>{{ $t("scoreTrends.tableHead_avgScore") }}</th>
+              <th>{{ $t("scoreTrends.tableHead_latestScore") }}</th>
+              <th>{{ $t("scoreTrends.tableHead_bestScore") }}</th>
+              <th>{{ $t("scoreTrends.tableHead_validRate") }}</th>
+              <th>{{ $t("scoreTrends.tableHead_errors") }}</th>
+              <th>{{ $t("scoreTrends.tableHead_calories") }}</th>
+              <th>{{ $t("scoreTrends.tableHead_duration") }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in comparisonRows" :key="row.exercise">
+              <td><strong>{{ row.name }}</strong></td>
+              <td>{{ row.count }}</td>
+              <td>{{ row.avg_score }}</td>
+              <td>{{ row.latest_score }}</td>
+              <td>{{ row.best_score }}</td>
+              <td>{{ row.valid_rate }}%</td>
+              <td>{{ row.total_errors }}</td>
+              <td>{{ row.calories }} kcal</td>
+              <td>{{ row.duration_minutes }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-    </section>
-
-    <section class="score-two-grid">
-      <article class="progress-card">
-        <h2>Exercise Comparison / 动作对比</h2>
-        <div class="comparison-bars">
-          <span v-for="item in comparisons" :key="item.name" :style="{ height: `${item.score * 2.4}px` }"><b>{{ item.name }}</b></span>
-        </div>
-      </article>
-      <article class="progress-card">
-        <h2>Performance Categories / 表现类别</h2>
-        <div class="radar-visual">
-          <div class="radar-polygon" />
-          <span class="r-top">Form / 动作形态</span>
-          <span class="r-right">Balance / 平衡性</span>
-          <span class="r-bottom-right">Range / 幅度</span>
-          <span class="r-bottom">Speed / 速度</span>
-          <span class="r-left">Stability / 稳定性</span>
-          <span class="r-top-left">Alignment / 对齐</span>
-        </div>
-      </article>
+      <StateDisplay v-else type="empty" :title="$t('scoreTrends.noComparisonData')" :text="$t('scoreTrends.noComparisonText')" />
+      <div ref="comparisonChartRef" class="comparison-chart" />
     </section>
 
     <section class="progress-card">
-      <h2>Detailed Score Breakdown / 详细分数分析</h2>
-      <div class="score-breakdown-list">
-        <article v-for="item in breakdown" :key="item.name">
-          <header><strong>{{ item.name }}</strong><span>Current <b>{{ item.current }}</b> Change <b>+{{ item.change }}</b></span></header>
-          <div class="detail-score-bar"><i :style="{ width: `${item.current}%` }" /></div>
-          <footer><small>Previous: {{ item.previous }}</small><small>Average: {{ item.average }}</small></footer>
+      <h2>{{ $t("scoreTrends.perExerciseTitle") }}</h2>
+      <div class="exercise-trend-grid">
+        <article v-for="item in exerciseTrendCards" :key="item.exercise" class="trend-mini-card">
+          <header>
+            <strong>{{ item.name }}</strong>
+            <span>{{ $t("scoreTrends.daysRecorded", { count: item.trend.length }) }}</span>
+          </header>
+          <ul>
+            <li v-for="point in item.trend" :key="point.date">
+              <span>{{ point.date.slice(5) }}</span>
+              <b>{{ point.score }}</b>
+            </li>
+          </ul>
+          <p v-if="!item.trend.length" class="empty-hint">{{ $t("scoreTrends.noTrend") }}</p>
         </article>
       </div>
     </section>
@@ -70,128 +101,239 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
-import { getSessions, type SessionRecord } from "../api/sessions";
-import { getDashboardStats } from "../api/dashboard";
+import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useI18n } from "vue-i18n";
+import * as echarts from "echarts";
+import { getPersonalReport, type PersonalReport } from "../api/reports";
+import ReportCharts, { type TrendSeriesItem } from "../components/ReportCharts.vue";
 import StateDisplay from "../components/StateDisplay.vue";
 
-const sessions = ref<SessionRecord[]>([]);
-const statsData = ref<any>(null);
+const { t } = useI18n();
+
+const EXERCISE_OPTIONS = [
+  { key: "squat", name: t("exercises.squat") },
+  { key: "push_up", name: t("exercises.push_up") },
+  { key: "jumping_jack", name: t("exercises.jumping_jack") },
+  { key: "plank", name: t("exercises.plank") },
+];
+
+const personalReport = ref<PersonalReport | null>(null);
 const loading = ref(true);
+const loadError = ref("");
+const exerciseFilter = ref("");
+const rangePreset = ref("7d");
+const dateFrom = ref("");
+const dateTo = ref("");
+const comparisonChartRef = ref<HTMLElement | null>(null);
+let comparisonChart: echarts.ECharts | null = null;
 
-interface TrendPoint {
-  x: number;
-  y: number;
-  label: string;
-  score: number;
-}
+const displayCharts = computed(() => {
+  const charts = personalReport.value?.charts;
+  if (!charts) {
+    return {
+      score_trend: [],
+      calorie_by_exercise: [],
+      exercise_distribution: [],
+      quality_radar: { dimensions: [], values: [] },
+      error_by_exercise: [],
+    };
+  }
+  if (!exerciseFilter.value) return charts;
 
-const trendData = computed<Array<{ date?: string; score: number }>>(() => statsData.value?.recent_trend || []);
+  const perRadar = charts.per_exercise_radar?.[exerciseFilter.value];
+  return {
+    ...charts,
+    quality_radar: perRadar?.dimensions?.length
+      ? perRadar
+      : charts.quality_radar,
+    calorie_by_exercise: charts.calorie_by_exercise.filter(
+      (c) => c.name === exerciseName(exerciseFilter.value),
+    ),
+    exercise_distribution: charts.exercise_distribution.filter(
+      (c) => c.name === exerciseName(exerciseFilter.value),
+    ),
+    error_by_exercise: charts.error_by_exercise.filter(
+      (c) => c.name === exerciseName(exerciseFilter.value),
+    ),
+  };
+});
 
-const trendPoints = computed<TrendPoint[]>(() => {
-  const data = trendData.value;
-  if (!data || data.length < 2) return [];
-  const width = 1000;
-  const height = 240;
-  const padding = 30;
-  const scores = data.map((d: any) => d.score);
-  const minScore = Math.max(0, Math.min(...scores) - 10);
-  const maxScore = Math.min(100, Math.max(...scores) + 10);
-  const range = maxScore - minScore || 1;
+const trendSeries = computed<TrendSeriesItem[]>(() => {
+  const trends = personalReport.value?.exercise_trends || personalReport.value?.charts?.score_trend_by_exercise || [];
+  if (exerciseFilter.value) {
+    const one = trends.find((t) => t.exercise === exerciseFilter.value);
+    return one ? [{ name: one.name, trend: one.trend }] : [];
+  }
+  return trends.map((t) => ({ name: t.name, trend: t.trend }));
+});
 
-  return data.map((d: any, i: number) => ({
-    x: Math.round(padding + (i / (data.length - 1)) * (width - 2 * padding)),
-    y: Math.round(height - padding - ((d.score - minScore) / range) * (height - 2 * padding)),
-    label: d.date?.slice(5) || "",
-    score: d.score,
+const trendSubtitle = computed(() =>
+  exerciseFilter.value
+    ? `${exerciseName(exerciseFilter.value)} · ${t("scoreTrends.recent7DayScoreTrend")}`
+    : t("scoreTrends.allExercisesScoreTrend"),
+);
+
+const radarSubtitle = computed(() =>
+  exerciseFilter.value
+    ? `${exerciseName(exerciseFilter.value)} ${t("scoreTrends.qualityDimension")}`
+    : t("scoreTrends.qualityAssessment"),
+);
+
+const hasChartData = computed(() =>
+  (personalReport.value?.total_sessions ?? 0) > 0
+  || trendSeries.value.some((s) => s.trend.length > 0),
+);
+
+const comparisonRows = computed(() =>
+  personalReport.value?.exercise_comparison
+  || personalReport.value?.exercise_breakdown
+  || [],
+);
+
+const exerciseTrendCards = computed(() => {
+  const trends = personalReport.value?.exercise_trends
+    || personalReport.value?.charts?.score_trend_by_exercise
+    || [];
+  if (exerciseFilter.value) {
+    return trends.filter((t) => t.exercise === exerciseFilter.value);
+  }
+  return trends.length ? trends : EXERCISE_OPTIONS.map((ex) => ({
+    exercise: ex.key,
+    name: ex.name,
+    trend: [] as { date: string; score: number }[],
   }));
 });
 
-const trendPolyline = computed(() =>
-  trendPoints.value.map(p => `${p.x},${p.y}`).join(" ")
-);
-
-const trendLabels = computed(() =>
-  trendPoints.value.map(p => p.label)
-);
-
 const stats = computed(() => {
-  const avg = statsData.value?.average_score || 0;
-  const trend = statsData.value?.recent_trend || [];
-  const trendScores = trend.map((d: any) => d.score);
-  const peak = trendScores.length ? Math.max(...trendScores) : 0;
-  const peakDate = trendScores.length ? trend[trendScores.indexOf(peak)]?.date || "" : "";
-  const weekAgo = trendScores.length >= 2 ? trendScores[trendScores.length - 1] - trendScores[0] : 0;
-  const avgSessionScore = sessions.value.length
-    ? Math.round(sessions.value.reduce((s, x) => s + x.average_score, 0) / sessions.value.length)
+  const report = personalReport.value;
+  const trend = report?.trend || [];
+  const trendScores = trend.map((d) => d.score);
+  const scoreDelta = trendScores.length >= 2
+    ? Math.round((trendScores[trendScores.length - 1] - trendScores[0]) * 10) / 10
     : 0;
   return [
-    { label: "Current Avg / 当前平均分", value: avgSessionScore || avg, hint: weekAgo >= 0 ? `+${weekAgo} vs last week` : `${weekAgo} vs last week`, tone: weekAgo >= 0 ? "tone-text-green" : "" },
-    { label: "Peak Score / 最高分", value: peak, hint: peakDate || "-", tone: "" },
-    { label: "Improvement / 改进率", value: sessions.value.length >= 2 ? `+${Math.max(0, weekAgo)}%` : "New", hint: "Last 7 days", tone: "tone-text-green" },
-    { label: "Total Sessions / 总次数", value: sessions.value.length, hint: "Total training sessions", tone: "" },
+    {
+      label: t("scoreTrends.currentAvgScore"),
+      value: report?.average_score ?? "--",
+      hint: exerciseFilter.value ? exerciseName(exerciseFilter.value) : t("scoreTrends.allExercises"),
+      tone: "",
+    },
+    {
+      label: t("scoreTrends.trendChange"),
+      value: trendScores.length >= 2 ? `${scoreDelta >= 0 ? "+" : ""}${scoreDelta}` : "--",
+      hint: t("scoreTrends.weekComparison"),
+      tone: scoreDelta >= 0 ? "tone-text-green" : "",
+    },
+    {
+      label: t("scoreTrends.totalCalories"),
+      value: `${report?.total_calories ?? 0} kcal`,
+      hint: t("scoreTrends.estimatedCalories"),
+      tone: "tone-text-orange",
+    },
+    {
+      label: t("scoreTrends.totalSessions"),
+      value: report?.total_sessions ?? 0,
+      hint: rangePreset.value === "7d" ? t("scoreTrends.last7Days") : t("scoreTrends.allTime"),
+      tone: "",
+    },
   ];
 });
 
-const comparisons = computed(() => {
-  const byEx: Record<string, number[]> = {};
-  for (const s of sessions.value) {
-    if (!byEx[s.exercise]) byEx[s.exercise] = [];
-    byEx[s.exercise].push(s.average_score);
-  }
-  const result = Object.entries(byEx).map(([key, scores]) => ({
-    name: exerciseName(key),
-    score: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
-  }));
-  return result.length ? result : [{ name: "No data", score: 0 }];
-});
-
-const breakdown = computed(() => {
-  const byEx: Record<string, { current: number; previous: number; count: number; scores: number[] }> = {};
-  for (const s of sessions.value) {
-    if (!byEx[s.exercise]) byEx[s.exercise] = { current: 0, previous: 0, count: 0, scores: [] };
-    byEx[s.exercise].scores.push(s.average_score);
-    byEx[s.exercise].current = s.average_score;
-    byEx[s.exercise].count += 1;
-  }
-  return Object.entries(byEx).map(([key, vals]) => {
-    const prev = vals.scores.length >= 2 ? vals.scores[vals.scores.length - 2] : vals.current;
-    const avg = vals.scores.length
-      ? Math.round(vals.scores.reduce((a, b) => a + b, 0) / vals.scores.length)
-      : vals.current;
-    return {
-      name: exerciseName(key),
-      current: vals.current,
-      change: vals.scores.length >= 2 ? vals.current - prev : 0,
-      previous: prev,
-      average: avg,
-    };
-  }).slice(0, 5);
-});
-
 function exerciseName(key: string): string {
-  const map: Record<string, string> = {
-    squat: "深蹲", push_up: "俯卧撑", jumping_jack: "开合跳", plank: "平板支撑",
+  const exerciseNames: Record<string, string> = {
+    squat: t("exercises.squat"),
+    push_up: t("exercises.push_up"),
+    jumping_jack: t("exercises.jumping_jack"),
+    plank: t("exercises.plank"),
   };
-  return map[key] ?? key;
+  return exerciseNames[key] ?? key;
 }
 
-onMounted(async () => {
+function applyRange() {
+  const today = new Date();
+  if (rangePreset.value === "7d") {
+    const from = new Date(today);
+    from.setDate(from.getDate() - 6);
+    dateFrom.value = from.toISOString().slice(0, 10);
+    dateTo.value = today.toISOString().slice(0, 10);
+  } else {
+    dateFrom.value = "";
+    dateTo.value = "";
+  }
+  loadData();
+}
+
+function renderComparisonChart() {
+  if (!comparisonChartRef.value || !comparisonRows.value.length) return;
+  comparisonChart?.dispose();
+  comparisonChart = echarts.init(comparisonChartRef.value);
+  const rows = comparisonRows.value;
+  comparisonChart.setOption({
+    tooltip: { trigger: "axis" },
+    legend: { data: [t("scoreTrends.tableHead_avgScore"), t("scoreTrends.tableHead_latestScore"), t("scoreTrends.tableHead_bestScore")], textStyle: { color: "#94a3b8" } },
+    grid: { left: 40, right: 20, top: 40, bottom: 50 },
+    xAxis: {
+      type: "category",
+      data: rows.map((r) => r.name),
+      axisLabel: { color: "#94a3b8" },
+    },
+    yAxis: { type: "value", max: 100, axisLabel: { color: "#94a3b8" } },
+    series: [
+      { name: t("scoreTrends.tableHead_avgScore"), type: "bar", data: rows.map((r) => r.avg_score), itemStyle: { color: "#60a5fa" } },
+      { name: t("scoreTrends.tableHead_latestScore"), type: "bar", data: rows.map((r) => r.latest_score ?? r.avg_score), itemStyle: { color: "#34d399" } },
+      { name: t("scoreTrends.tableHead_bestScore"), type: "bar", data: rows.map((r) => r.best_score ?? r.avg_score), itemStyle: { color: "#f59e0b" } },
+    ],
+  });
+}
+
+async function loadData() {
+  loading.value = true;
+  loadError.value = "";
   try {
-    const [sessRes, statsRes] = await Promise.allSettled([
-      getSessions({ limit: 200 }),
-      getDashboardStats(),
-    ]);
-    if (sessRes.status === "fulfilled") {
-      sessions.value = sessRes.value.items || [];
-    }
-    if (statsRes.status === "fulfilled") {
-      statsData.value = statsRes.value;
-    }
-  } catch {
-    // defaults apply
+    personalReport.value = await getPersonalReport({
+      date_from: dateFrom.value || undefined,
+      date_to: dateTo.value || undefined,
+      exercise: exerciseFilter.value || undefined,
+    });
+  } catch (err: unknown) {
+    loadError.value = err instanceof Error ? err.message : t("scoreTrends.loadFailed");
   } finally {
     loading.value = false;
+    await nextTick();
+    renderComparisonChart();
   }
+}
+
+watch(comparisonRows, () => nextTick().then(renderComparisonChart));
+
+onMounted(() => {
+  applyRange();
+});
+onActivated(loadData);
+onBeforeUnmount(() => {
+  comparisonChart?.dispose();
 });
 </script>
+
+<style scoped>
+.score-trends-page { display: grid; gap: 24px; }
+.trend-filter-card { display: flex; gap: 16px; flex-wrap: wrap; padding: 16px 20px; border-radius: 12px; background: rgba(15,23,42,0.96); border: 1px solid rgba(59,130,246,0.1); }
+.trend-filter-card label { display: grid; gap: 6px; color: #94a3b8; font-size: 12px; }
+.trend-filter-card select { padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(59,130,246,0.15); background: rgba(8,13,26,0.8); color: #f8fafc; }
+.trend-load-error { color: #f87171; font-size: 13px; margin: 0; }
+.comparison-card { display: grid; gap: 16px; }
+.comparison-table-wrap { overflow-x: auto; }
+.comparison-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.comparison-table th, .comparison-table td { padding: 10px 12px; border-bottom: 1px solid rgba(59,130,246,0.08); color: #cbd5e1; text-align: left; }
+.comparison-table th { color: #64748b; font-size: 11px; }
+.comparison-chart { width: 100%; height: 280px; }
+.exercise-trend-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.trend-mini-card { padding: 14px; border-radius: 10px; background: rgba(8,13,26,0.5); border: 1px solid rgba(59,130,246,0.08); }
+.trend-mini-card header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+.trend-mini-card header strong { color: #f8fafc; }
+.trend-mini-card header span { color: #64748b; font-size: 11px; }
+.trend-mini-card ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.trend-mini-card li { display: flex; justify-content: space-between; color: #94a3b8; font-size: 12px; }
+.trend-mini-card b { color: #60a5fa; }
+.empty-hint { color: #64748b; font-size: 12px; margin: 0; }
+</style>

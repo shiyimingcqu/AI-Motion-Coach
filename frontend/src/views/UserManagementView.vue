@@ -2,7 +2,7 @@
   <div class="users-page">
     <header class="section-page-header">
       <div>
-        <h1>User Management / 用户管理</h1>
+        <h1>{{ $t('userManagement.title') }}</h1>
         <p>Manage users, roles, and permissions</p>
       </div>
       <button class="blue-action-button" type="button">
@@ -21,7 +21,7 @@
     <section class="filter-card user-filter-card">
       <label class="session-search">
         <Search :size="20" />
-        <input v-model="keyword" type="search" placeholder="Search users... / 搜索用户..." />
+        <input v-model="keyword" type="search" :placeholder="$t('userManagement.search')" />
       </label>
       <select v-model="roleFilter">
         <option value="">All Roles</option>
@@ -37,15 +37,15 @@
 
     <section class="users-table-card">
       <StateDisplay v-if="loading" type="loading" size="sm" />
-      <StateDisplay v-else-if="filteredUsers.length === 0" type="empty" title="暂无用户" size="sm" />
+      <StateDisplay v-else-if="filteredUsers.length === 0" type="empty" :title="$t('userManagement.noUsers')" size="sm" />
       <table v-else class="users-table">
         <thead>
           <tr>
-            <th>USER / 用户</th>
-            <th>ROLE / 角色</th>
-            <th>STATUS / 状态</th>
-            <th>JOINED / 加入时间</th>
-            <th>ACTIONS / 操作</th>
+            <th>{{ $t('userManagement.tableHead_user') }}</th>
+            <th>{{ $t('userManagement.tableHead_role') }}</th>
+            <th>{{ $t('userManagement.tableHead_status') }}</th>
+            <th>{{ $t('userManagement.tableHead_joined') }}</th>
+            <th>{{ $t('userManagement.tableHead_actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -58,7 +58,7 @@
                 </div>
               </div>
             </td>
-            <td><span class="role-pill" :class="u.role">{{ u.role }}</span></td>
+            <td><span class="role-pill" :class="u.role">{{ u.role === 'admin' ? $t('common.admin') : $t('common.user') }}</span></td>
             <td><span class="status-badge" :class="{ inactive: !u.is_active }">{{ u.is_active ? "Active" : "Inactive" }}</span></td>
             <td>{{ u.created_at?.slice(0, 10) || "-" }}</td>
             <td>
@@ -76,10 +76,12 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import { Search, UserPlus } from "lucide-vue-next";
 import StateDisplay from "../components/StateDisplay.vue";
 import { getUsers, updateUser, deleteUser, type UserRecord } from "../api/admin";
 
+const { t } = useI18n();
 const users = ref<UserRecord[]>([]);
 const keyword = ref("");
 const roleFilter = ref("");
@@ -101,10 +103,10 @@ const summaryCards = computed(() => {
   const admins = users.value.filter(u => u.role === "admin").length;
   const active = users.value.filter(u => u.is_active).length;
   return [
-    { label: "Total Users / 总用户数", value: total, tone: "tone-text-blue" },
-    { label: "Admins / 管理员", value: admins, tone: "tone-text-purple" },
-    { label: "Active / 活跃", value: active, tone: "tone-text-green" },
-    { label: "Inactive / 未激活", value: total - active, tone: "tone-text-orange" },
+    { label: t("userManagement.summary_total"), value: total, tone: "tone-text-blue" },
+    { label: t("userManagement.summary_admins"), value: admins, tone: "tone-text-purple" },
+    { label: t("userManagement.summary_active"), value: active, tone: "tone-text-green" },
+    { label: t("userManagement.summary_inactive"), value: total - active, tone: "tone-text-orange" },
   ];
 });
 
@@ -114,17 +116,17 @@ async function toggleActive(u: UserRecord) {
     const idx = users.value.findIndex(x => x.id === u.id);
     if (idx >= 0) users.value[idx] = updated;
   } catch (err: any) {
-    alert("操作失败: " + (err.message || "网络错误"));
+    alert(`${t("common.operationFailed")}: ${err.message || t("common.networkError")}`);
   }
 }
 
 async function handleDelete(u: UserRecord) {
-  if (!confirm(`确定删除用户 "${u.username}"？此操作不可撤销。`)) return;
+  if (!confirm(t("userManagement.deleteConfirm", { name: u.username }))) return;
   try {
     await deleteUser(u.id);
     users.value = users.value.filter(x => x.id !== u.id);
   } catch (err: any) {
-    alert("删除失败: " + (err.message || "网络错误"));
+    alert(t("common.deleteFailed") + (err.message || t("common.networkError")));
   }
 }
 

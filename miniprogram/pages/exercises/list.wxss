@@ -1,55 +1,24 @@
-/* 动作库列表 - 设计稿风格 */
+/* 动作库列表 */
 .exercises-page {
   min-height: 100vh;
   background: var(--bg);
-  padding: 0 24rpx 24rpx;
-}
-
-/* 顶部 */
-.top-bar {
-  background: var(--bg);
-}
-
-.top-bar-content {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 88rpx;
-}
-
-.top-title {
-  font-size: 32rpx;
-  font-weight: 700;
-  color: var(--text);
+  padding: 24rpx;
 }
 
 /* 搜索 */
 .search-bar {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  background: #fff;
-  border-radius: var(--radius-full);
-  padding: 0 24rpx;
-  height: 80rpx;
   margin-bottom: 20rpx;
-  box-shadow: var(--shadow-card);
-}
-
-.search-icon {
-  font-size: 28rpx;
-  color: var(--text-muted);
 }
 
 .search-input {
-  flex: 1;
-  height: 100%;
-  font-size: 26rpx;
-  color: var(--text);
-}
-
-.search-placeholder {
-  color: var(--text-placeholder);
+  width: 100%;
+  height: 80rpx;
+  background: #fff;
+  border-radius: var(--radius-full);
+  padding: 0 32rpx;
+  font-size: 28rpx;
+  box-shadow: var(--shadow);
+  box-sizing: border-box;
 }
 
 /* 分类 Tab */
@@ -67,11 +36,11 @@
   font-size: 26rpx;
   color: var(--text-secondary);
   background: #fff;
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow);
 }
 
 .tab-active {
-  background: linear-gradient(135deg, #4f8cff 0%, #2f6fe0 100%);
+  background: var(--primary);
   color: #fff;
 }
 
@@ -80,54 +49,4 @@
   display: flex;
   flex-direction: column;
   gap: 16rpx;
-}
-
-.exercise-card-new {
-  background: #fff;
-  border-radius: var(--radius-lg);
-  padding: 20rpx 24rpx;
-  display: flex;
-  align-items: center;
-  gap: 20rpx;
-  box-shadow: var(--shadow-card);
-}
-
-.exercise-thumb {
-  width: 96rpx;
-  height: 96rpx;
-  border-radius: var(--radius-lg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.exercise-thumb-icon {
-  font-size: 52rpx;
-  filter: brightness(1.05);
-}
-
-.exercise-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.exercise-name {
-  font-size: 30rpx;
-  font-weight: 700;
-  color: var(--text);
-  margin-bottom: 10rpx;
-}
-
-.exercise-tags {
-  display: flex;
-  gap: 8rpx;
-  flex-wrap: wrap;
-}
-
-.exercise-arrow {
-  font-size: 40rpx;
-  color: var(--text-muted);
-  line-height: 1;
-  flex-shrink: 0;
 }

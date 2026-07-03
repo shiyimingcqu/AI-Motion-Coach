@@ -8,13 +8,16 @@ from app.models.entities import SessionORM
 
 
 class SessionService:
-    def list_sessions(self, limit: int = 50, offset: int = 0) -> list[SessionORM]:
+    def list_sessions(self, limit: int = 50, offset: int = 0, user_id: int | None = None) -> list[SessionORM]:
         if SessionLocal is None:
             return []
         db = SessionLocal()
         try:
+            query = db.query(SessionORM)
+            if user_id is not None:
+                query = query.filter(SessionORM.user_id == user_id)
             sessions = (
-                db.query(SessionORM)
+                query
                 .order_by(SessionORM.created_at.desc())
                 .offset(offset)
                 .limit(limit)

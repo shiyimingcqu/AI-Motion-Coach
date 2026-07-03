@@ -84,8 +84,12 @@ if router and BaseModel:
             is_active=True,
         )
         db.add(user)
-        db.commit()
-        db.refresh(user)
+        try:
+            db.commit()
+            db.refresh(user)
+        except Exception:
+            db.rollback()
+            raise
         return _to_admin_user_response(user)
 
     @router.get(
@@ -125,8 +129,12 @@ if router and BaseModel:
 
         if request.is_active is not None:
             user.is_active = request.is_active
-        db.commit()
-        db.refresh(user)
+        try:
+            db.commit()
+            db.refresh(user)
+        except Exception:
+            db.rollback()
+            raise
         return _to_admin_user_response(user)
 
     @router.put(
@@ -158,35 +166,185 @@ if router and BaseModel:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="管理员账号不能在用户管理中删除")
 
         db.delete(user)
-        db.commit()
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
         return None
 
     @router.get(
         "/sessions",
         dependencies=[Depends(require_admin)],
     )
-    def list_all_sessions():
-        return {"items": [session.to_dict() for session in session_service.list_sessions()]}
+    def list_all_sessions(user_id: int | None = None, db: Session = Depends(get_db)):
+        sessions = session_service.list_sessions(limit=200, user_id=user_id)
+        result = []
+        for s in sessions:
+            username = "匿名用户"
+            if s.user_id:
+                u = db.query(UserORM).filter(UserORM.id == s.user_id).first()
+                if u:
+                    username = u.username
+            row = s.to_dict() if hasattr(s, "to_dict") else {
+                "session_id": s.session_id,
+                "exercise": s.exercise,
+                "duration_seconds": s.duration_seconds,
+                "total_count": s.total_count,
+                "valid_count": s.valid_count,
+                "error_count": s.error_count,
+                "average_score": s.average_score,
+                "created_at": s.created_at.isoformat() + "Z" if s.created_at else None,
+            }
+            row["username"] = username
+            result.append(row)
+        return {"items": result}
+
+    @router.get(
+        "/dashboard",
+        dependencies=[Depends(require_admin)],
+    )
+    def admin_dashboard(db: Session = Depends(get_db)):
+        """Return aggregated admin dashboard statistics."""
+        from datetime import datetime, timezone
+        from app.models.entities import AnalysisTaskORM, ExerciseORM, ReferenceVideoORM, SessionORM
+
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+        seven_days_ago = today_start.replace(day=today_start.day - 7) if today_start.day > 7 else today_start.replace(month=today_start.month - 1 or 12, day=1)
+
+        # User stats
+        total_users = db.query(UserORM).filter(UserORM.role == "user").count()
+        admins = db.query(UserORM).filter(UserORM.role == "admin").count()
+        new_users_week = db.query(UserORM).filter(
+            UserORM.role == "user",
+            UserORM.created_at >= seven_days_ago,
+        ).count()
+
+        # Session stats
+        sessions = db.query(SessionORM).order_by(SessionORM.created_at.desc()).all()
+        total_sessions = len(sessions)
+        today_sessions = [s for s in sessions if s.created_at and s.created_at >= today_start]
+        avg_score = round(sum(s.average_score for s in sessions) / total_sessions, 1) if total_sessions else 0
+        total_duration_min = round(sum(s.duration_seconds for s in sessions) / 60)
+
+        # Score trend vs last week
+        prev_week_sessions = [s for s in sessions if s.created_at and s.created_at < seven_days_ago]
+        prev_avg = round(sum(s.average_score for s in prev_week_sessions) / len(prev_week_sessions), 1) if prev_week_sessions else 0
+        score_change = round(avg_score - prev_avg, 1)
+
+        # Video analysis tasks
+        video_total = db.query(AnalysisTaskORM).count()
+        video_success = db.query(AnalysisTaskORM).filter(AnalysisTaskORM.status == "success").count()
+
+        # Exercise count
+        exercise_count = db.query(ExerciseORM).filter(ExerciseORM.is_active == True).count()
+
+        # Recent sessions (with username)
+        recent_sessions = []
+        for s in sessions[:8]:
+            username = "匿名用户"
+            if s.user_id:
+                u = db.query(UserORM).filter(UserORM.id == s.user_id).first()
+                if u:
+                    username = u.username
+            recent_sessions.append({
+                "session_id": s.session_id,
+                "user": username,
+                "exercise": s.exercise,
+                "score": s.average_score,
+                "error_count": s.error_count,
+                "duration_seconds": s.duration_seconds,
+                "created_at": s.created_at.isoformat() + "Z" if s.created_at else None,
+            })
+
+        # Error breakdown by exercise
+        error_by_exercise: dict[str, int] = {}
+        error_sessions_by_exercise: dict[str, int] = {}
+        for s in sessions:
+            label = s.exercise or "其他"
+            if s.error_count > 0:
+                error_by_exercise[label] = error_by_exercise.get(label, 0) + s.error_count
+            error_sessions_by_exercise[label] = error_sessions_by_exercise.get(label, 0) + 1
+        max_errors = max(error_by_exercise.values()) if error_by_exercise else 1
+        total_errors = sum(error_by_exercise.values())
+        error_stats = sorted(
+            ({"name": k, "count": v, "rate": round(v / max(max_errors, 1) * 100),
+              "sessions": error_sessions_by_exercise.get(k, 0)}
+             for k, v in error_by_exercise.items()),
+            key=lambda x: x["count"],
+            reverse=True,
+        )[:6]
+
+        # Work queue items
+        work_queue = []
+        low_score_users = len([s for s in sessions if s.average_score < 70 and s.created_at and s.created_at >= seven_days_ago])
+        if low_score_users:
+            work_queue.append({
+                "title": "查看低分训练",
+                "desc": f"近 7 天有 {low_score_users} 条训练记录平均分低于 70。",
+                "link": "/admin/sessions",
+            })
+        pending_templates = db.query(ReferenceVideoORM).filter(ReferenceVideoORM.is_active == False).count()
+        if pending_templates:
+            work_queue.append({
+                "title": "审核停用模板",
+                "desc": f"{pending_templates} 个标准视频模板处于停用状态。",
+                "link": "/admin/templates",
+            })
+        if exercise_count < 4:
+            work_queue.append({
+                "title": "补充动作库",
+                "desc": f"当前仅有 {exercise_count} 个动作，建议丰富动作类型。",
+                "link": "/admin/rules",
+            })
+        if video_success > 0 and video_total > 0:
+            work_queue.append({
+                "title": "检查视频分析任务",
+                "desc": f"共 {video_total} 个视频分析任务，{video_success} 个成功。",
+                "link": "/admin/reports",
+            })
+
+        return {
+            "user_count": total_users,
+            "admin_count": admins,
+            "new_users_week": new_users_week,
+            "today_sessions": len(today_sessions),
+            "total_sessions": total_sessions,
+            "average_score": avg_score,
+            "average_score_change": score_change,
+            "total_duration_minutes": total_duration_min,
+            "video_total": video_total,
+            "video_success": video_success,
+            "exercise_count": exercise_count,
+            "recent_sessions": recent_sessions,
+            "error_stats": error_stats,
+            "total_errors": total_errors,
+            "work_queue": work_queue,
+        }
 
     @router.get(
         "/reports",
         dependencies=[Depends(require_admin)],
     )
-    def list_all_reports():
-        sessions = session_service.list_sessions()
-        items = [
-            {
+    def list_all_reports(user_id: int | None = None, db: Session = Depends(get_db)):
+        sessions = session_service.list_sessions(limit=200, user_id=user_id)
+        items = []
+        for session in sessions:
+            username = "匿名用户"
+            if session.user_id:
+                u = db.query(UserORM).filter(UserORM.id == session.user_id).first()
+                if u:
+                    username = u.username
+            items.append({
                 "id": f"report-{session.session_id}",
                 "session_id": session.session_id,
                 "title": f"{session.exercise} 训练评估报告",
-                "user": "系统记录",
-                "created_at": session.created_at,
+                "user": username,
+                "created_at": session.created_at.isoformat() + "Z" if session.created_at else None,
                 "average_score": session.average_score,
                 "status": "需关注" if session.average_score < 70 or session.error_count > 5 else "已生成",
                 "error_count": session.error_count,
-            }
-            for session in sessions
-        ]
+            })
         low_score_count = sum(1 for session in sessions if session.average_score < 70)
         high_error_count = sum(1 for session in sessions if session.error_count > 5)
         return {

@@ -1,4 +1,4 @@
-tasklist | findstr python# 运动姿态评估与纠错系统
+# 运动姿态评估与纠错系统
 
 面向健身、体育教学和训练评估场景的工程化运动姿态分析系统，支持姿态检测、动作计数、纠错提示和训练数据统计。
 
@@ -21,14 +21,15 @@ $env:PYTHONPATH='backend'
 python -m unittest discover -s backend/tests -p "test_*.py"
 ```
 
-## 完整后端依赖安装后可启动 API：
+完整后端依赖安装后可启动 API：
 
 ```powershell
 pip install -r backend/requirements.txt
 uvicorn app.main:app --app-dir backend --reload
 ```
 
-## 前端启动：
+前端启动：
+
 ```powershell
 cd frontend
 npm install
