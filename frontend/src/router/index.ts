@@ -12,6 +12,8 @@ import MotionQualityView from "../views/MotionQualityView.vue";
 import ExerciseRulesView from "../views/ExerciseRulesView.vue";
 import ProfileView from "../views/ProfileView.vue";
 import SettingsView from "../views/SettingsView.vue";
+import ReferenceVideosView from "../views/ReferenceVideosView.vue";
+import TrainingResultView from "../views/TrainingResultView.vue";
 import ExportReportsView from "../views/ExportReportsView.vue";
 import ExerciseLibraryView from "../views/ExerciseLibraryView.vue";
 import ErrorFeedbackView from "../views/ErrorFeedbackView.vue";
@@ -39,6 +41,8 @@ export const router = createRouter({
     { path: "/score-trends", component: ScoreTrendsView, meta: { userOnly: true } },
     { path: "/motion-quality", component: MotionQualityView, meta: { userOnly: true } },
     { path: "/export", component: ExportReportsView, meta: { userOnly: true } },
+    { path: "/reference-videos", component: ReferenceVideosView, meta: { userOnly: true } },
+    { path: "/training-result", component: TrainingResultView, meta: { userOnly: true } },
     { path: "/profile", component: ProfileView, meta: { userOnly: true, layoutTransition: "layout-slide-up" } },
     { path: "/settings", component: SettingsView, meta: { userOnly: true, layoutTransition: "layout-slide-up" } },
 

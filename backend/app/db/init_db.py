@@ -199,6 +199,9 @@ def _migrate_legacy_schema():
     if "active_templates" not in inspector.get_table_names():
         Base.metadata.tables["active_templates"].create(bind=engine)
 
+    if "reference_videos" not in inspector.get_table_names():
+        Base.metadata.tables["reference_videos"].create(bind=engine)
+
 
 def _create_default_users(db: Session):
     """如果用户表为空，创建默认管理员和普通用户"""

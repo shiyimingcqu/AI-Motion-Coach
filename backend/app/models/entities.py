@@ -174,3 +174,32 @@ class SessionORM(Base if Base is not None else object):
             "evaluation_json": self.evaluation_json,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class ReferenceVideoORM(Base if Base is not None else object):
+    """标准参考视频数据库模型"""
+    if Base is not None:
+        __tablename__ = "reference_videos"
+
+        id = Column(Integer, primary_key=True, index=True)
+        title = Column(String(128), nullable=False)
+        exercise = Column(String(32), nullable=False, default="squat")
+        camera_view = Column(String(16), nullable=False, default="front")
+        description = Column(Text, nullable=True)
+        file_uri = Column(String(512), nullable=False)
+        uploaded_by = Column(Integer, nullable=True)
+        is_active = Column(Boolean, default=True, nullable=False)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "exercise": self.exercise,
+            "camera_view": self.camera_view,
+            "description": self.description,
+            "file_uri": self.file_uri,
+            "uploaded_by": self.uploaded_by,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() + "Z" if self.created_at else None,
+        }
