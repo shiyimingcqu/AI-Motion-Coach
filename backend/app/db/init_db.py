@@ -2,7 +2,7 @@ from sqlalchemy import inspect, text
 
 from app.db.session import engine
 from app.core.security import get_password_hash
-from app.models.entities import Base, UserORM, ExerciseORM
+from app.models.entities import Base, UserORM, ExerciseORM, ActiveTemplateORM
 
 try:
     from sqlalchemy.orm import Session
@@ -182,13 +182,14 @@ def _migrate_legacy_schema():
     """Patch old SQLite schemas so newer ORM fields don't crash at runtime."""
     inspector = inspect(engine)
 
-    if "sessions" not in inspector.get_table_names():
-        return
+    if "sessions" in inspector.get_table_names():
+        session_columns = {column["name"] for column in inspector.get_columns("sessions")}
+        if "user_id" not in session_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE sessions ADD COLUMN user_id INTEGER"))
 
-    session_columns = {column["name"] for column in inspector.get_columns("sessions")}
-    if "user_id" not in session_columns:
-        with engine.begin() as connection:
-            connection.execute(text("ALTER TABLE sessions ADD COLUMN user_id INTEGER"))
+    if "active_templates" not in inspector.get_table_names():
+        Base.metadata.tables["active_templates"].create(bind=engine)
 
 
 def _create_default_users(db: Session):

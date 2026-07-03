@@ -1,6 +1,16 @@
 // 动作详情页
 const { EXERCISE_CONFIG } = require('../../utils/constants');
 
+const EXERCISE_IMAGES = {
+  squat: '/assets/fitness/exercise-squat.png',
+  push_up: '/assets/fitness/exercise-pushup.png',
+  jumping_jack: '/assets/fitness/exercise-jumping-jack.png',
+  plank: '/assets/fitness/exercise-plank.png',
+  lunge: '/assets/fitness/exercise-squat.png',
+  burpee: '/assets/fitness/exercise-pushup.png',
+  high_knees: '/assets/fitness/exercise-jumping-jack.png',
+};
+
 Page({
   data: {
     exercise: {},
@@ -21,6 +31,7 @@ Page({
         description: this.getDescription(config.key),
         accentColor: config.accentColor,
         icon: config.icon,
+        image: EXERCISE_IMAGES[config.key] || '',
         modes: ['摄像头实时检测', '视频上传分析'],
         errors: this.getErrors(config.key),
         phases: config.phases || [],

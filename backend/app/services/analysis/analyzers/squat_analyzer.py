@@ -130,14 +130,16 @@ class SquatAnalyzer(BaseExerciseAnalyzer):
         delta = knee - prev
         state["prev_knee"] = knee
 
-        if knee > 155:
+        if knee > 150:
             return "standing"
-        if 70 <= knee <= 110 and abs(delta) <= 3:
+        if 65 <= knee <= 125:
             return "bottom"
-        if delta < -2:
+        if delta < -1.5:
             return "down"
-        if delta > 2:
+        if delta > 1.5:
             return "up"
+        if knee < 145:
+            return "bottom"
         return "down"
 
     def score_frame(self, features: dict, phase: str) -> dict:

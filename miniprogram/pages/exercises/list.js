@@ -2,6 +2,16 @@
 const ApiClient = require('../../utils/api');
 const { EXERCISE_CONFIG } = require('../../utils/constants');
 
+const EXERCISE_IMAGES = {
+  squat: '/assets/fitness/exercise-squat.png',
+  push_up: '/assets/fitness/exercise-pushup.png',
+  jumping_jack: '/assets/fitness/exercise-jumping-jack.png',
+  plank: '/assets/fitness/exercise-plank.png',
+  lunge: '/assets/fitness/exercise-squat.png',
+  burpee: '/assets/fitness/exercise-pushup.png',
+  high_knees: '/assets/fitness/exercise-jumping-jack.png',
+};
+
 Page({
   data: {
     keyword: '',
@@ -33,6 +43,7 @@ Page({
           description: item.description || '',
           accentColor: config.accentColor || '#3b82f6',
           icon: config.icon || '🏋️',
+          image: EXERCISE_IMAGES[item.key] || '',
           modes: item.modes || [],
           errors: item.errors || [],
         };
@@ -43,7 +54,10 @@ Page({
     } catch (err) {
       console.error('Load exercises error:', err);
       // 使用本地配置兜底
-      const exercises = Object.values(EXERCISE_CONFIG);
+      const exercises = Object.values(EXERCISE_CONFIG).map(item => ({
+        ...item,
+        image: EXERCISE_IMAGES[item.key] || '',
+      }));
       this.setData({ exercises, loading: false });
       this.applyFilter();
     }

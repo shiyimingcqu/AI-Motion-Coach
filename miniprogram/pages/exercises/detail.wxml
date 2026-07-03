@@ -13,13 +13,16 @@
 
   <!-- 头部 -->
   <view class="detail-hero" style="background: linear-gradient(135deg, {{exercise.accentColor}}, {{exercise.accentColor}}cc);">
-    <view class="detail-icon">{{exercise.icon}}</view>
-    <view class="detail-name">{{exercise.name}}</view>
-    <view class="detail-tags">
-      <text class="detail-tag">{{exercise.category}}</text>
-      <text class="detail-tag">{{exercise.level}}</text>
-      <text class="detail-tag">{{exercise.duration}}</text>
+    <view class="detail-hero-copy">
+      <view class="detail-name">{{exercise.name}}</view>
+      <view class="detail-tags">
+        <text class="detail-tag">{{exercise.category}}</text>
+        <text class="detail-tag">{{exercise.level}}</text>
+        <text class="detail-tag">{{exercise.duration}}</text>
+      </view>
     </view>
+    <image wx:if="{{exercise.image}}" class="detail-image" src="{{exercise.image}}" mode="aspectFill"></image>
+    <view wx:else class="detail-icon">{{exercise.icon}}</view>
   </view>
 
   <view class="detail-content">

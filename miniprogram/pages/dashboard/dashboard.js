@@ -4,13 +4,20 @@ const { EXERCISE_CONFIG, getScoreLevel } = require('../../utils/constants');
 const { formatDate, formatDuration } = require('../../utils/util');
 const app = getApp();
 
+const FITNESS_ASSETS = {
+  squat: '/assets/fitness/exercise-squat.png',
+  push_up: '/assets/fitness/exercise-pushup.png',
+  plank: '/assets/fitness/exercise-plank.png',
+  jumping_jack: '/assets/fitness/exercise-jumping-jack.png',
+};
+
 const RECOMMEND_LIST = [
-  { key: 'squat', icon: '🦵', name: '深蹲', level: '初级', duration: '8 分钟', people: 86 },
-  { key: 'push_up', icon: '💪', name: '俯卧撑', level: '中级', duration: '10 分钟', people: 142 },
-  { key: 'plank', icon: '🧘', name: '平板支撑', level: '初级', duration: '5 分钟', people: 68 },
-  { key: 'jumping_jack', icon: '🤸', name: '开合跳', level: '初级', duration: '6 分钟', people: 95 },
-  { key: 'lunge', icon: '🚶', name: '弓步蹲', level: '中级', duration: '9 分钟', people: 53 },
-  { key: 'high_knees', icon: '🏃', name: '高抬腿', level: '中级', duration: '5 分钟', people: 71 },
+  { key: 'squat', image: FITNESS_ASSETS.squat, name: '深蹲', level: '初级', duration: '8 分钟', people: 86 },
+  { key: 'push_up', image: FITNESS_ASSETS.push_up, name: '俯卧撑', level: '中级', duration: '10 分钟', people: 142 },
+  { key: 'plank', image: FITNESS_ASSETS.plank, name: '平板支撑', level: '初级', duration: '5 分钟', people: 68 },
+  { key: 'jumping_jack', image: FITNESS_ASSETS.jumping_jack, name: '开合跳', level: '初级', duration: '6 分钟', people: 95 },
+  { key: 'lunge', image: FITNESS_ASSETS.squat, name: '弓步蹲', level: '中级', duration: '9 分钟', people: 53 },
+  { key: 'high_knees', image: FITNESS_ASSETS.jumping_jack, name: '高抬腿', level: '中级', duration: '5 分钟', people: 71 },
 ];
 
 Page({

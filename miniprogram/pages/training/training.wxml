@@ -99,20 +99,9 @@
 
   <!-- 指标卡片 -->
   <view class="metrics-row">
-    <view class="metric-card">
-      <text class="metric-value">{{metrics.knee}}°</text>
-      <text class="metric-label">膝关节角度</text>
-      <text class="metric-target">标准 90°</text>
-    </view>
-    <view class="metric-card">
-      <text class="metric-value">{{metrics.hip}}°</text>
-      <text class="metric-label">髋关节角度</text>
-      <text class="metric-target">标准 100°</text>
-    </view>
-    <view class="metric-card">
-      <text class="metric-value">{{metrics.torso}}°</text>
-      <text class="metric-label">躯干倾斜</text>
-      <text class="metric-target">标准 &lt;15°</text>
+    <view class="metric-card" wx:for="{{metricCards}}" wx:key="key">
+      <text class="metric-value">{{item.value}}{{item.unit}}</text>
+      <text class="metric-label">{{item.label}}</text>
     </view>
   </view>
 

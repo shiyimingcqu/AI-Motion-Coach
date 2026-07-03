@@ -1,11 +1,12 @@
 # 加载 .env 文件中的环境变量（必须在其他 import 之前）
 from pathlib import Path
 from dotenv import load_dotenv
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=True)
 
 from app.api.router import create_api_router
 from app.core.config import settings
 from app.db.init_db import init_db
+from app.db.session import SessionLocal
 
 try:
     from fastapi import FastAPI
@@ -29,6 +30,15 @@ def create_app():
 
     # 初始化数据库（创建表和默认账号）
     init_db()
+
+    # 加载启用的模板配置
+    try:
+        db = SessionLocal()
+        from app.services.analysis.template_service import refresh_active_templates
+        refresh_active_templates(db)
+        db.close()
+    except Exception:
+        pass
 
     application.add_middleware(
         CORSMiddleware,

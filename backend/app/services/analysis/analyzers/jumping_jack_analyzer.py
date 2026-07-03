@@ -76,19 +76,24 @@ class JumpingJackAnalyzer(BaseExerciseAnalyzer):
     def detect_phase(self, features: dict, state: dict) -> str:
         foot = features.get("foot_distance", 0)
         arm_h = features.get("avg_arm_height", 0)
+        spread = features.get("spread_ratio", 0)
 
         prev_phase = state.get("phase", "closed")
+        is_closed = foot < 0.18 and arm_h < 0.08
+        is_open = (foot >= 0.22 or spread >= 1.8) and arm_h >= 0.10
 
-        if foot < 0.15 and arm_h < 0.05:
+        if is_closed and prev_phase in ("closing", "open_peak"):
+            return "complete"
+        if is_closed:
             return "closed"
-        if prev_phase == "closed" and (foot >= 0.15 or arm_h >= 0.05):
+        if is_open:
+            return "open_peak"
+        if prev_phase == "closed" and (foot >= 0.12 or arm_h >= 0.04):
             state["opening_foot"] = foot
             return "opening"
-        if foot >= 0.25 and arm_h >= 0.15:
-            return "open_peak"
-        if prev_phase in ("open_peak", "opening") and foot < 0.2:
+        if prev_phase in ("open_peak", "opening") and (foot < 0.22 or arm_h < 0.12):
             return "closing"
-        if prev_phase in ("closing",) and foot < 0.15 and arm_h < 0.05:
+        if prev_phase in ("closing",) and is_closed:
             return "complete"
 
         return prev_phase

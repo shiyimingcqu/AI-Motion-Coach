@@ -121,6 +121,27 @@ class AnalysisTaskORM(Base if Base is not None else object):
         }
 
 
+class ActiveTemplateORM(Base if Base is not None else object):
+    """启用的模板配置——每种动作只能启用一个模板"""
+    if Base is not None:
+        __tablename__ = "active_templates"
+
+        id = Column(Integer, primary_key=True, index=True)
+        action = Column(String(32), unique=True, index=True, nullable=False)
+        template_id = Column(String(128), nullable=False)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "action": self.action,
+            "template_id": self.template_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class SessionORM(Base if Base is not None else object):
     """训练记录数据库模型"""
     if Base is not None:

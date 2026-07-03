@@ -1,6 +1,7 @@
 """Realtime analysis WebSocket and HTTP endpoints — multi-exercise support."""
 
 import os
+import time
 from pathlib import Path
 
 from app.api.deps import get_current_active_user
@@ -9,6 +10,7 @@ from app.db.session import SessionLocal
 from app.models.entities import UserORM
 from app.services.analysis.models import NormalizedKeypoint
 from app.services.analysis.analyzers.registry import get_analyzer, ANALYZER_REGISTRY
+from app.services.analysis.exercise_metrics import get_core_metrics
 from app.services.storage.local_storage import local_storage
 from app.services.session.session_service import session_service
 from app.services.video.video_analysis_service import video_analysis_service
@@ -29,6 +31,7 @@ except ModuleNotFoundError:
     base64 = None
 
 router = APIRouter(prefix="/realtime", tags=["realtime"]) if APIRouter else None
+_pose_detect_states: dict[str, dict] = {}
 
 
 def _parse_keypoints(raw_keypoints: dict) -> dict[str, NormalizedKeypoint]:
@@ -137,6 +140,7 @@ if router:
             "keypoints": { ... }
         }
         """
+        started_at = time.perf_counter()
         exercise_type = request.get("exercise_type", "squat")
         raw_keypoints = request.get("keypoints", {})
 
@@ -235,11 +239,18 @@ if router:
             }, ...]
         }
         """
+        started_at = time.perf_counter()
         if cv2 is None or np is None or base64 is None:
             raise HTTPException(status_code=500, detail="cv2/numpy 不可用")
 
         exercise_type = request.get("exercise_type", "squat")
         frames = request.get("frames", [])
+        if exercise_type == "jumping_jack" and request.get("reset_state"):
+            _pose_detect_states[exercise_type] = {}
+            try:
+                get_analyzer(exercise_type).reset()
+            except Exception:
+                pass
 
         if not frames:
             raise HTTPException(status_code=400, detail="frames 不能为空")
@@ -294,11 +305,9 @@ if router:
                 mp_result = landmarker.detect(mp_image)
 
                 if not mp_result.pose_landmarks:
-                    print(f"[pose-detect] frame {img.shape}: no pose landmarks detected")
                     results.append({"keypoints": None, "features": None, "error": "未检测到人体"})
                     continue
 
-                print(f"[pose-detect] frame {img.shape}: detected {len(mp_result.pose_landmarks)} pose(s), {len(mp_result.pose_landmarks[0]) if mp_result.pose_landmarks else 0} landmarks")
                 # 提取 33 关键点
                 landmarks = mp_result.pose_landmarks[0]
                 keypoints = []
@@ -325,14 +334,22 @@ if router:
 
                 # 提取动作特征
                 features = None
+                analysis = None
                 try:
                     features = analyzer.extract_features(named_keypoints)
                 except Exception:
                     pass
+                if exercise_type == "jumping_jack" and features is not None:
+                    state = _pose_detect_states.setdefault(exercise_type, {})
+                    try:
+                        analysis = analyzer.analyze_frame(named_keypoints, state)
+                    except Exception:
+                        analysis = None
 
                 results.append({
                     "keypoints": keypoints,
                     "features": features,
+                    "analysis": analysis,
                 })
             except Exception as e:
                 import traceback
@@ -342,6 +359,7 @@ if router:
         return {
             "exercise_type": exercise_type,
             "frames": results,
+            "process_ms": round((time.perf_counter() - started_at) * 1000, 1),
         }
 
     @router.websocket("/pose")
@@ -403,7 +421,10 @@ if router:
                     saved_session = None
                     running = True
                     await websocket.send_json({
-                        "type": "status", "state": "running", "exercise_type": new_exercise,
+                        "type": "status",
+                        "state": "running",
+                        "exercise_type": new_exercise,
+                        "core_metrics": [metric.to_dict() for metric in get_core_metrics(new_exercise)],
                     })
                     continue
 
@@ -438,7 +459,24 @@ if router:
                     continue
 
                 keypoints = _parse_keypoints(payload.get("keypoints", {}))
-                result = analyzer.analyze_frame(keypoints, state)
+                try:
+                    result = analyzer.analyze_frame(keypoints, state)
+                except ValueError as exc:
+                    error_message = "关键点不足"
+                    await websocket.send_json({
+                        "type": "analysis",
+                        "stage": "invalid",
+                        "phase": "invalid",
+                        "count": analyzer.count,
+                        "valid_count": analyzer.valid_count,
+                        "score": 0,
+                        "issues": [error_message],
+                        "errors": [error_message],
+                        "feedback": [str(exc)],
+                        "metrics": {},
+                        "features": {},
+                    })
+                    continue
                 result["metrics"] = result.get("features", {})
                 result["type"] = "analysis"
                 await websocket.send_json(result)

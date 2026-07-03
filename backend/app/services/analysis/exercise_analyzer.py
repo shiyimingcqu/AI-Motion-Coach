@@ -26,9 +26,10 @@ class ExerciseAnalyzer:
         self._last_down_was_valid = False
         self.scores_history: list[float] = []
         self.start_time = 0.0  # set by the real-time loop
+        self._state: dict = {}  # persistent state for phase tracking across frames
 
     def analyze(self, keypoints: Keypoints) -> AnalysisResult:
-        result = self._analyzer.analyze_frame(keypoints, {})
+        result = self._analyzer.analyze_frame(keypoints, self._state)
         self.stage = result["phase"]
         self.count = result["count"]
         self.valid_count = result["valid_count"]

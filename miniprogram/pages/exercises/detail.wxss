@@ -1,13 +1,15 @@
 /* 动作详情 - 设计稿风格 */
 .detail-page {
   min-height: 100vh;
-  background: var(--bg);
+  background:
+    radial-gradient(circle at 16% 0%, rgba(79, 140, 255, 0.15), transparent 36%),
+    linear-gradient(180deg, #f7fbff 0%, #eef5ff 48%, #f9fbff 100%);
   padding-bottom: 140rpx;
 }
 
 /* 顶部 */
 .top-bar {
-  background: #fff;
+  background: transparent;
 }
 
 .top-bar-content {
@@ -44,15 +46,17 @@
 
 /* 头部 */
 .detail-hero {
-  margin: 16rpx 24rpx 0;
-  border-radius: var(--radius-xl);
-  padding: 48rpx 24rpx 36rpx;
+  margin: 16rpx 28rpx 0;
+  border-radius: 30rpx;
+  padding: 38rpx 30rpx;
   display: flex;
-  flex-direction: column;
   align-items: center;
+  justify-content: space-between;
   color: #fff;
   position: relative;
   overflow: hidden;
+  min-height: 220rpx;
+  box-shadow: 0 20rpx 46rpx rgba(47, 111, 224, 0.22);
 }
 
 .detail-hero::before {
@@ -65,16 +69,33 @@
   background: radial-gradient(circle, rgba(255,255,255,0.18) 0%, transparent 70%);
 }
 
+.detail-hero-copy {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  min-width: 0;
+}
+
+.detail-image {
+  width: 244rpx;
+  height: 178rpx;
+  border-radius: 24rpx;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 16rpx 34rpx rgba(0, 34, 112, 0.18);
+}
+
 .detail-icon {
   font-size: 88rpx;
-  margin-bottom: 16rpx;
+  position: relative;
+  z-index: 2;
   filter: drop-shadow(0 2rpx 8rpx rgba(0,0,0,0.1));
 }
 
 .detail-name {
-  font-size: 40rpx;
-  font-weight: 700;
-  margin-bottom: 16rpx;
+  font-size: 44rpx;
+  font-weight: 800;
+  margin-bottom: 22rpx;
 }
 
 .detail-tags {
@@ -92,14 +113,15 @@
 
 /* section */
 .detail-content {
-  padding: 20rpx 24rpx 0;
+  padding: 22rpx 28rpx 0;
 }
 
 .section-card {
-  padding: 24rpx 24rpx 28rpx;
-  background: #fff;
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-card);
+  padding: 26rpx 26rpx 30rpx;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 26rpx;
+  border: 1rpx solid rgba(255,255,255,0.95);
+  box-shadow: 0 12rpx 34rpx rgba(38, 69, 128, 0.08);
   margin-bottom: 20rpx;
 }
 

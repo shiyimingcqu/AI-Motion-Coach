@@ -3,45 +3,39 @@
   <scroll-view class="dashboard-scroll" scroll-y enhanced show-scrollbar="{{false}}">
     <!-- Hero 横幅 -->
     <view class="hero-card">
+      <image class="hero-bg" src="/assets/fitness/hero-runner.png" mode="aspectFit"></image>
       <view class="hero-text">
-        <view class="hero-emoji">💪</view>
         <view class="hero-tip">今天继续训练，</view>
         <view class="hero-tip">保持标准动作！</view>
-      </view>
-      <view class="hero-illu">
-        <view class="hero-runner"></view>
+        <view class="hero-sub">科学评估 · 精准纠正 · 持续进步</view>
       </view>
     </view>
 
     <!-- 2x2 功能宫格 -->
     <view class="grid-2x2">
       <view class="grid-item grid-blue" bindtap="goToTraining">
-        <view class="grid-icon-wrap grid-icon-blue">
-          <text class="grid-icon">📷</text>
-        </view>
+        <image class="grid-art" src="/assets/fitness/icon-realtime.png" mode="aspectFit"></image>
         <view class="grid-title">开始实时评估</view>
         <view class="grid-sub">摄像头实时识别</view>
+        <view class="grid-arrow">›</view>
       </view>
       <view class="grid-item grid-cyan" bindtap="goToVideoAnalysis">
-        <view class="grid-icon-wrap grid-icon-cyan">
-          <text class="grid-icon">☁️</text>
-        </view>
+        <image class="grid-art" src="/assets/fitness/icon-upload.png" mode="aspectFit"></image>
         <view class="grid-title">上传视频分析</view>
         <view class="grid-sub">捕捉识别分析</view>
+        <view class="grid-arrow">›</view>
       </view>
       <view class="grid-item grid-purple" bindtap="goToReports">
-        <view class="grid-icon-wrap grid-icon-purple">
-          <text class="grid-icon">📋</text>
-        </view>
+        <image class="grid-art" src="/assets/fitness/icon-records.png" mode="aspectFit"></image>
         <view class="grid-title">训练记录</view>
         <view class="grid-sub">查看历史训练数据</view>
+        <view class="grid-arrow">›</view>
       </view>
       <view class="grid-item grid-orange" bindtap="goToExercises">
-        <view class="grid-icon-wrap grid-icon-orange">
-          <text class="grid-icon">📚</text>
-        </view>
+        <image class="grid-art" src="/assets/fitness/icon-library.png" mode="aspectFit"></image>
         <view class="grid-title">动作库</view>
         <view class="grid-sub">学习标准动作要领</view>
+        <view class="grid-arrow">›</view>
       </view>
     </view>
 
@@ -53,25 +47,25 @@
       </view>
       <view class="data-grid">
         <view class="data-item">
-          <view class="data-icon data-icon-blue">🏋️</view>
+          <view class="data-icon data-icon-blue"><view class="data-glyph data-glyph-train"></view></view>
           <view class="data-value">{{stats.todaySessions}}</view>
           <view class="data-unit">次</view>
           <view class="data-label">训练次数</view>
         </view>
         <view class="data-item">
-          <view class="data-icon data-icon-yellow">⭐</view>
+          <view class="data-icon data-icon-yellow"><view class="data-glyph data-glyph-score"></view></view>
           <view class="data-value">{{stats.averageScore}}</view>
           <view class="data-unit">分</view>
           <view class="data-label">平均得分</view>
         </view>
         <view class="data-item">
-          <view class="data-icon data-icon-orange">🔥</view>
+          <view class="data-icon data-icon-orange"><view class="data-glyph data-glyph-fire"></view></view>
           <view class="data-value">{{stats.weekSessions}}</view>
           <view class="data-unit">次</view>
           <view class="data-label">锻炼次数</view>
         </view>
         <view class="data-item">
-          <view class="data-icon data-icon-cyan">⏱</view>
+          <view class="data-icon data-icon-cyan"><view class="data-glyph data-glyph-time"></view></view>
           <view class="data-value">{{stats.totalDuration}}</view>
           <view class="data-unit">分钟</view>
           <view class="data-label">完成时长</view>
@@ -86,7 +80,7 @@
         <text class="section-more" bindtap="shuffleRecommend">换一换</text>
       </view>
       <view class="recommend-body" bindtap="goToRecommend">
-        <view class="recommend-emoji">{{recommended.icon}}</view>
+        <image class="recommend-image" src="{{recommended.image}}" mode="aspectFill"></image>
         <view class="recommend-info">
           <view class="recommend-title">{{recommended.name}}训练</view>
           <view class="recommend-tags">
