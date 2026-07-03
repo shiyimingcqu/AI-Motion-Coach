@@ -6,6 +6,30 @@ from typing import Optional
 import numpy as np
 
 
+# 全局启用的模板缓存 { action: template_id }
+# 由管理员在后台配置，通过 refresh_active_templates 更新
+_active_template_map: dict[str, str] = {}
+
+
+def refresh_active_templates(db_session=None) -> dict[str, str]:
+    """从数据库重新加载启用的模板配置到全局缓存。"""
+    global _active_template_map
+    if db_session is None:
+        return _active_template_map
+    try:
+        from app.models.entities import ActiveTemplateORM
+        records = db_session.query(ActiveTemplateORM).all()
+        _active_template_map = {r.action: r.template_id for r in records}
+    except Exception:
+        _active_template_map = {}
+    return _active_template_map
+
+
+def get_active_template_id(action: str) -> str | None:
+    """获取指定动作当前启用的模板 ID。"""
+    return _active_template_map.get(action)
+
+
 class TemplateService:
     """Loads templates and scores user frame sequences using DTW-like matching."""
 
@@ -13,15 +37,27 @@ class TemplateService:
         backend_root = Path(__file__).resolve().parents[3]
         repo_root = backend_root.parent
         self._dirs = [
-            (backend_root / template_dir).resolve(),
-            (repo_root / template_dir).resolve(),
             (backend_root / storage_dir).resolve(),
             (repo_root / storage_dir).resolve(),
+            (backend_root / template_dir).resolve(),
+            (repo_root / template_dir).resolve(),
         ]
         self.templates: dict[str, dict] = {}
 
     def _find_template_file(self, action: str, view: str | None = None) -> Path | None:
-        patterns = [f"{action}_template_{view}_v*.json", f"{action}_template_*.json"]
+        if view:
+            patterns = [
+                f"{action}_template_{view}_v*.json",
+                f"{action}_template_{view}.json",
+                f"{action}_template_*.json",
+                f"{action}_template.json",
+            ]
+        else:
+            patterns = [
+                f"{action}_template_*_v*.json",
+                f"{action}_template_*.json",
+                f"{action}_template.json",
+            ]
         for base in self._dirs:
             for pat in patterns:
                 files = sorted(base.glob(pat), reverse=True)
@@ -38,7 +74,7 @@ class TemplateService:
         if not path or not path.exists():
             raise FileNotFoundError(f"No template found for: {action}")
 
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             tmpl = json.load(f)
 
         required = {"action", "weights", "template_sequence", "thresholds"}
@@ -46,6 +82,8 @@ class TemplateService:
         if missing:
             raise ValueError(f"Template missing fields: {missing}")
 
+        tmpl["_template_id"] = path.stem
+        tmpl["_template_path"] = str(path)
         self.templates[cache_key] = tmpl
         return tmpl
 
@@ -60,11 +98,13 @@ class TemplateService:
         for base in self._dirs:
             p = base / f"{safe}.json"
             if p.exists():
-                with open(p) as f:
+                with open(p, encoding="utf-8") as f:
                     tmpl = json.load(f)
                 required = {"action", "weights", "template_sequence", "thresholds"}
                 if required - set(tmpl):
                     continue
+                tmpl["_template_id"] = p.stem
+                tmpl["_template_path"] = str(p)
                 self.templates[cache_key] = tmpl
                 return tmpl
         raise FileNotFoundError(f"Template not found: {template_id}")
@@ -87,6 +127,12 @@ class TemplateService:
     ) -> dict:
         if not user_frames:
             return {"score": 0.0, "level": "invalid", "detail_scores": {}, "differences": {}}
+
+        # 如果未指定 template_id，检查是否有管理员启用的模板
+        if template_id is None:
+            active_id = get_active_template_id(action)
+            if active_id:
+                template_id = active_id
 
         template = (
             self.load_template_by_id(template_id)

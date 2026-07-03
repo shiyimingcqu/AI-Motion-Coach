@@ -35,7 +35,7 @@
 
     <!-- Gallery View -->
     <section v-if="showGallery" class="gallery-section">
-      <StateDisplay v-if="loading" type="loading" skeleton="card" text="加载动作库..." />
+      <StateDisplay v-if="loading" type="loading" skeleton="cards" text="加载动作库..." />
       <StateDisplay v-else-if="galleryItems.length === 0" type="empty" title="暂无动作数据" text="后端服务未连接或动作库为空，请在管理页面添加动作" />
       <template v-else>
         <div class="gallery-container">
@@ -62,7 +62,7 @@
 
     <!-- Grid View -->
     <section v-else class="library-grid">
-      <StateDisplay v-if="loading" type="loading" skeleton="card" text="加载动作库..." />
+      <StateDisplay v-if="loading" type="loading" skeleton="cards" text="加载动作库..." />
       <StateDisplay v-else-if="filteredExercises.length === 0" type="empty" title="暂无匹配动作" text="尝试调整筛选条件或检查后端服务是否运行" />
       <article v-for="exercise in filteredExercises" :key="exercise.name" class="library-card">
         <div class="exercise-hero">

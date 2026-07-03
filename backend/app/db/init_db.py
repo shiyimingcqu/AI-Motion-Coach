@@ -2,7 +2,7 @@ from sqlalchemy import inspect, text
 
 from app.db.session import engine
 from app.core.security import get_password_hash
-from app.models.entities import Base, UserORM, ExerciseORM
+from app.models.entities import Base, UserORM, ExerciseORM, ActiveTemplateORM
 
 try:
     from sqlalchemy.orm import Session
@@ -171,6 +171,9 @@ def init_db():
     try:
         _create_default_users(db)
         _seed_exercises(db)
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -179,21 +182,22 @@ def _migrate_legacy_schema():
     """Patch old SQLite schemas so newer ORM fields don't crash at runtime."""
     inspector = inspect(engine)
 
-    if "sessions" not in inspector.get_table_names():
-        return
+    if "sessions" in inspector.get_table_names():
+        session_columns = {column["name"] for column in inspector.get_columns("sessions")}
+        migrations = {
+            "user_id": "INTEGER",
+            "calories_burned": "FLOAT DEFAULT 0",
+            "evaluation_json": "TEXT",
+        }
+        with engine.begin() as connection:
+            for column_name, column_type in migrations.items():
+                if column_name not in session_columns:
+                    connection.execute(
+                        text(f"ALTER TABLE sessions ADD COLUMN {column_name} {column_type}")
+                    )
 
-    session_columns = {column["name"] for column in inspector.get_columns("sessions")}
-    migrations = {
-        "user_id": "INTEGER",
-        "calories_burned": "FLOAT DEFAULT 0",
-        "evaluation_json": "TEXT",
-    }
-    with engine.begin() as connection:
-        for column_name, column_type in migrations.items():
-            if column_name not in session_columns:
-                connection.execute(
-                    text(f"ALTER TABLE sessions ADD COLUMN {column_name} {column_type}")
-                )
+    if "active_templates" not in inspector.get_table_names():
+        Base.metadata.tables["active_templates"].create(bind=engine)
 
 
 def _create_default_users(db: Session):
@@ -223,7 +227,11 @@ def _create_default_users(db: Session):
         )
         db.add(user)
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
 
 
 def _seed_exercises(db: Session):
@@ -234,4 +242,8 @@ def _seed_exercises(db: Session):
             ex = ExerciseORM(**data)
             db.add(ex)
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise

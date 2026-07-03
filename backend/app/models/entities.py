@@ -41,7 +41,8 @@ class UserORM(Base if Base is not None else object):
 
         id = Column(Integer, primary_key=True, index=True)
         username = Column(String(64), unique=True, index=True, nullable=False)
-        hashed_password = Column(String(255), nullable=False)
+        hashed_password = Column(String(255), nullable=True)
+        openid = Column(String(64), unique=True, nullable=True, index=True)
         role = Column(String(16), nullable=False, default="user")
         is_active = Column(Boolean, default=True, nullable=False)
         created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
@@ -117,6 +118,27 @@ class AnalysisTaskORM(Base if Base is not None else object):
             "output_uri": self.output_uri,
             "error_message": self.error_message,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class ActiveTemplateORM(Base if Base is not None else object):
+    """启用的模板配置——每种动作只能启用一个模板"""
+    if Base is not None:
+        __tablename__ = "active_templates"
+
+        id = Column(Integer, primary_key=True, index=True)
+        action = Column(String(32), unique=True, index=True, nullable=False)
+        template_id = Column(String(128), nullable=False)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "action": self.action,
+            "template_id": self.template_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
 

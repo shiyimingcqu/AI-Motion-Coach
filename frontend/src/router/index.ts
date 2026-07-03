@@ -28,8 +28,6 @@ export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: "/login", component: LoginView, meta: { public: true } },
-
-    // 普通用户路由
     { path: "/", component: DashboardView, meta: { userOnly: true } },
     { path: "/realtime", component: RealtimeDetectView, meta: { userOnly: true } },
     { path: "/upload", component: VideoUploadView, meta: { userOnly: true } },
@@ -41,8 +39,8 @@ export const router = createRouter({
     { path: "/score-trends", component: ScoreTrendsView, meta: { userOnly: true } },
     { path: "/motion-quality", component: MotionQualityView, meta: { userOnly: true } },
     { path: "/export", component: ExportReportsView, meta: { userOnly: true } },
-    { path: "/profile", component: ProfileView, meta: { userOnly: true } },
-    { path: "/settings", component: SettingsView, meta: { userOnly: true } },
+    { path: "/profile", component: ProfileView, meta: { userOnly: true, layoutTransition: "layout-slide-up" } },
+    { path: "/settings", component: SettingsView, meta: { userOnly: true, layoutTransition: "layout-slide-up" } },
 
     // 兼容 main 分支的管理路由（重定向到 admin 后台）
     { path: "/rules", redirect: "/admin/rules" },

@@ -9,10 +9,10 @@
     "valid_frames": 241
   },
   "weights": {
-    "knee_angle": 0.35,
+    "knee_angle": 0.25,
     "hip_angle": 0.25,
-    "trunk_angle": 0.2,
-    "knee_symmetry_diff": 0.2
+    "trunk_angle": 0.25,
+    "knee_symmetry_diff": 0.25
   },
   "template_sequence": {
     "knee_angle": [

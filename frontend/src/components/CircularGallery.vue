@@ -53,7 +53,7 @@ function debounce<T extends (...args: unknown[]) => void>(fn: T, wait: number) {
 
 function lerp(p1: number, p2: number, t: number) { return p1 + (p2 - p1) * t; }
 
-function autoBind(instance: Record<string, unknown>) {
+function autoBind(instance: any) {
   const proto = Object.getPrototypeOf(instance);
   Object.getOwnPropertyNames(proto).forEach(key => {
     if (key !== "constructor" && typeof instance[key] === "function") {
@@ -138,7 +138,7 @@ function getFontSize(font: string) {
 }
 
 function createTextTexture(
-  gl: WebGLRenderingContext,
+  gl: any,
   text: string,
   font = "bold 30px monospace",
   color = "black",
@@ -164,7 +164,7 @@ function createTextTexture(
 
 // ─── Title class ─────────────────────────────────
 class Title {
-  gl: WebGLRenderingContext;
+  gl: any;
   plane: Mesh;
   renderer: Renderer;
   text: string;
@@ -175,7 +175,7 @@ class Title {
   constructor({
     gl, plane, renderer, text, textColor = "#545050", font = "30px sans-serif",
   }: {
-    gl: WebGLRenderingContext;
+    gl: any;
     plane: Mesh;
     renderer: Renderer;
     text: string;
@@ -234,7 +234,7 @@ class Title {
 class Media {
   extra = 0;
   geometry: Plane;
-  gl: WebGLRenderingContext;
+  gl: any;
   image: string;
   index: number;
   length: number;
@@ -262,7 +262,7 @@ class Media {
   constructor({
     geometry, gl, image, index, length, renderer, scene, screen, text, viewport, bend, textColor, borderRadius, font,
   }: {
-    geometry: Plane; gl: WebGLRenderingContext; image: string; index: number; length: number;
+    geometry: Plane; gl: any; image: string; index: number; length: number;
     renderer: Renderer; scene: Transform; screen: { width: number; height: number };
     text: string; viewport: { width: number; height: number };
     bend: number; textColor: string; borderRadius: number; font: string;
@@ -424,10 +424,10 @@ class Media {
 // ─── App class ───────────────────────────────────
 class GalleryApp {
   container: HTMLElement;
-  renderer: Renderer;
-  gl: WebGLRenderingContext;
-  camera: Camera;
-  scene: Transform;
+  renderer!: Renderer;
+  gl!: any;
+  camera!: Camera;
+  scene!: Transform;
   planeGeometry!: Plane;
   mediasImages!: GalleryItem[];
   medias!: Media[];
@@ -487,7 +487,7 @@ class GalleryApp {
     });
     this.gl = this.renderer.gl;
     this.gl.clearColor(0, 0, 0, 0);
-    this.container.appendChild(this.gl.canvas);
+    this.container.appendChild(this.gl.canvas as HTMLCanvasElement);
   }
 
   createCamera() {

@@ -12,7 +12,6 @@ def create_api_router():
 
     router = APIRouter()
     router.include_router(auth.router)
-    router.include_router(admin.router)
     router.include_router(health.router)
     router.include_router(exercises.router)
     router.include_router(feedback.router)

@@ -20,7 +20,7 @@ class ExerciseAnalyzer:
     def __init__(self, exercise: str = "squat"):
         self.exercise = exercise
         self._analyzer = get_analyzer(exercise)
-        self._frame_state: dict = {}
+        self._state: dict = {}  # persistent state for phase tracking across frames
         self.stage = "ready"
         self.count = 0
         self.valid_count = 0
@@ -29,7 +29,7 @@ class ExerciseAnalyzer:
         self.start_time = 0.0  # set by the real-time loop
 
     def analyze(self, keypoints: Keypoints) -> AnalysisResult:
-        result = self._analyzer.analyze_frame(keypoints, self._frame_state)
+        result = self._analyzer.analyze_frame(keypoints, self._state)
         self.stage = result["phase"]
         self.count = result["count"]
         self.valid_count = result["valid_count"]

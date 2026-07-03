@@ -1,6 +1,9 @@
-﻿from app.api.deps import get_db, require_admin
+from datetime import datetime, timezone
+
+from app.api.deps import get_db, require_admin
 from app.core.security import get_password_hash
-from app.models.entities import UserORM
+from app.models.entities import UserORM, ActiveTemplateORM
+from app.services.analysis.template_service import refresh_active_templates
 from app.services.session.session_service import session_service
 
 try:
@@ -28,7 +31,8 @@ if router and BaseModel:
         items: list[AdminUserResponse]
 
     class AdminUserUpdateRequest(BaseModel):
-        is_active: bool
+        is_active: bool | None = None
+        role: str | None = None
 
     class AdminUserCreateRequest(BaseModel):
         username: str
@@ -51,7 +55,6 @@ if router and BaseModel:
     def list_users(db: Session = Depends(get_db)):
         users = (
             db.query(UserORM)
-            .filter(UserORM.role == "user")
             .order_by(UserORM.id.asc())
             .all()
         )
@@ -125,16 +128,38 @@ if router and BaseModel:
         if user is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
 
-        if user.role == "admin":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="管理员账号不能在用户管理中禁用",
-            )
+        if request.role is not None:
+            if request.role not in {"user", "admin"}:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="角色只能是 user 或 admin")
+            if user.role == "admin" and request.role != "admin":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="管理员账号不能在用户管理中降级",
+                )
+            user.role = request.role
 
-        user.is_active = request.is_active
+        if request.is_active is not None:
+            if user.role == "admin" and not request.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="管理员账号不能在用户管理中禁用",
+                )
+            user.is_active = request.is_active
         db.commit()
         db.refresh(user)
         return _to_admin_user_response(user)
+
+    @router.put(
+        "/users/{user_id}",
+        response_model=AdminUserResponse,
+    )
+    def replace_user(
+        user_id: int,
+        request: AdminUserUpdateRequest,
+        db: Session = Depends(get_db),
+        current_admin: UserORM = Depends(require_admin),
+    ):
+        return update_user_status(user_id, request, db, current_admin)
 
     @router.delete(
         "/users/{user_id}",
@@ -195,3 +220,60 @@ if router and BaseModel:
                 "报告数据来自当前后端训练记录，用户归属将在训练会话落库后进一步关联。",
             ],
         }
+
+    # ── 模板启用/禁用 ─────────────────────────────────────────────
+
+    @router.get("/templates/active", dependencies=[Depends(require_admin)])
+    def list_active_templates(db: Session = Depends(get_db)):
+        """获取所有已启用的模板配置"""
+        records = db.query(ActiveTemplateORM).all()
+        return {"items": [r.to_dict() for r in records]}
+
+    @router.post("/templates/active", status_code=201, dependencies=[Depends(require_admin)])
+    def set_active_template(
+        body: dict,
+        db: Session = Depends(get_db),
+    ):
+        """
+        设置启用模板——每种动作只能启用一个模板。
+        如果该动作已有启用的模板，自动替换。
+        """
+        action = body.get("action", "").strip()
+        template_id = body.get("template_id", "").strip()
+        if not action:
+            raise HTTPException(status_code=400, detail="action 不能为空")
+        if not template_id:
+            raise HTTPException(status_code=400, detail="template_id 不能为空")
+
+        existing = db.query(ActiveTemplateORM).filter(ActiveTemplateORM.action == action).first()
+        if existing:
+            existing.template_id = template_id
+            existing.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(existing)
+            refresh_active_templates(db)
+            return existing.to_dict()
+
+        record = ActiveTemplateORM(
+            action=action,
+            template_id=template_id,
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        refresh_active_templates(db)
+        return record.to_dict()
+
+    @router.delete("/templates/active/{action}", status_code=204, dependencies=[Depends(require_admin)])
+    def remove_active_template(
+        action: str,
+        db: Session = Depends(get_db),
+    ):
+        """取消启用模板"""
+        record = db.query(ActiveTemplateORM).filter(ActiveTemplateORM.action == action).first()
+        if not record:
+            raise HTTPException(status_code=404, detail="该动作尚未启用模板")
+        db.delete(record)
+        db.commit()
+        refresh_active_templates(db)
+        return None

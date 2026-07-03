@@ -128,20 +128,30 @@ class VideoAnalysisService:
 
         video_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
         video_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        total_frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT)) or 0
 
         analyzer = ExerciseAnalyzer(exercise=exercise)
         template_service = TemplateService()
         feedback_service = FeedbackService()
         pose = self._create_pose()
         frame_results = []
-        frame_index = 0
         limit = max(1, min(int(max_frames), 600))
+        if total_frame_count > limit:
+            frame_indices = [
+                int(round(i * (total_frame_count - 1) / max(limit - 1, 1)))
+                for i in range(limit)
+            ]
+        else:
+            frame_indices = list(range(total_frame_count or limit))
 
         try:
-            while frame_index < limit:
+            for frame_index in frame_indices:
+                if total_frame_count:
+                    capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+
                 ok, frame = capture.read()
                 if not ok:
-                    break
+                    continue
 
                 if keypoint_extractor is not None:
                     keypoints = keypoint_extractor(frame, pose)
@@ -158,7 +168,6 @@ class VideoAnalysisService:
                     payload["metrics"] = payload["features"]
 
                 frame_results.append(payload)
-                frame_index += 1
         finally:
             capture.release()
             if pose is not None:
@@ -191,6 +200,8 @@ class VideoAnalysisService:
             "exercise": exercise,
             "source_uri": str(source_path).replace("\\", "/"),
             "processed_frames": len(frame_results),
+            "valid_keypoint_frames": sum(1 for frame in frame_results if frame.get("keypoints")),
+            "total_video_frames": total_frame_count,
             "video_width": video_width,
             "video_height": video_height,
             "frames": frame_results,
@@ -204,10 +215,23 @@ class VideoAnalysisService:
             analyzer.analyze(keypoints)
 
     def _extract_keypoints_from_frame(self, frame, pose):
-        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        result = pose.process(rgb)
+        landmarks = None
+        transform = "none"
+        candidates = [
+            ("none", frame),
+            ("cw", cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)),
+            ("ccw", cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)),
+            ("180", cv2.rotate(frame, cv2.ROTATE_180)),
+        ]
 
-        if not result.pose_landmarks:
+        for candidate_transform, candidate_frame in candidates:
+            candidate_landmarks = self._detect_landmarks(candidate_frame, pose)
+            if candidate_landmarks:
+                landmarks = candidate_landmarks
+                transform = candidate_transform
+                break
+
+        if not landmarks:
             return {}
 
         keypoints = {}
@@ -224,21 +248,53 @@ class VideoAnalysisService:
         ]
 
         for index, name in enumerate(landmark_names):
-            if index < len(result.pose_landmarks.landmark):
-                landmark = result.pose_landmarks.landmark[index]
+            if index < len(landmarks):
+                landmark = landmarks[index]
+                x, y = self._map_landmark_to_original(landmark.x, landmark.y, transform)
                 keypoints[name] = NormalizedKeypoint(
-                    x=landmark.x,
-                    y=landmark.y,
+                    x=x,
+                    y=y,
                     visibility=landmark.visibility,
                 )
 
         return keypoints
 
+    @staticmethod
+    def _detect_landmarks(frame, pose):
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        if hasattr(pose, "detect"):
+            from mediapipe import Image, ImageFormat
+
+            mp_image = Image(image_format=ImageFormat.SRGB, data=rgb)
+            result = pose.detect(mp_image)
+            return result.pose_landmarks[0] if result.pose_landmarks else None
+
+        result = pose.process(rgb)
+        return result.pose_landmarks.landmark if result.pose_landmarks else None
+
+    @staticmethod
+    def _map_landmark_to_original(x: float, y: float, transform: str) -> tuple[float, float]:
+        if transform == "cw":
+            mapped = (y, 1 - x)
+        elif transform == "ccw":
+            mapped = (1 - y, x)
+        elif transform == "180":
+            mapped = (1 - x, 1 - y)
+        else:
+            mapped = (x, y)
+
+        return (
+            min(1.0, max(0.0, mapped[0])),
+            min(1.0, max(0.0, mapped[1])),
+        )
+
     def _resolve_source(self, source_uri: str) -> Path:
         source = Path(source_uri)
         if source.is_absolute():
             return source
-        return (Path.cwd() / source).resolve()
+        storage_parent = self.storage_root.resolve().parent
+        return (storage_parent / source).resolve()
 
     def _make_output_path(self, source_path: Path) -> Path:
         return self.storage_root / "outputs" / f"{source_path.stem}-{uuid4().hex[:8]}.webm"
@@ -250,16 +306,24 @@ class VideoAnalysisService:
     @staticmethod
     def _create_pose():
         try:
-            import mediapipe as mp
+            from mediapipe.tasks.python import BaseOptions
+            from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions, RunningMode
         except ModuleNotFoundError:
             return None
 
-        return mp.solutions.pose.Pose(
-            static_image_mode=False,
-            model_complexity=1,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5,
+        model_path = Path(__file__).resolve().parents[3] / "pose_landmarker_lite.task"
+        if not model_path.exists():
+            model_path = Path(r"C:\temp\pose_landmarker_lite.task")
+
+        options = PoseLandmarkerOptions(
+            base_options=BaseOptions(model_asset_buffer=model_path.read_bytes()),
+            running_mode=RunningMode.IMAGE,
+            num_poses=1,
+            min_pose_detection_confidence=0.3,
+            min_pose_presence_confidence=0.3,
+            min_tracking_confidence=0.3,
         )
+        return PoseLandmarker.create_from_options(options)
 
     def _annotate_frame(self, frame, pose, exercise: str, frame_index: int):
         annotated = frame.copy()
@@ -292,6 +356,9 @@ class VideoAnalysisService:
 
     @staticmethod
     def _draw_pose(frame, pose):
+        if not hasattr(pose, "process"):
+            return
+
         import mediapipe as mp
 
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)

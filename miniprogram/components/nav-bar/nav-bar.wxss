@@ -1,0 +1,33 @@
+/* 自定义导航栏 */
+.nav-bar {
+  background: var(--primary);
+  color: #fff;
+}
+
+.nav-bar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 88rpx;
+  padding: 0 24rpx;
+  position: relative;
+}
+
+.nav-left {
+  position: absolute;
+  left: 24rpx;
+}
+
+.nav-back {
+  font-size: 28rpx;
+}
+
+.nav-title {
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.nav-right {
+  position: absolute;
+  right: 24rpx;
+}
