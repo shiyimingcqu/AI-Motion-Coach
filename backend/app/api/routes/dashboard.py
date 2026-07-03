@@ -43,6 +43,7 @@ if router:
             from datetime import datetime, timezone
             today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
             today_sessions = [s for s in sessions if s.created_at >= today_start]
+            today_avg = round(sum(s.average_score for s in today_sessions) / len(today_sessions), 1) if today_sessions else 0
 
             # trend (last 7 days)
             trend_map: dict[str, list[float]] = {}
@@ -68,6 +69,7 @@ if router:
 
             return {
                 "today_sessions": len(today_sessions),
+                "today_avg_score": today_avg,
                 "total_sessions": total,
                 "average_score": round(avg_score, 1),
                 "average_score_change": round(score_change, 1),
@@ -92,6 +94,7 @@ if router:
 def _empty_stats():
     return {
         "today_sessions": 0,
+        "today_avg_score": 0,
         "total_sessions": 0,
         "average_score": 0,
         "average_score_change": 0,

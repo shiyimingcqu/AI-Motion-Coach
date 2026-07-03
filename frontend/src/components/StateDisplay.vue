@@ -42,7 +42,7 @@
           <div class="sd-spinner"><div class="spinner-ring" /><div class="spinner-ring spinner-ring-inner" /></div>
         </template>
       </div>
-      <p v-if="text || $slots.default" class="sd-text"><slot>{{ text || '加载中...' }}</slot></p>
+      <p v-if="text || $slots.default" class="sd-text"><slot>{{ text || t("stateDisplay.loading") }}</slot></p>
     </div>
 
     <!-- ===== Empty ===== -->
@@ -55,7 +55,7 @@
           <line x1="12" y1="10" x2="12" y2="16"/>
         </svg>
       </div>
-      <p class="sd-title"><slot name="title">{{ title || '暂无数据' }}</slot></p>
+      <p class="sd-title"><slot name="title">{{ title || t("stateDisplay.noData") }}</slot></p>
       <p v-if="text" class="sd-text">{{ text }}</p>
       <button v-if="actionLabel" class="sd-action" @click="$emit('action')">
         <slot name="action">{{ actionLabel }}</slot>
@@ -71,16 +71,20 @@
           <line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
       </div>
-      <p class="sd-title"><slot name="title">{{ title || '加载失败' }}</slot></p>
+      <p class="sd-title"><slot name="title">{{ title || t("stateDisplay.loadFailed") }}</slot></p>
       <p v-if="text" class="sd-text">{{ text }}</p>
-      <button v-if="retryLabel" class="sd-action" @click="$emit('retry')">
-        <slot name="retry">{{ retryLabel }}</slot>
+      <button class="sd-action" @click="$emit('retry')">
+        <slot name="retry">{{ retryLabel || t("stateDisplay.retry") }}</slot>
       </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
+
 withDefaults(defineProps<{
   type: "loading" | "empty" | "error";
   skeleton?: "table" | "cards" | "chart" | "list";
@@ -91,7 +95,6 @@ withDefaults(defineProps<{
   retryLabel?: string;
   size?: "sm" | "md" | "lg";
 }>(), {
-  retryLabel: "重试",
   size: "md",
 });
 
@@ -165,7 +168,7 @@ defineEmits<{
 .sd-skeleton { width: 100%; max-width: 800px; }
 .skeleton-pulse {
   height: 100%; border-radius: 4px;
-  background: linear-gradient(90deg, rgba(30,41,59,0.4) 25%, rgba(59,130,246,0.08) 50%, rgba(30,41,59,0.4) 75%);
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -181,14 +184,14 @@ defineEmits<{
 .skeleton-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
 .skeleton-card {
   padding: 20px; border-radius: 10px;
-  background: rgba(15,23,42,0.5); border: 1px solid rgba(59,130,246,0.06);
+  background: #f1f5f9; border: 1px solid #e2e8f0;
 }
 
 /* Chart skeleton */
 .skeleton-chart {
   height: 180px; border-radius: 10px;
-  background: rgba(15,23,42,0.4);
-  border: 1px solid rgba(59,130,246,0.06);
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
   padding: 24px;
   display: flex; flex-direction: column; justify-content: flex-end;
   gap: 8px;
@@ -198,6 +201,6 @@ defineEmits<{
 
 /* List skeleton */
 .skeleton-list { display: grid; gap: 8px; }
-.skeleton-list-item { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 8px; background: rgba(15,23,42,0.3); }
+.skeleton-list-item { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 8px; background: #f1f5f9; }
 .skeleton-avatar { width: 36px; height: 36px; flex-shrink: 0; }
 </style>

@@ -126,19 +126,19 @@
               @timeupdate="onVideoTimeUpdate"
             />
             <svg v-else viewBox="0 0 300 520" class="pose-skeleton breathing-skel">
-              <circle cx="150" cy="42" r="20" fill="none" stroke="#3b82f6" stroke-width="2.5" />
-              <line x1="150" y1="62" x2="150" y2="90" stroke="#3b82f6" stroke-width="2.5" />
-              <line x1="150" y1="90" x2="150" y2="210" stroke="#3b82f6" stroke-width="2.5" />
-              <line x1="110" y1="210" x2="190" y2="210" stroke="#3b82f6" stroke-width="2.5" />
-              <line x1="150" y1="110" x2="90" y2="172" stroke="#3b82f6" stroke-width="2.5" />
-              <line x1="90" y1="172" x2="72" y2="230" stroke="#3b82f6" stroke-width="2.5" />
-              <line x1="150" y1="110" x2="210" y2="172" stroke="#3b82f6" stroke-width="2.5" />
-              <line x1="210" y1="172" x2="228" y2="230" stroke="#3b82f6" stroke-width="2.5" />
-              <line x1="130" y1="210" x2="70" y2="350" stroke="#f59e0b" stroke-width="3" />
-              <line x1="70" y1="350" x2="55" y2="470" stroke="#f59e0b" stroke-width="2.5" />
-              <line x1="170" y1="210" x2="230" y2="350" stroke="#3b82f6" stroke-width="2.5" />
-              <line x1="230" y1="350" x2="245" y2="470" stroke="#3b82f6" stroke-width="2.5" />
-              <g fill="#3b82f6">
+              <circle cx="150" cy="42" r="20" fill="none" stroke="#5b8cff" stroke-width="2.5" />
+              <line x1="150" y1="62" x2="150" y2="90" stroke="#5b8cff" stroke-width="2.5" />
+              <line x1="150" y1="90" x2="150" y2="210" stroke="#5b8cff" stroke-width="2.5" />
+              <line x1="110" y1="210" x2="190" y2="210" stroke="#5b8cff" stroke-width="2.5" />
+              <line x1="150" y1="110" x2="90" y2="172" stroke="#5b8cff" stroke-width="2.5" />
+              <line x1="90" y1="172" x2="72" y2="230" stroke="#5b8cff" stroke-width="2.5" />
+              <line x1="150" y1="110" x2="210" y2="172" stroke="#5b8cff" stroke-width="2.5" />
+              <line x1="210" y1="172" x2="228" y2="230" stroke="#5b8cff" stroke-width="2.5" />
+              <line x1="130" y1="210" x2="70" y2="350" stroke="#f97316" stroke-width="3" />
+              <line x1="70" y1="350" x2="55" y2="470" stroke="#f97316" stroke-width="2.5" />
+              <line x1="170" y1="210" x2="230" y2="350" stroke="#5b8cff" stroke-width="2.5" />
+              <line x1="230" y1="350" x2="245" y2="470" stroke="#5b8cff" stroke-width="2.5" />
+              <g fill="#5b8cff">
                 <circle cx="150" cy="90" r="5" />
                 <circle cx="150" cy="130" r="5" />
                 <circle cx="90" cy="172" r="5" />
@@ -148,12 +148,12 @@
                 <circle cx="130" cy="210" r="5" />
                 <circle cx="170" cy="210" r="5" />
               </g>
-              <g fill="#f59e0b">
+              <g fill="#f97316">
                 <circle cx="70" cy="350" r="5" />
                 <circle cx="55" cy="470" r="4.5" />
               </g>
-              <circle cx="230" cy="350" r="5" fill="#3b82f6" />
-              <circle cx="245" cy="470" r="4.5" fill="#3b82f6" />
+              <circle cx="230" cy="350" r="5" fill="#5b8cff" />
+              <circle cx="245" cy="470" r="4.5" fill="#5b8cff" />
               <g class="warning-anim">
                 <circle
                   cx="70"
@@ -633,7 +633,7 @@ const issueSummary = computed(() => {
 const adviceGroups = computed<AdviceGroup[]>(() => {
   return problems.value.map((problem, index) => ({
     label: problem.title,
-    color: problem.level === "high" ? "#f87171" : problem.level === "medium" ? "#fbbf24" : "#60a5fa",
+    color: problem.level === "high" ? "#ef4444" : problem.level === "medium" ? "#f97316" : "#5b8cff",
     items: [
       {
         title: `专项纠正 ${index + 1}`,
@@ -688,13 +688,13 @@ function buildCharts() {
 
   if (trendChartRef.value) {
     createChart(trendChartRef.value, {
-      color: ["#60a5fa"],
+      color: ["#5b8cff"],
       grid: { left: 40, right: 14, top: 12, bottom: 28 },
       tooltip: {
         trigger: "axis",
-        backgroundColor: "rgba(8,13,26,0.94)",
-        borderColor: "#253047",
-        textStyle: { color: "#e2e8f0" },
+        backgroundColor: "rgba(255,255,255,0.94)",
+        borderColor: "#cbd5e1",
+        textStyle: { color: "#0f172a" },
         formatter: (params: any[]) => {
           const point = params[0];
           return `${point.axisValue}: ${point.value} 分`;
@@ -704,7 +704,7 @@ function buildCharts() {
         type: "category",
         boundaryGap: false,
         data: trendDates,
-        axisLine: { lineStyle: { color: "#1e293b" } },
+        axisLine: { lineStyle: { color: "#cbd5e1" } },
         axisTick: { show: false },
         axisLabel: { color: "#64748b", fontSize: 11 },
       },
@@ -713,7 +713,7 @@ function buildCharts() {
         min: 60,
         max: 100,
         interval: 10,
-        splitLine: { lineStyle: { color: "rgba(30,41,59,0.6)", type: "dashed" } },
+        splitLine: { lineStyle: { color: "rgba(203,213,225,0.6)", type: "dashed" } },
         axisLabel: { color: "#64748b", fontSize: 11 },
       },
       series: [
@@ -724,8 +724,8 @@ function buildCharts() {
           lineStyle: { width: 2.5 },
           areaStyle: {
             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: "rgba(59,130,246,0.25)" },
-              { offset: 1, color: "rgba(59,130,246,0.02)" },
+              { offset: 0, color: "rgba(91,140,255,0.2)" },
+              { offset: 1, color: "rgba(91,140,255,0.02)" },
             ]),
           },
           data: trendScores,
@@ -736,11 +736,11 @@ function buildCharts() {
 
   if (radarChartRef.value) {
     createChart(radarChartRef.value, {
-      color: ["#60a5fa"],
+      color: ["#5b8cff"],
       tooltip: {
-        backgroundColor: "rgba(8,13,26,0.94)",
-        borderColor: "#253047",
-        textStyle: { color: "#e2e8f0" },
+        backgroundColor: "rgba(255,255,255,0.94)",
+        borderColor: "#cbd5e1",
+        textStyle: { color: "#0f172a" },
       },
       radar: {
         center: ["50%", "52%"],
@@ -752,18 +752,18 @@ function buildCharts() {
           { name: "左右对称性", max: 100 },
           { name: "姿态控制力", max: 100 },
         ],
-        axisName: { color: "#94a3b8", fontSize: 11 },
-        splitArea: { areaStyle: { color: ["rgba(15,23,42,0.5)", "rgba(8,13,26,0.8)"] } },
-        splitLine: { lineStyle: { color: "#1e293b" } },
-        axisLine: { lineStyle: { color: "#1e293b" } },
+        axisName: { color: "#64748b", fontSize: 11 },
+        splitArea: { areaStyle: { color: ["#f8fafc", "#f1f5f9"] } },
+        splitLine: { lineStyle: { color: "#cbd5e1" } },
+        axisLine: { lineStyle: { color: "#cbd5e1" } },
       },
       series: [
         {
           type: "radar",
           data: [{ value: metricValues, name: "当前表现" }],
-          areaStyle: { color: "rgba(59,130,246,0.2)" },
-          lineStyle: { color: "#60a5fa", width: 2 },
-          itemStyle: { color: "#3b82f6" },
+          areaStyle: { color: "rgba(91,140,255,0.15)" },
+          lineStyle: { color: "#5b8cff", width: 2 },
+          itemStyle: { color: "#5b8cff" },
           symbolSize: 4,
         },
       ],
@@ -774,9 +774,9 @@ function buildCharts() {
     createChart(symmetryChartRef.value, {
       tooltip: {
         trigger: "axis",
-        backgroundColor: "rgba(8,13,26,0.94)",
-        borderColor: "#253047",
-        textStyle: { color: "#e2e8f0" },
+        backgroundColor: "rgba(255,255,255,0.94)",
+        borderColor: "#cbd5e1",
+        textStyle: { color: "#0f172a" },
       },
       legend: {
         data: ["左侧", "右侧"],
@@ -787,7 +787,7 @@ function buildCharts() {
       xAxis: {
         type: "category",
         data: ["髋部", "腿部", "膝关节", "踝关节"],
-        axisLine: { lineStyle: { color: "#1e293b" } },
+        axisLine: { lineStyle: { color: "#cbd5e1" } },
         axisTick: { show: false },
         axisLabel: { color: "#64748b", fontSize: 11 },
       },
@@ -795,7 +795,7 @@ function buildCharts() {
         type: "value",
         min: 0,
         max: 100,
-        splitLine: { lineStyle: { color: "rgba(30,41,59,0.6)", type: "dashed" } },
+        splitLine: { lineStyle: { color: "rgba(203,213,225,0.6)", type: "dashed" } },
         axisLabel: { color: "#64748b", fontSize: 11 },
       },
       series: [
@@ -803,7 +803,7 @@ function buildCharts() {
           type: "bar",
           name: "左侧",
           data: [score + 5, score, score - 10, score - 3],
-          color: "#3b82f6",
+          color: "#5b8cff",
           barWidth: 14,
           itemStyle: { borderRadius: [3, 3, 0, 0] },
         },
@@ -811,7 +811,7 @@ function buildCharts() {
           type: "bar",
           name: "右侧",
           data: [score + 8, score + 3, score - 14, score],
-          color: "#10b981",
+          color: "#25b87b",
           barWidth: 14,
           itemStyle: { borderRadius: [3, 3, 0, 0] },
         },
@@ -961,10 +961,10 @@ onBeforeUnmount(() => {
 .main-panel,
 .section-card,
 .chart-card {
-  border: 1px solid rgba(59, 130, 246, 0.1);
+  border: 1px solid #d6e3ff;
   border-radius: 14px;
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(8, 13, 26, 0.98));
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
+  background: linear-gradient(180deg, #ffffff, #f8fbff);
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.07);
 }
 
 .top-header {
@@ -993,7 +993,7 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   border-radius: 11px;
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  background: linear-gradient(135deg, #5b8cff, #4f46e5);
   color: #fff;
   font-size: 18px;
   font-weight: 800;
@@ -1005,7 +1005,7 @@ onBeforeUnmount(() => {
 .sc-header h3,
 .pi-title-row strong,
 .ai-body strong {
-  color: #f8fafc;
+  color: #0f172a;
 }
 
 .th-info p,
@@ -1021,7 +1021,7 @@ onBeforeUnmount(() => {
 .ai-prescription,
 .chart-pill,
 .tl-labels {
-  color: #94a3b8;
+  color: #64748b;
 }
 
 .th-score {
@@ -1038,7 +1038,7 @@ onBeforeUnmount(() => {
   font-size: 30px;
   font-weight: 900;
   line-height: 1;
-  background: linear-gradient(135deg, #60a5fa, #a78bfa);
+  background: linear-gradient(135deg, #5b8cff, #8b5cf6);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -1064,8 +1064,8 @@ onBeforeUnmount(() => {
 .th-score-badge.good,
 .score-ring-grade.good,
 .cf-badge.good {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
+  background: rgba(37, 184, 123, 0.12);
+  color: #25b87b;
 }
 
 .th-compare {
@@ -1081,11 +1081,11 @@ onBeforeUnmount(() => {
 }
 
 .th-compare-value.up {
-  color: #34d399;
+  color: #25b87b;
 }
 
 .th-compare-value.down {
-  color: #f87171;
+  color: #ef4444;
 }
 
 .th-actions {
@@ -1108,7 +1108,7 @@ onBeforeUnmount(() => {
 .play-btn-small,
 .ba-btn.primary {
   color: #fff;
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  background: linear-gradient(135deg, #5b8cff, #4f46e5);
 }
 
 .btn-primary {
@@ -1118,7 +1118,7 @@ onBeforeUnmount(() => {
   padding: 10px 24px;
   border: none;
   border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 16px rgba(91, 140, 255, 0.3);
 }
 
 .btn-outline {
@@ -1126,10 +1126,10 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 8px;
   padding: 10px 20px;
-  border: 1.5px solid #3b82f6;
+  border: 1.5px solid #5b8cff;
   border-radius: 10px;
   background: transparent;
-  color: #3b82f6;
+  color: #5b8cff;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -1154,8 +1154,8 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   padding: 12px 18px;
-  border-bottom: 1px solid rgba(59, 130, 246, 0.06);
-  background: rgba(8, 13, 26, 0.7);
+  border-bottom: 1px solid #e8effd;
+  background: #f8fafc;
 }
 
 .panel-left {
@@ -1173,7 +1173,7 @@ onBeforeUnmount(() => {
 .skel-stage-label,
 .phase-step.active .phase-label,
 .btn-full-plan {
-  color: #93c5fd;
+  color: #5b8cff;
 }
 
 .phase-badge {
@@ -1181,12 +1181,12 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
   padding: 3px 12px;
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(91, 140, 255, 0.08);
   font-size: 12px;
 }
 
 .phase-badge strong {
-  color: #f8fafc;
+  color: #0f172a;
 }
 
 .phase-dot {
@@ -1196,8 +1196,8 @@ onBeforeUnmount(() => {
 }
 
 .pulse-blue {
-  background: #3b82f6;
-  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+  background: #5b8cff;
+  box-shadow: 0 0 10px rgba(91, 140, 255, 0.5);
 }
 
 .status-pill {
@@ -1210,8 +1210,8 @@ onBeforeUnmount(() => {
 
 .status-pill.warn,
 .cf-badge.warn {
-  background: rgba(245, 158, 11, 0.12);
-  color: #fbbf24;
+  background: rgba(249, 115, 22, 0.08);
+  color: #f97316;
 }
 
 .metric-strip {
@@ -1219,8 +1219,8 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(5, 1fr);
   gap: 8px;
   padding: 10px 16px;
-  background: rgba(8, 13, 26, 0.35);
-  border-bottom: 1px solid rgba(59, 130, 246, 0.04);
+  background: #f8fafc;
+  border-bottom: 1px solid #e8effd;
 }
 
 .ms-item {
@@ -1235,21 +1235,21 @@ onBeforeUnmount(() => {
 
 .ms-item .good,
 .ms-track .good {
-  color: #34d399;
-  background: linear-gradient(90deg, #10b981, #34d399);
+  color: #25b87b;
+  background: linear-gradient(90deg, #17a36b, #25b87b);
 }
 
 .ms-item .warn,
 .ms-track .warn {
-  color: #fbbf24;
-  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+  color: #f97316;
+  background: linear-gradient(90deg, #ea580c, #f97316);
 }
 
 .ms-track {
   height: 4px;
   border-radius: 999px;
   overflow: hidden;
-  background: rgba(30, 41, 59, 0.6);
+  background: #e2e8f0;
 }
 
 .ms-track i {
@@ -1270,8 +1270,8 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(rgba(59, 130, 246, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(59, 130, 246, 0.035) 1px, transparent 1px);
+    linear-gradient(rgba(91, 140, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(91, 140, 255, 0.045) 1px, transparent 1px);
   background-size: 28px 28px;
 }
 
@@ -1280,8 +1280,8 @@ onBeforeUnmount(() => {
 .view-strip {
   position: absolute;
   z-index: 5;
-  border: 1px solid rgba(59, 130, 246, 0.1);
-  background: rgba(8, 13, 26, 0.82);
+  border: 1px solid #d6e3ff;
+  background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(8px);
 }
 
@@ -1313,10 +1313,10 @@ onBeforeUnmount(() => {
 .video-selector {
   margin-left: 4px;
   padding: 3px 8px;
-  border: 1px solid rgba(59, 130, 246, 0.25);
+  border: 1px solid rgba(91, 140, 255, 0.25);
   border-radius: 6px;
-  background: rgba(15, 23, 42, 0.85);
-  color: #93c5fd;
+  background: #ffffff;
+  color: #5b8cff;
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
@@ -1325,11 +1325,11 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
 }
 .video-selector:focus {
-  border-color: #3b82f6;
+  border-color: #5b8cff;
 }
 .video-selector option {
-  background: #0f172a;
-  color: #e2e8f0;
+  background: #ffffff;
+  color: #0f172a;
 }
 
 .skel-layout {
@@ -1392,20 +1392,20 @@ onBeforeUnmount(() => {
   gap: 1px;
   border-radius: 50%;
   background:
-    radial-gradient(circle, rgba(8, 13, 26, 0.9) 38%, transparent 39%),
-    conic-gradient(#34d399 0 var(--ring-pct, 0%), rgba(255, 255, 255, 0.04) var(--ring-pct, 0%) 100%);
-  border: 2px solid rgba(52, 211, 153, 0.2);
+    radial-gradient(circle, rgba(255, 255, 255, 0.95) 38%, transparent 39%),
+    conic-gradient(#25b87b 0 var(--ring-pct, 0%), rgba(203, 213, 225, 0.1) var(--ring-pct, 0%) 100%);
+  border: 2px solid rgba(37, 184, 123, 0.2);
   animation: ringPulse 3s ease-in-out infinite;
 }
 
 @keyframes ringPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.25); }
-  50% { box-shadow: 0 0 16px 4px rgba(52, 211, 153, 0.15); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37, 184, 123, 0.25); }
+  50% { box-shadow: 0 0 16px 4px rgba(37, 184, 123, 0.15); }
 }
 
 .score-ring-label {
   font-size: 8px;
-  color: #94a3b8;
+  color: #64748b;
 }
 
 .score-ring-meta {
@@ -1420,14 +1420,14 @@ onBeforeUnmount(() => {
 }
 
 .score-ring-issues {
-  color: #94a3b8;
+  color: #64748b;
   font-size: 11px;
 }
 
 .score-ring-issues strong,
 .pi-deduct strong,
 .score-deduct {
-  color: #f87171;
+  color: #ef4444;
 }
 
 .view-strip {
@@ -1444,14 +1444,14 @@ onBeforeUnmount(() => {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #64748b;
+  color: #94a3b8;
   font-size: 11px;
   font-weight: 600;
 }
 
 .view-angle.active {
-  background: rgba(59, 130, 246, 0.15);
-  color: #93c5fd;
+  background: rgba(91, 140, 255, 0.12);
+  color: #5b8cff;
 }
 
 .view-angle.disabled {
@@ -1463,8 +1463,8 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 12px;
   padding: 14px 18px;
-  border-top: 1px solid rgba(59, 130, 246, 0.06);
-  background: rgba(8, 13, 26, 0.7);
+  border-top: 1px solid #e8effd;
+  background: #f8fafc;
 }
 
 .phase-flow {
@@ -1490,34 +1490,34 @@ onBeforeUnmount(() => {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  border: 2px solid #334155;
-  background: rgba(30, 41, 59, 0.8);
-  color: #64748b;
+  border: 2px solid #cbd5e1;
+  background: #f1f5f9;
+  color: #94a3b8;
   font-size: 10px;
   font-weight: 700;
 }
 
 .phase-step.done .phase-circle {
-  background: rgba(16, 185, 129, 0.2);
-  border-color: #10b981;
-  color: #34d399;
+  background: rgba(37, 184, 123, 0.15);
+  border-color: #25b87b;
+  color: #25b87b;
 }
 
 .phase-step.active .phase-circle {
-  background: rgba(59, 130, 246, 0.2);
-  border-color: #3b82f6;
-  color: #93c5fd;
+  background: rgba(91, 140, 255, 0.15);
+  border-color: #5b8cff;
+  color: #5b8cff;
 }
 
 .phase-label {
   font-size: 10px;
-  color: #64748b;
+  color: #94a3b8;
 }
 
 .phase-now {
   padding: 1px 7px;
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
+  background: rgba(91, 140, 255, 0.12);
+  color: #5b8cff;
   font-size: 8px;
 }
 
@@ -1529,20 +1529,20 @@ onBeforeUnmount(() => {
   z-index: 1;
   height: 2px;
   margin: 0 calc(50% + 12px);
-  background: #1e293b;
+  background: #cbd5e1;
   border-radius: 999px;
 }
 
 .phase-connector-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #3b82f6, #60a5fa);
+  background: linear-gradient(90deg, #5b8cff, #7db4ff);
   transition: width 0.6s ease;
 }
 
 .phase-no-data {
   text-align: center;
-  color: #64748b;
+  color: #94a3b8;
   font-size: 13px;
   padding: 8px 0;
 }
@@ -1572,13 +1572,13 @@ onBeforeUnmount(() => {
   position: relative;
   height: 4px;
   border-radius: 999px;
-  background: rgba(30, 41, 59, 0.7);
+  background: #cbd5e1;
 }
 
 .tl-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #60a5fa, #a78bfa);
+  background: linear-gradient(90deg, #5b8cff, #8b5cf6);
   transition: width 0.6s ease;
 }
 
@@ -1589,8 +1589,8 @@ onBeforeUnmount(() => {
   width: 11px;
   height: 11px;
   border-radius: 50%;
-  background: #f8fafc;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  background: #0f172a;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
   transition: left 0.6s ease;
 }
 
@@ -1615,9 +1615,9 @@ onBeforeUnmount(() => {
 .speed-mini button,
 .ba-btn,
 .btn-full-plan {
-  border: 1px solid rgba(59, 130, 246, 0.12);
-  background: rgba(59, 130, 246, 0.06);
-  color: #cbd5e1;
+  border: 1px solid #d6e3ff;
+  background: rgba(91, 140, 255, 0.05);
+  color: #64748b;
 }
 
 .speed-mini button {
@@ -1627,8 +1627,8 @@ onBeforeUnmount(() => {
 }
 
 .speed-mini button.active {
-  background: rgba(59, 130, 246, 0.16);
-  color: #93c5fd;
+  background: rgba(91, 140, 255, 0.12);
+  color: #5b8cff;
 }
 
 .right-col {
@@ -1640,9 +1640,9 @@ onBeforeUnmount(() => {
 .tab-bar {
   gap: 6px;
   padding: 4px;
-  border: 1px solid rgba(59, 130, 246, 0.1);
+  border: 1px solid #d6e3ff;
   border-radius: 12px;
-  background: rgba(15, 23, 42, 0.96);
+  background: #ffffff;
 }
 
 .tab-btn {
@@ -1655,7 +1655,7 @@ onBeforeUnmount(() => {
   border: none;
   border-radius: 9px;
   background: transparent;
-  color: #64748b;
+  color: #94a3b8;
   font-size: 13px;
   font-weight: 600;
 }
@@ -1670,7 +1670,7 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   margin-bottom: 14px;
   padding-bottom: 12px;
-  border-bottom: 1px solid rgba(59, 130, 246, 0.06);
+  border-bottom: 1px solid #e8effd;
 }
 
 .sc-header-icon,
@@ -1688,15 +1688,15 @@ onBeforeUnmount(() => {
 }
 
 .sc-header-icon.danger {
-  background: rgba(239, 68, 68, 0.12);
-  color: #f87171;
+  background: rgba(239, 68, 68, 0.08);
+  color: #ef4444;
 }
 
 .sc-header-icon.success,
 .qa-icon,
 .ai-num {
-  background: rgba(16, 185, 129, 0.12);
-  color: #34d399;
+  background: rgba(37, 184, 123, 0.1);
+  color: #25b87b;
 }
 
 .problem-list,
@@ -1717,22 +1717,22 @@ onBeforeUnmount(() => {
 }
 
 .problem-item.high {
-  background: rgba(239, 68, 68, 0.05);
-  border-color: rgba(239, 68, 68, 0.12);
+  background: rgba(239, 68, 68, 0.04);
+  border-color: rgba(239, 68, 68, 0.1);
 }
 
 .problem-item.medium {
-  background: rgba(245, 158, 11, 0.04);
-  border-color: rgba(245, 158, 11, 0.12);
+  background: rgba(249, 115, 22, 0.04);
+  border-color: rgba(249, 115, 22, 0.1);
 }
 
 .problem-item.low {
-  background: rgba(59, 130, 246, 0.03);
-  border-color: rgba(59, 130, 246, 0.08);
+  background: rgba(91, 140, 255, 0.03);
+  border-color: rgba(91, 140, 255, 0.07);
 }
 
 .problem-item.selected {
-  outline: 1px solid rgba(59, 130, 246, 0.3);
+  outline: 1px solid rgba(91, 140, 255, 0.3);
 }
 
 .pi-top,
@@ -1755,20 +1755,20 @@ onBeforeUnmount(() => {
 
 .pi-num.high,
 .pi-badge.high {
-  background: rgba(239, 68, 68, 0.14);
-  color: #f87171;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
 }
 
 .pi-num.medium,
 .pi-badge.medium {
-  background: rgba(245, 158, 11, 0.14);
-  color: #fbbf24;
+  background: rgba(249, 115, 22, 0.1);
+  color: #f97316;
 }
 
 .pi-num.low,
 .pi-badge.low {
-  background: rgba(59, 130, 246, 0.1);
-  color: #93c5fd;
+  background: rgba(91, 140, 255, 0.08);
+  color: #5b8cff;
 }
 
 .pi-badge {
@@ -1780,7 +1780,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   margin-top: 6px;
   padding-top: 6px;
-  border-top: 1px solid rgba(59, 130, 246, 0.04);
+  border-top: 1px solid #e8effd;
   font-size: 10px;
 }
 
@@ -1788,8 +1788,8 @@ onBeforeUnmount(() => {
   margin-top: 14px;
   padding: 12px;
   border-radius: 9px;
-  border: 1px solid rgba(16, 185, 129, 0.1);
-  background: rgba(16, 185, 129, 0.04);
+  border: 1px solid rgba(37, 184, 123, 0.1);
+  background: rgba(37, 184, 123, 0.04);
 }
 
 .qa-icon {
@@ -1809,10 +1809,10 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 10px;
   padding: 12px;
-  border: 1px solid rgba(59, 130, 246, 0.06);
+  border: 1px solid #e8effd;
   border-radius: 9px;
-  background: rgba(8, 13, 26, 0.4);
-  color: #f8fafc;
+  background: #f8fafc;
+  color: #0f172a;
   font-size: 13px;
   font-weight: 600;
   text-align: left;
@@ -1829,7 +1829,7 @@ onBeforeUnmount(() => {
 }
 
 .accordion-chevron {
-  color: #64748b;
+  color: #94a3b8;
   transition: transform 0.2s ease;
 }
 
@@ -1842,7 +1842,7 @@ onBeforeUnmount(() => {
 }
 
 .advice-item {
-  background: rgba(8, 13, 26, 0.3);
+  background: #f8fafc;
 }
 
 .ai-num {

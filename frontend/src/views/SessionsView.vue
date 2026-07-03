@@ -1,305 +1,186 @@
 <template>
-  <div class="sessions-page">
+  <div class="evaluation-page">
     <header class="section-page-header">
       <div>
-        <h1>Training Sessions / 训练记录</h1>
-        <p>Complete history of all training sessions</p>
+        <h1>{{ $t("sessions.title") }}</h1>
       </div>
     </header>
 
-    <section class="summary-card-grid">
-      <article v-for="item in summaryCards" :key="item.label" class="summary-card">
-        <span>{{ item.label }}</span>
-        <strong :class="item.tone">{{ item.value }}</strong>
-      </article>
-    </section>
-
-    <section class="filter-card">
+    <section class="filter-card report-filter-card">
       <label class="session-search">
-        <Search :size="20" />
-        <input v-model="keyword" type="search" placeholder="Search sessions... / 搜索训练记录..." />
+        <Filter :size="18" />
+        <input v-model="keyword" type="search" :placeholder="$t('sessions.search')" />
       </label>
       <select v-model="exerciseFilter">
-        <option value="">All / 全部</option>
-        <option value="squat">深蹲</option>
-        <option value="push_up">俯卧撑</option>
-        <option value="jumping_jack">开合跳</option>
-        <option value="plank">平板支撑</option>
+        <option value="">{{ $t("common.all") }}</option>
+        <option v-for="(name, key) in exerciseLabels" :key="key" :value="key">{{ name }}</option>
       </select>
       <select v-model="sortOrder">
-        <option value="desc">Newest / 最新</option>
-        <option value="asc">Oldest / 最早</option>
+        <option value="desc">{{ $t("sessions.newest") }}</option>
+        <option value="asc">{{ $t("sessions.oldest") }}</option>
       </select>
     </section>
 
-    <section class="sessions-table-card">
-      <StateDisplay v-if="loading" type="loading" skeleton="table" :skeleton-rows="5" text="正在加载训练记录..." />
-      <StateDisplay v-else-if="error" type="error" :title="'加载失败'" :text="error" @retry="loadSessions" />
-      <StateDisplay v-else-if="filteredSessions.length === 0" type="empty" title="暂无训练记录" text="完成一次训练后，记录将在此处展示" />
-      <table v-else class="sessions-table">
+    <section class="report-table-card">
+      <StateDisplay v-if="loading" type="loading" skeleton="table" :skeleton-rows="6" :text="$t('sessions.loading')" />
+      <StateDisplay v-else-if="error" type="error" :title="$t('common.loadFailed')" :text="error" />
+      <StateDisplay v-else-if="filteredSessions.length === 0" type="empty" :title="$t('sessions.noSessions')" :text="$t('sessions.noSessionsText')" />
+      <table v-else class="report-table">
         <thead>
           <tr>
-            <th>DATE & TIME / 日期时间</th>
-            <th>EXERCISE / 动作</th>
-            <th>DURATION / 时长</th>
-            <th>REPS / 次数</th>
-            <th>SCORE / 分数</th>
-            <th>ACTIONS / 操作</th>
+            <th>{{ $t("sessions.tableHead_datetime") }}</th>
+            <th>{{ $t("sessions.tableHead_exercise") }}</th>
+            <th>{{ $t("sessions.tableHead_duration") }}</th>
+            <th>{{ $t("sessions.tableHead_reps") }}</th>
+            <th>{{ $t("sessions.tableHead_score") }}</th>
+            <th>{{ $t("sessions.tableHead_actions") }}</th>
           </tr>
         </thead>
         <tbody>
-            <tr v-for="s in filteredSessions" :key="s.session_id"
-              :data-session-id="s.session_id"
-              :class="{ 'session-highlight': s.session_id === highlightId }"
-            >
+          <tr v-for="session in filteredSessions" :key="session.session_id" class="report-row">
+            <td>{{ formatDate(session.created_at) }}</td>
+            <td>{{ exerciseLabels[session.exercise] || session.exercise }}</td>
+            <td>{{ formatDuration(session.duration_seconds) }}</td>
+            <td>{{ session.total_count }} / {{ session.valid_count }}</td>
             <td>
-              <div class="date-cell">
-                <CalendarDays :size="17" />
-                <div>
-                  <strong>{{ formatDate(s.created_at) }}</strong>
-                  <span>
-                    <Clock3 :size="13" />
-                    {{ formatTime(s.created_at) }}
-                  </span>
-                </div>
-              </div>
+              <span :class="session.average_score >= 70 ? 'pill score-good' : 'pill score-warn'">
+                {{ session.average_score }}
+              </span>
             </td>
             <td>
-              <div class="exercise-tags">
-                <span>{{ exerciseName(s.exercise) }}</span>
-              </div>
-            </td>
-            <td>{{ formatDuration(s.duration_seconds) }}</td>
-            <td>{{ s.total_count }}</td>
-            <td>
-              <div class="score-progress">
-                <i :class="scoreTone(s.average_score)" :style="{ width: s.average_score + '%' }" />
-                <strong>{{ s.average_score }}</strong>
-              </div>
-            </td>
-            <td>
-              <button class="link-button" type="button" @click="viewSession(s.session_id)">View Details</button>
+              <button class="icon-btn" @click="$emit('noop')">
+                <Trash2 :size="16" />
+              </button>
             </td>
           </tr>
         </tbody>
       </table>
-      <Pagination v-if="!loading && !error && filteredSessions.length > 0" :current="page" :total="totalCount" :page-size="pageSize" @update:current="onPageChange" />
     </section>
 
-    <section class="streak-card">
-      <span class="streak-icon">
-        <Medal :size="34" />
-      </span>
-      <div>
-        <h2>{{ streakLabel }}</h2>
-        <p>{{ streakSubtext }}</p>
+    <section class="summary-card-grid" style="margin-top: 16px;">
+      <article class="summary-card compact-summary" v-for="card in summaryCards" :key="card.label">
+        <span>{{ card.label }}</span>
+        <strong>{{ card.value }}</strong>
+      </article>
+    </section>
+
+    <!-- Streak -->
+    <section class="blue-shadow-card" style="margin-top:16px;padding:14px 20px;">
+      <span class="blue-solid"><Flame :size="28" /></span>
+      <div style="margin-left:10px">
+        <strong v-if="streakDays > 0">{{ $t("sessions.streak", { count: streakDays }) }}</strong>
+        <strong v-else>{{ $t("sessions.noStreakYet") }}</strong>
+        <p style="margin:4px 0 0;font-size:13px;color:#64748b">
+          {{ streakDays > 0 ? $t("sessions.keepGoing") : $t("sessions.startFirst") }}
+        </p>
       </div>
-      <strong>
-        <TrendingUp :size="18" />
-        {{ trendLabel }}
-      </strong>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, nextTick, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
-import { CalendarDays, Clock3, Medal, Search, TrendingUp } from "lucide-vue-next";
+import { computed, onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
+import { Filter, Flame, Trash2 } from "lucide-vue-next";
 import StateDisplay from "../components/StateDisplay.vue";
-import Pagination from "../components/Pagination.vue";
-import { getSessions, deleteSession, type SessionRecord } from "../api/sessions";
+import { getSessions } from "../api/sessions";
 
-const router = useRouter();
-const route = useRoute();
+const { t } = useI18n();
 
-const sessions = ref<SessionRecord[]>([]);
+interface SessionItem {
+  session_id: string;
+  exercise: string;
+  created_at: string;
+  duration_seconds: number;
+  total_count: number;
+  valid_count: number;
+  error_count: number;
+  average_score: number;
+}
+
+const sessions = ref<SessionItem[]>([]);
 const loading = ref(true);
 const error = ref("");
 const keyword = ref("");
 const exerciseFilter = ref("");
-const sortOrder = ref("desc");
-const page = ref(1);
-const pageSize = ref(20);
-const totalCount = ref(0);
-const deleting = ref<string | null>(null);
-const highlightId = ref(route.query.highlight as string || "");
+const sortOrder = ref<"asc" | "desc">("desc");
 
-function onPageChange(p: number) {
-  page.value = p;
-  loadSessions();
-}
+const exerciseLabels: Record<string, string> = {
+  squat: t("exercises.squat"),
+  push_up: t("exercises.push_up"),
+  plank: t("exercises.plank"),
+  lunge: t("exercises.lunge"),
+  jumping_jack: t("exercises.jumping_jack"),
+  burpee: t("exercises.burpee"),
+  high_knees: t("exercises.high_knees"),
+  glute_bridge: t("exercises.glute_bridge"),
+};
 
 const filteredSessions = computed(() => {
-  let list = sessions.value;
-  if (exerciseFilter.value) {
-    list = list.filter(s => s.exercise === exerciseFilter.value);
-  }
-  const query = keyword.value.trim().toLowerCase();
-  if (query) {
+  let list = [...sessions.value];
+  if (exerciseFilter.value) list = list.filter(s => s.exercise === exerciseFilter.value);
+  if (keyword.value.trim()) {
+    const q = keyword.value.trim().toLowerCase();
     list = list.filter(s =>
-      formatDate(s.created_at).includes(query) ||
-      exerciseName(s.exercise).toLowerCase().includes(query)
+      (exerciseLabels[s.exercise] || s.exercise).toLowerCase().includes(q)
     );
   }
-  list = [...list].sort((a, b) => {
-    const diff = a.created_at.localeCompare(b.created_at);
+  return list.sort((a, b) => {
+    const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     return sortOrder.value === "desc" ? -diff : diff;
   });
-  return list;
 });
 
 const summaryCards = computed(() => {
   const total = sessions.value.length;
-  const totalDuration = sessions.value.reduce((s, item) => s + item.duration_seconds, 0);
-  const avgScore = total > 0
-    ? (sessions.value.reduce((s, item) => s + item.average_score, 0) / total).toFixed(1) : "0";
+  const avgScore = total > 0 ? sessions.value.reduce((s, r) => s + r.average_score, 0) / total : 0;
+  const totalSec = sessions.value.reduce((s, r) => s + (r.duration_seconds || 0), 0);
+  const allTotal = sessions.value.reduce((s, r) => s + r.total_count, 0);
+  const allValid = sessions.value.reduce((s, r) => s + r.valid_count, 0);
+  const validRate = allTotal > 0 ? Math.round((allValid / allTotal) * 100) + "%" : "-";
+  const mins = Math.floor(totalSec / 60);
   return [
-    { label: "Total Sessions / 总训练次数", value: total, tone: "tone-text-blue" },
-    { label: "Total Duration / 总时长", value: `${Math.round(totalDuration / 60)} min`, tone: "tone-text-green" },
-    { label: "Avg Score / 平均分数", value: avgScore, tone: "tone-text-purple" },
-    { label: "Valid Rate / 有效率", value: validRate.value, tone: "tone-text-orange" },
+    { label: t("sessions.summary_total"), value: total },
+    { label: t("sessions.summary_duration"), value: mins + " " + t("common.minute") },
+    { label: t("sessions.summary_score"), value: avgScore.toFixed(1) },
+    { label: t("sessions.summary_rate"), value: validRate },
   ];
 });
 
-const validRate = computed(() => {
-  const total = sessions.value.reduce((s, item) => s + item.total_count, 0);
-  const valid = sessions.value.reduce((s, item) => s + item.valid_count, 0);
-  if (total === 0) return "0%";
-  return `${Math.round((valid / total) * 100)}%`;
-});
-
-const streakLabel = computed(() => {
-  const count = sessions.value.length;
-  if (count === 0) return "开始你的第一次训练吧！";
-  const days = Math.min(count, 7);
-  return `${days}-Day Streak! / 连续${days}天训练!`;
-});
-
-const streakSubtext = computed(() => {
-  if (sessions.value.length === 0) return "完成训练后，你的连续记录将在此展示。";
-  return "坚持训练，保持良好习惯！";
-});
-
-const trendLabel = computed(() => {
-  if (sessions.value.length < 2) return "继续加油！";
-  const sorted = [...sessions.value].sort((a, b) => a.created_at.localeCompare(b.created_at));
-  const recent = sorted.slice(-2);
-  const diff = recent[1].average_score - recent[0].average_score;
-  const sign = diff >= 0 ? "+" : "";
-  return `${sign}${diff} vs last session`;
-});
-
-function exerciseName(key: string): string {
-  const map: Record<string, string> = {
-    squat: "深蹲", push_up: "俯卧撑", jumping_jack: "开合跳", plank: "平板支撑",
-  };
-  return map[key] ?? key;
-}
-
-function scoreTone(score: number) {
-  if (score >= 90) return "progress-green";
-  if (score >= 75) return "progress-blue";
-  return "progress-orange";
-}
-
-function toLocal(iso?: string): Date | null {
-  if (!iso) return null;
-  // 后端返回 UTC 时间（带 Z 后缀），转为本地时间
-  return new Date(iso);
-}
-
-function formatDuration(seconds: number): string {
-  if (!seconds || seconds <= 0) return "0 秒";
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  if (m > 0) return `${m} 分 ${s} 秒`;
-  return `${s} 秒`;
-}
-
-function formatDate(iso?: string): string {
-  const d = toLocal(iso);
-  if (!d) return "";
-  return d.toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
-}
-
-function formatTime(iso?: string): string {
-  const d = toLocal(iso);
-  if (!d) return "";
-  return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
-}
-
-function viewSession(session_id: string) {
-  router.push({ path: "/reports", query: { session: session_id } });
-}
-
-async function handleDelete(session_id: string) {
-  if (!confirm("确定删除这条训练记录？")) return;
-  deleting.value = session_id;
-  try {
-    await deleteSession(session_id);
-    sessions.value = sessions.value.filter(s => s.session_id !== session_id);
-  } catch (err: any) {
-    alert("删除失败: " + (err.message || "网络错误"));
-  } finally {
-    deleting.value = null;
+const streakDays = computed(() => {
+  if (sessions.value.length === 0) return 0;
+  const dates = [...new Set(sessions.value.map(s => s.created_at.split("T")[0]))].sort().reverse();
+  let streak = 1;
+  for (let i = 1; i < dates.length; i++) {
+    const prev = new Date(dates[i - 1]);
+    const curr = new Date(dates[i]);
+    const diff = (prev.getTime() - curr.getTime()) / (86400000);
+    if (Math.abs(diff - 1) < 0.1) streak++;
+    else break;
   }
+  return streak;
+});
+
+function formatDate(iso: string) {
+  if (!iso) return "-";
+  return new Date(iso).toLocaleString(undefined, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
-async function loadSessions() {
-  loading.value = true;
-  error.value = "";
+function formatDuration(sec: number) {
+  if (!sec || sec <= 0) return "0 " + t("common.second");
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m > 0 ? `${m} ${t("common.minute")} ${s} ${t("common.second")}` : `${s} ${t("common.second")}`;
+}
+
+onMounted(async () => {
   try {
-    const data = await getSessions({ limit: pageSize.value, offset: (page.value - 1) * pageSize.value });
+    const data = await getSessions();
     sessions.value = data.items || [];
-    totalCount.value = data.total || 0;
-  } catch (err: any) {
-    error.value = err.message || "网络错误";
-    sessions.value = [];
+  } catch (e: any) {
+    error.value = e?.message || t("common.networkError");
   } finally {
     loading.value = false;
-    if (highlightId.value) {
-      highlightToSession(highlightId.value);
-    }
   }
-}
-
-onMounted(loadSessions);
-
-// 当从其他页面导航过来且 highlight 参数存在时，重新加载并滚动
-watch(
-  () => route.query.highlight,
-  (newHighlight) => {
-    if (newHighlight && typeof newHighlight === 'string') {
-      highlightId.value = newHighlight;
-      if (sessions.value.length > 0) {
-        // 数据已存在，直接滚动
-        highlightToSession(newHighlight);
-      } else {
-        // 数据尚未加载，重新加载
-        loadSessions();
-      }
-    }
-  }
-);
-
-function highlightToSession(id: string) {
-  nextTick(() => {
-    const el = document.querySelector(`[data-session-id="${id}"]`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  });
-}
-
+});
 </script>
-
-<style scoped>
-.session-highlight {
-  outline: 2px solid rgba(59, 130, 246, 0.6);
-  outline-offset: -2px;
-  animation: highlight-fade 3s ease-out;
-}
-@keyframes highlight-fade {
-  0% { background: rgba(59, 130, 246, 0.15); }
-  100% { background: transparent; }
-}
-</style>

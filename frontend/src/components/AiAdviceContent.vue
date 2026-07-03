@@ -25,7 +25,7 @@ const html = computed(() => (props.content?.trim() ? renderMarkdown(props.conten
   margin: 0;
   font-size: 13px;
   line-height: 1.7;
-  color: #cbd5e1;
+  color: #475569;
   word-break: break-word;
 }
 
@@ -42,7 +42,7 @@ const html = computed(() => (props.content?.trim() ? renderMarkdown(props.conten
 }
 
 .ai-advice-markdown :deep(strong) {
-  color: #f1f5f9;
+  color: #0f172a;
   font-weight: 600;
 }
 
@@ -51,7 +51,7 @@ const html = computed(() => (props.content?.trim() ? renderMarkdown(props.conten
 .ai-advice-markdown :deep(h3),
 .ai-advice-markdown :deep(h4) {
   margin: 0.9em 0 0.5em;
-  color: #e2e8f0;
+  color: #1e293b;
   font-size: 14px;
   font-weight: 600;
 }
@@ -76,7 +76,7 @@ const html = computed(() => (props.content?.trim() ? renderMarkdown(props.conten
 .ai-advice-markdown :deep(code) {
   padding: 0.1em 0.35em;
   border-radius: 4px;
-  background: rgba(148, 163, 184, 0.15);
+  background: #f1f5f9;
   font-size: 12px;
 }
 

@@ -10,7 +10,7 @@
     <!-- 项目名称 + 标题 -->
     <div class="login-header">
       <SplitText
-        text="姿态棱镜"
+        :text="$t('login.title')"
         tag="h1"
         className="brand-title"
         :delay="70"
@@ -21,7 +21,7 @@
         textAlign="center"
       />
       <SplitText
-        text="运动姿态评估与纠错系统"
+        :text="$t('login.subtitle')"
         tag="p"
         className="brand-sub"
         :delay="25"
@@ -32,7 +32,7 @@
         textAlign="center"
       />
       <TextType
-        :text="['看见每一度偏差', '让每次抬手都有意义', '练对 · 比练多更重要']"
+        :text="[$t('login.tagline1'), $t('login.tagline2'), $t('login.tagline3')]"
         :typingSpeed="60"
         :deletingSpeed="25"
         :pauseDuration="2000"
@@ -46,8 +46,8 @@
 
     <!-- 登录 / 注册 切换 -->
     <div class="mode-bar">
-      <button :class="['mode-btn', { on: mode === 'login' }]" @click="switchTo('login')">登录</button>
-      <button :class="['mode-btn', { on: mode === 'reg' }]" @click="switchTo('reg')">注册</button>
+      <button :class="['mode-btn', { on: mode === 'login' }]" @click="switchTo('login')">{{ $t('login.login') }}</button>
+      <button :class="['mode-btn', { on: mode === 'reg' }]" @click="switchTo('reg')">{{ $t('login.register') }}</button>
     </div>
 
     <!-- ===== 登录 Stepper (2步) ===== -->
@@ -55,25 +55,25 @@
       v-if="mode === 'login'"
       :key="'login'"
       :start="1"
-      bk="← 上一步"
-      nx="下一步 →"
-      fn="登  录"
+      :bk="$t('login.prevStep')"
+      :nx="$t('login.nextStep')"
+      :fn="$t('login.login')"
       :ld="busy"
       @finish="submit"
     >
       <div class="page">
-        <h2 class="pg-title">欢迎回来</h2>
-        <p class="pg-desc">请输入用户名。</p>
+        <h2 class="pg-title">{{ $t('login.welcome') }}</h2>
+        <p class="pg-desc">{{ $t('login.enterUsername') }}</p>
         <div class="field">
-          <label>用户名</label>
+          <label>{{ $t('common.username') }}</label>
           <input v-model="login.user" type="text" placeholder="admin" autocomplete="off" />
         </div>
       </div>
       <div class="page">
-        <h2 class="pg-title">输入密码</h2>
-        <p class="pg-desc"><strong>{{ login.user }}</strong>，请输入密码。</p>
+        <h2 class="pg-title">{{ $t('login.enterPassword') }}</h2>
+        <p class="pg-desc"><strong>{{ login.user }}</strong>，{{ $t('login.enterPassword') }}</p>
         <div class="field">
-          <label>密码</label>
+          <label>{{ $t('common.password') }}</label>
           <input v-model="login.pass" type="password" placeholder="••••••••" autocomplete="off" :readonly="passReadonly" @focus="onPassFocus" />
         </div>
       </div>
@@ -84,45 +84,45 @@
       v-if="mode === 'reg'"
       :key="'reg'"
       :start="1"
-      bk="← 上一步"
-      nx="下一步 →"
-      fn="注  册"
+      :bk="$t('login.prevStep')"
+      :nx="$t('login.nextStep')"
+      :fn="$t('login.register')"
       :ld="busy"
       @finish="submit"
     >
       <div class="page">
-        <h2 class="pg-title">创建账号</h2>
-        <p class="pg-desc">选择一个用户名。</p>
+        <h2 class="pg-title">{{ $t('login.createAccount') }}</h2>
+        <p class="pg-desc">{{ $t('login.chooseUsername') }}</p>
         <div class="field">
-          <label>用户名</label>
-          <input v-model="reg.user" type="text" placeholder="3~32个字符" minlength="3" autocomplete="off" />
+          <label>{{ $t('common.username') }}</label>
+          <input v-model="reg.user" type="text" :placeholder="$t('login.usernamePlaceholder')" minlength="3" autocomplete="off" />
         </div>
       </div>
       <div class="page">
-        <h2 class="pg-title">设置密码</h2>
-        <p class="pg-desc">至少6个字符。</p>
+        <h2 class="pg-title">{{ $t('login.setPassword') }}</h2>
+        <p class="pg-desc">{{ $t('login.minChars') }}</p>
         <div class="field">
-          <label>密码</label>
-          <input v-model="reg.pass" type="password" placeholder="创建密码" minlength="6" autocomplete="new-password" :readonly="passReadonly" @focus="onPassFocus" />
+          <label>{{ $t('common.password') }}</label>
+          <input v-model="reg.pass" type="password" :placeholder="$t('login.passwordPlaceholder')" minlength="6" autocomplete="new-password" :readonly="passReadonly" @focus="onPassFocus" />
         </div>
       </div>
       <div class="page">
-        <h2 class="pg-title">最后一步</h2>
-        <p class="pg-desc">确认密码并选择角色。</p>
+        <h2 class="pg-title">{{ $t('login.lastStep') }}</h2>
+        <p class="pg-desc">{{ $t('login.confirmAndRole') }}</p>
         <div class="field">
-          <label>确认密码</label>
-          <input v-model="reg.confirm" type="password" placeholder="再次输入密码" autocomplete="new-password" :readonly="passReadonly" @focus="onPassFocus" />
+          <label>{{ $t('login.confirmPassword') }}</label>
+          <input v-model="reg.confirm" type="password" :placeholder="$t('login.confirmPlaceholder')" autocomplete="new-password" :readonly="passReadonly" @focus="onPassFocus" />
         </div>
         <div class="field">
-          <label>账号类型</label>
+          <label>{{ $t('login.accountType') }}</label>
           <div class="roles">
             <label class="role" :class="{ sel: reg.role === 'user' }">
               <input v-model="reg.role" type="radio" value="user" />
-              <span>用户</span>
+              <span>{{ $t('login.user') }}</span>
             </label>
             <label class="role" :class="{ sel: reg.role === 'admin' }">
               <input v-model="reg.role" type="radio" value="admin" />
-              <span>管理员</span>
+              <span>{{ $t('login.admin') }}</span>
             </label>
           </div>
         </div>
@@ -136,8 +136,8 @@
 
     <!-- 默认账号提示 -->
     <div class="hint">
-      默认账号：<strong>admin / admin123</strong>（管理员）&nbsp;·&nbsp;
-      <strong>user / user123</strong>（普通用户）
+      {{ $t('login.defaultAccounts') }}<strong>admin / admin123</strong>（{{ $t('login.admin') }}）&nbsp;·&nbsp;
+      <strong>user / user123</strong>（{{ $t('login.user') }}）
     </div>
   </div>
 </template>
@@ -145,12 +145,14 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useAuthStore } from '@/stores/auth';
 import Aurora from '@/components/Aurora.vue';
 import Stepper from '@/components/Stepper.vue';
 import SplitText from '@/components/SplitText.vue';
 import TextType from '@/components/TextType.vue';
 
+const { t } = useI18n();
 const router = useRouter();
 const auth = useAuthStore();
 
@@ -195,23 +197,23 @@ async function submit() {
   if (busy.value) return;
 
   if (mode.value === 'login') {
-    if (!login.user || !login.pass) { flash('请填写所有字段。', 'err'); return; }
+    if (!login.user || !login.pass) { flash(t('login.fillAll'), 'err'); return; }
     busy.value = true;
     try {
       const u = await auth.login(login.user, login.pass);
       router.push(u.role === 'admin' ? '/rules' : '/');
-    } catch (e: any) { flash(e.message || '用户名或密码错误。', 'err');
+    } catch (e: any) { flash(e.message || t('login.wrongCredentials'), 'err');
     } finally { busy.value = false; }
   } else {
-    if (!reg.user || !reg.pass || !reg.confirm) { flash('请填写所有字段。', 'err'); return; }
-    if (reg.pass !== reg.confirm) { flash('两次密码输入不一致。', 'err'); return; }
-    if (reg.pass.length < 6) { flash('密码至少6个字符。', 'err'); return; }
+    if (!reg.user || !reg.pass || !reg.confirm) { flash(t('login.fillAll'), 'err'); return; }
+    if (reg.pass !== reg.confirm) { flash(t('login.passwordMismatch'), 'err'); return; }
+    if (reg.pass.length < 6) { flash(t('login.passwordTooShort'), 'err'); return; }
     busy.value = true;
     try {
       await auth.register(reg.user, reg.pass, reg.role);
-      flash('账号创建成功！请登录。', 'ok');
+      flash(t('login.registerSuccess'), 'ok');
       setTimeout(() => { switchTo('login'); msg.value = ''; login.user = reg.user; }, 1200);
-    } catch (e: any) { flash(e.message || '注册失败。', 'err');
+    } catch (e: any) { flash(e.message || t('login.registerFailed'), 'err');
     } finally { busy.value = false; }
   }
 }

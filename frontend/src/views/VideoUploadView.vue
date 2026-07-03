@@ -2,13 +2,13 @@
   <div class="upload-page">
     <header class="section-page-header">
       <div>
-        <h1>Video Upload Analysis / 视频上传分析</h1>
-        <p>Upload and analyze training videos</p>
+        <h1>{{ $t("videoUpload.title") }}</h1>
+        <p>{{ $t("videoUpload.uploadVideo") }}</p>
       </div>
     </header>
 
     <section class="upload-main-card">
-      <h2>Upload Video / 上传视频</h2>
+      <h2>{{ $t("videoUpload.uploadVideo") }}</h2>
       <div
         class="upload-drop-card"
         :class="{ active: isDragging }"
@@ -17,11 +17,11 @@
         @drop.prevent="handleDrop"
       >
         <Upload :size="48" />
-        <strong>{{ selectedFile ? selectedFile.name : "Drop your video here / 拖拽视频到此处" }}</strong>
+        <strong>{{ selectedFile ? selectedFile.name : $t("videoUpload.dropHere") }}</strong>
         <span>or click to browse files (MP4, AVI, MOV up to 500MB)</span>
 
         <label class="upload-exercise-select">
-          <span>Exercise / 动作</span>
+          <span>{{ $t("videoUpload.exerciseLabel") }}</span>
           <select v-model="selectedExercise">
             <option v-for="exercise in exercises" :key="exercise.key" :value="exercise.key">
               {{ exerciseDisplayName(exercise.key) }}
@@ -30,10 +30,10 @@
         </label>
 
         <label class="upload-exercise-select">
-          <span>Camera View / 视角</span>
+          <span>{{ $t("videoUpload.cameraView") }}</span>
           <select v-model="selectedCameraView">
-            <option value="front">正面 Front</option>
-            <option value="side">侧面 Side</option>
+            <option value="front">{{ $t("videoUpload.front") }}</option>
+            <option value="side">{{ $t("videoUpload.side") }}</option>
           </select>
         </label>
 
@@ -45,10 +45,10 @@
           @change="handleFileChange"
         />
         <button class="blue-action-button" type="button" @click="openFilePicker">
-          Browse Files / 选择文件
+          {{ $t("videoUpload.browseFiles") }}
         </button>
         <div class="upload-info-before-send" v-if="selectedFile">
-          即将上传: {{ exerciseDisplayName(selectedExercise) }} · {{ selectedCameraView === 'side' ? '侧面' : '正面' }}
+          {{ $t("videoUpload.willUpload", { exercise: exerciseDisplayName(selectedExercise), view: selectedCameraView === 'side' ? $t('videoUpload.side') : $t('videoUpload.front') }) }}
         </div>
         <button
           v-if="selectedFile"
@@ -57,7 +57,7 @@
           :disabled="uploadState === 'uploading'"
           @click="uploadVideo"
         >
-          {{ uploadState === "uploading" ? "Analyzing... / 分析中..." : "Start Analysis / 开始分析" }}
+          {{ uploadState === "uploading" ? $t("videoUpload.uploading") : $t("videoUpload.startAnalysis") }}
         </button>
 
         <video v-if="localPreviewUrl" class="upload-preview-video" :src="localPreviewUrl" controls />
@@ -69,7 +69,7 @@
 
     <section class="analysis-history-card">
       <header>
-        <h2>Analysis History / 分析历史</h2>
+        <h2>{{ $t("videoUpload.analysisHistory") }}</h2>
         <button class="link-button" type="button">View All</button>
       </header>
 
@@ -89,7 +89,7 @@
           <template v-if="item.status === 'completed'">
             <span class="completed-badge">
               <CheckCircle2 :size="14" />
-              已完成
+              {{ $t("videoUpload.completed") }}
             </span>
             <div class="analysis-stat">
               <span>Score</span>
@@ -117,18 +117,18 @@
 
           <span v-else-if="item.status === 'failed'" class="failed-pill">
             <XCircle :size="19" />
-            失败
+            {{ $t("videoUpload.failed") }}
           </span>
 
           <span v-else class="processing-pill">
             <LoaderCircle :size="19" />
-            处理中
+            {{ $t("videoUpload.processing") }}
           </span>
 
           <button
             class="delete-button"
             type="button"
-            title="删除此记录"
+            :title="$t('videoUpload.deleteRecord')"
             @click.stop="handleDeleteTask(item.id)"
           >
             <Trash2 :size="16" />
@@ -153,6 +153,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   BarChart3,
   CheckCircle2,
@@ -194,6 +195,8 @@ interface HistoryItem {
   reportUrl?: string;
 }
 
+const { t } = useI18n();
+
 const fileInput = ref<HTMLInputElement | null>(null);
 const selectedFile = ref<File | null>(null);
 const selectedExercise = ref("squat");
@@ -232,7 +235,7 @@ const analysisHistory = computed<HistoryItem[]>(() => {
     items.unshift({
       id: latestTask.value.task_id,
       name: uploadedName,
-      date: "Just now / 刚刚",
+      date: t("videoUpload.justNow"),
       duration: "new",
       score: uploadState.value === "success" ? 90 : undefined,
       errors: uploadState.value === "success" ? 3 : undefined,
@@ -249,18 +252,18 @@ const uploadStats = computed(() => {
   const completed = allTasks.value.filter(t => t.status === "success" || t.status === "completed").length + (uploadState.value === "success" ? 1 : 0);
   const processing = allTasks.value.filter(t => t.status === "pending" || t.status === "processing").length + (uploadState.value === "uploading" ? 1 : 0);
   return [
-    { label: "Total Videos / 总视频数", value: total || "--", icon: FileText, tone: "tone-blue" },
-    { label: "Completed / 已完成", value: completed || "--", icon: CheckCircle2, tone: "tone-green" },
-    { label: "Processing / 处理中", value: processing || "--", icon: LoaderCircle, tone: "tone-orange" },
+    { label: t("videoUpload.summary_total"), value: total || "--", icon: FileText, tone: "tone-blue" },
+    { label: t("videoUpload.summary_completed"), value: completed || "--", icon: CheckCircle2, tone: "tone-green" },
+    { label: t("videoUpload.summary_processing"), value: processing || "--", icon: LoaderCircle, tone: "tone-orange" },
   ];
 });
 
 function exerciseDisplayName(key: string) {
   const names: Record<string, string> = {
-    squat: "深蹲",
-    pushup: "俯卧撑",
-    jumping_jack: "开合跳",
-    plank: "平板支撑"
+    squat: t("exercises.squat"),
+    push_up: t("exercises.push_up"),
+    jumping_jack: t("exercises.jumping_jack"),
+    plank: t("exercises.plank")
   };
   return names[key] ?? key;
 }
@@ -288,7 +291,7 @@ function chooseFile(file: File | null) {
 
   if (!file.type.startsWith("video/") && !/\.(mp4|avi|mov)$/i.test(file.name)) {
     uploadState.value = "failed";
-    message.value = "请选择 MP4、AVI 或 MOV 格式的视频文件。";
+    message.value = t("videoUpload.selectFile");
     return;
   }
 
@@ -300,12 +303,12 @@ function chooseFile(file: File | null) {
   latestTask.value = null;
   localPreviewUrl.value = URL.createObjectURL(file);
   uploadState.value = "ready";
-  message.value = `已选择：${file.name}`;
+  message.value = t("videoUpload.fileSelected", { name: file.name });
 }
 
 async function uploadVideo() {
   if (!selectedFile.value) {
-    message.value = "请先选择一个训练视频。";
+    message.value = t("videoUpload.noFile");
     return;
   }
 
@@ -316,7 +319,7 @@ async function uploadVideo() {
     source_uri: selectedFile.value.name,
     status: "processing"
   };
-  message.value = "正在上传视频并生成分析报告，请稍候...";
+  message.value = t("videoUpload.uploadingMsg");
 
   const formData = new FormData();
   formData.append("exercise", selectedExercise.value);
@@ -328,13 +331,13 @@ async function uploadVideo() {
     const result = await apiUpload<UploadResponse>("/videos/upload", formData);
     latestTask.value = result.task;
     uploadState.value = "success";
-    message.value = `分析完成：${result.task.task_id}`;
+    message.value = `${t("videoUpload.completeMsg")}${result.task.task_id}`;
     // Refresh task list
     await loadTasks();
   } catch {
     uploadState.value = "failed";
     latestTask.value = null;
-    message.value = "上传失败，请确认后端服务已启动。";
+    message.value = t("videoUpload.uploadFailed");
   }
 }
 
@@ -351,12 +354,12 @@ async function loadTasks() {
 }
 
 async function handleDeleteTask(task_id: string) {
-  if (!confirm("确定删除此分析记录？此操作不可撤销。")) return;
+  if (!confirm(t("videoUpload.deleteConfirm"))) return;
   try {
     await apiDelete(`/analysis/tasks/${task_id}`);
     allTasks.value = allTasks.value.filter(t => t.task_id !== task_id);
   } catch (err: any) {
-    alert("删除失败: " + (err.message || "网络错误"));
+    alert(t("videoUpload.deleteFailed", { error: err.message || t("videoUpload.networkError") }));
   }
 }
 
