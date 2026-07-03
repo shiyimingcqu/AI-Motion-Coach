@@ -25,12 +25,12 @@ def test_video_analysis_generates_readable_output_video(tmp_path):
     source = tmp_path / "source.mp4"
     _make_test_video(source)
 
-    output_uri, _session = video_analysis_service.analyze_video(
+    result = video_analysis_service.analyze_video(
         source_uri=str(source),
         exercise="squat",
     )
 
-    output = Path(output_uri)
+    output = Path(result["output_uri"])
     assert output.exists()
     assert output != source
     assert output.suffix == ".webm"
@@ -46,8 +46,13 @@ def test_video_analysis_generates_readable_output_video(tmp_path):
 def test_realtime_video_test_returns_frame_results_and_summary(tmp_path):
     source = tmp_path / "source.mp4"
     _make_test_video(source)
+    shoulders = {
+        "left_shoulder": NormalizedKeypoint(x=0.45, y=0.20, visibility=0.99),
+        "right_shoulder": NormalizedKeypoint(x=0.55, y=0.20, visibility=0.99),
+    }
     frames = [
         {
+            **shoulders,
             "left_hip": NormalizedKeypoint(x=0.45, y=0.72, visibility=0.99),
             "left_knee": NormalizedKeypoint(x=0.47, y=0.66, visibility=0.99),
             "left_ankle": NormalizedKeypoint(x=0.47, y=0.82, visibility=0.99),
@@ -56,6 +61,7 @@ def test_realtime_video_test_returns_frame_results_and_summary(tmp_path):
             "right_ankle": NormalizedKeypoint(x=0.53, y=0.82, visibility=0.99),
         },
         {
+            **shoulders,
             "left_hip": NormalizedKeypoint(x=0.45, y=0.24, visibility=0.99),
             "left_knee": NormalizedKeypoint(x=0.47, y=0.58, visibility=0.99),
             "left_ankle": NormalizedKeypoint(x=0.47, y=0.82, visibility=0.99),

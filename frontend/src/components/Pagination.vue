@@ -76,10 +76,10 @@ function go(page: number) {
   justify-content: center;
   width: 34px;
   height: 34px;
-  border: 1px solid rgba(59, 130, 246, 0.1);
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: transparent;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -87,14 +87,14 @@ function go(page: number) {
 }
 
 .pagination-btn:hover:not(:disabled):not(.active) {
-  border-color: rgba(59, 130, 246, 0.25);
-  color: #93c5fd;
+  border-color: #5b8cff;
+  color: #5b8cff;
 }
 
 .pagination-btn.active {
-  background: rgba(59, 130, 246, 0.15);
-  border-color: rgba(59, 130, 246, 0.3);
-  color: #93c5fd;
+  background: rgba(91, 140, 255, 0.1);
+  border-color: #5b8cff;
+  color: #5b8cff;
 }
 
 .pagination-btn:disabled {
@@ -103,14 +103,14 @@ function go(page: number) {
 }
 
 .pagination-ellipsis {
-  color: #475569;
+  color: #94a3b8;
   font-size: 13px;
   padding: 0 4px;
 }
 
 .pagination-info {
   margin-left: 12px;
-  color: #475569;
+  color: #94a3b8;
   font-size: 12px;
 }
 </style>

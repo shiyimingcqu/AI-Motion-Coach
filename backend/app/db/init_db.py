@@ -2,7 +2,7 @@ from sqlalchemy import inspect, text
 
 from app.db.session import engine
 from app.core.security import get_password_hash
-from app.models.entities import Base, UserORM, ExerciseORM, ActiveTemplateORM
+from app.models.entities import Base, UserORM, ExerciseORM, ReferenceVideoORM
 
 try:
     from sqlalchemy.orm import Session
@@ -171,36 +171,43 @@ def init_db():
     try:
         _create_default_users(db)
         _seed_exercises(db)
-    except Exception:
-        db.rollback()
-        raise
     finally:
         db.close()
+
+
+def _add_column_if_missing(connection, table: str, column: str, ddl: str):
+    inspector = inspect(engine)
+    columns = {c["name"] for c in inspector.get_columns(table)}
+    if column not in columns:
+        connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {ddl}"))
 
 
 def _migrate_legacy_schema():
     """Patch old SQLite schemas so newer ORM fields don't crash at runtime."""
     inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
 
-    if "sessions" in inspector.get_table_names():
-        session_columns = {column["name"] for column in inspector.get_columns("sessions")}
-        migrations = {
-            "user_id": "INTEGER",
-            "calories_burned": "FLOAT DEFAULT 0",
-            "evaluation_json": "TEXT",
-        }
-        with engine.begin() as connection:
-            for column_name, column_type in migrations.items():
-                if column_name not in session_columns:
-                    connection.execute(
-                        text(f"ALTER TABLE sessions ADD COLUMN {column_name} {column_type}")
-                    )
+    with engine.begin() as connection:
+        if "users" in tables:
+            _add_column_if_missing(connection, "users", "openid", "openid VARCHAR(64)")
+            _add_column_if_missing(connection, "users", "nickname", "nickname VARCHAR(64)")
+            _add_column_if_missing(connection, "users", "avatar_mode", "avatar_mode VARCHAR(16) DEFAULT 'default'")
+            _add_column_if_missing(connection, "users", "avatar_image", "avatar_image TEXT")
+            _add_column_if_missing(connection, "users", "occupation", "occupation VARCHAR(32)")
+            _add_column_if_missing(connection, "users", "height", "height VARCHAR(8)")
+            _add_column_if_missing(connection, "users", "weight", "weight VARCHAR(8)")
+            _add_column_if_missing(connection, "users", "training_goal", "training_goal VARCHAR(256)")
+            _add_column_if_missing(connection, "users", "training_preferences", "training_preferences TEXT")
 
-    if "active_templates" not in inspector.get_table_names():
-        Base.metadata.tables["active_templates"].create(bind=engine)
+        if "sessions" in tables:
+            _add_column_if_missing(connection, "sessions", "user_id", "user_id INTEGER")
+            _add_column_if_missing(connection, "sessions", "calories_burned", "calories_burned FLOAT DEFAULT 0")
+            _add_column_if_missing(connection, "sessions", "evaluation_json", "evaluation_json TEXT")
+            _add_column_if_missing(connection, "sessions", "feedback_summary", "feedback_summary TEXT")
 
-    if "reference_videos" not in inspector.get_table_names():
-        Base.metadata.tables["reference_videos"].create(bind=engine)
+        if "analysis_tasks" in tables:
+            _add_column_if_missing(connection, "analysis_tasks", "user_id", "user_id INTEGER")
+            _add_column_if_missing(connection, "analysis_tasks", "camera_view", "camera_view VARCHAR(16) DEFAULT 'front'")
 
 
 def _create_default_users(db: Session):
@@ -230,11 +237,7 @@ def _create_default_users(db: Session):
         )
         db.add(user)
 
-    try:
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
+    db.commit()
 
 
 def _seed_exercises(db: Session):
@@ -245,8 +248,4 @@ def _seed_exercises(db: Session):
             ex = ExerciseORM(**data)
             db.add(ex)
 
-    try:
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
+    db.commit()

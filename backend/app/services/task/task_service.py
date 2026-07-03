@@ -16,6 +16,9 @@ class TaskService:
         source_uri: str,
         status: str = "pending",
         output_uri: str | None = None,
+        error_message: str | None = None,
+        camera_view: str = "front",
+        user_id: int | None = None,
     ) -> dict:
         """Create a new analysis task and persist it."""
         if SessionLocal is None:
@@ -25,10 +28,13 @@ class TaskService:
         try:
             task = AnalysisTaskORM(
                 task_id=str(uuid4()),
+                user_id=user_id,
                 exercise=exercise,
+                camera_view=camera_view,
                 source_uri=source_uri,
                 status=status,
                 output_uri=output_uri,
+                error_message=error_message,
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc),
             )
@@ -93,22 +99,60 @@ class TaskService:
             db.close()
 
     def list_tasks(
-        self, limit: int = 50, offset: int = 0
+        self, limit: int = 50, offset: int = 0, user_id: int | None = None
     ) -> list[dict]:
-        """List tasks, newest first."""
+        """List tasks, newest first. Optionally filtered by user_id."""
         if SessionLocal is None:
             return []
 
         db = SessionLocal()
         try:
+            query = db.query(AnalysisTaskORM)
+            if user_id is not None:
+                query = query.filter(AnalysisTaskORM.user_id == user_id)
             tasks = (
-                db.query(AnalysisTaskORM)
+                query
                 .order_by(AnalysisTaskORM.created_at.desc())
                 .offset(offset)
                 .limit(limit)
                 .all()
             )
             return [t.to_dict() for t in tasks]
+        finally:
+            db.close()
+
+    def count_tasks(self) -> int:
+        """Count total tasks."""
+        if SessionLocal is None:
+            return 0
+
+        db = SessionLocal()
+        try:
+            return db.query(AnalysisTaskORM).count()
+        finally:
+            db.close()
+
+    def delete_task(self, task_id: str, user_id: int | None = None) -> bool:
+        """Delete a task by task_id. Optionally verify ownership via user_id. Returns True if deleted, False if not found."""
+        if SessionLocal is None:
+            return False
+
+        db = SessionLocal()
+        try:
+            task = db.query(AnalysisTaskORM).filter(
+                AnalysisTaskORM.task_id == task_id
+            ).first()
+            if not task:
+                return False
+            if user_id is not None and task.user_id is not None and task.user_id != user_id:
+                return False
+
+            db.delete(task)
+            db.commit()
+            return True
+        except Exception:
+            db.rollback()
+            raise
         finally:
             db.close()
 

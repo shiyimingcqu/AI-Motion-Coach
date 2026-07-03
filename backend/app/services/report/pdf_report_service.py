@@ -2,12 +2,32 @@
 
 import io
 import os
+import re
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 from app.services.evaluation.calorie_service import get_exercise_display_name
 from app.services.evaluation.evaluation_service import build_evaluation, parse_evaluation
+from app.services.session.feedback_display import build_session_feedback_view
+
+
+def _strip_markdown(text: str) -> str:
+    lines = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line:
+            lines.append("")
+            continue
+        if line.startswith("##"):
+            title = re.sub(r"^#+\s*", "", line)
+            title = re.sub(r"[\U0001F300-\U0001FAFF\U00002700-\U000027BF]", "", title).strip()
+            lines.append(f"【{title}】")
+            continue
+        line = re.sub(r"[\U0001F300-\U0001FAFF\U00002700-\U000027BF]", "", line)
+        line = line.replace("**", "").replace("*", "")
+        lines.append(line)
+    return "\n".join(lines)
 
 
 def _find_chinese_font() -> str | None:
@@ -191,7 +211,7 @@ class PdfReportBuilder:
                     self._chart_page(pdf, font_name, title, chart_images[key], temp_files)
 
             self._exercise_comparison_page(pdf, font_name, summary)
-            self._feedback_page(pdf, font_name, summary)
+            self._training_feedback_pages(pdf, font_name, sessions)
             self._sessions_table(pdf, font_name, sessions)
             self._evaluation_details(pdf, font_name, sessions)
 
@@ -323,28 +343,92 @@ class PdfReportBuilder:
             self._multi(pdf, font_name, f"· {name}：{points}", 10)
         pdf.ln(4)
 
-    def _feedback_page(self, pdf, font_name: str, summary: dict):
-        feedback = summary.get("feedback_summary", {})
-        weaknesses = feedback.get("weaknesses", [])
-        recommendations = feedback.get("recommendations", [])
-        if not weaknesses and not recommendations:
+    def _ensure_space(self, pdf, font_name: str, needed: float = 40):
+        if pdf.get_y() + needed > pdf.h - pdf.b_margin:
+            pdf.add_page()
+
+    def _training_feedback_pages(self, pdf, font_name: str, sessions: list):
+        views = [build_session_feedback_view(s) for s in sessions[:15]]
+        views = [v for v in views if v["cards"] or v["ai_advice"]]
+        if not views:
             return
+
         pdf.add_page()
-        self._section_title(pdf, font_name, "四、纠错分析与训练建议")
-        self._set_font(pdf, font_name, 10)
-        if weaknesses:
-            self._set_font(pdf, font_name, 11, "B")
-            pdf.cell(0, 8, "常见待改进项（来自姿态检测与评估）", ln=True)
-            self._set_font(pdf, font_name, 10)
-            for idx, item in enumerate(weaknesses, 1):
-                self._multi(pdf, font_name, f"{idx}. {item}", 10)
-            pdf.ln(4)
-        if recommendations:
-            self._set_font(pdf, font_name, 11, "B")
-            pdf.cell(0, 8, "个性化训练建议", ln=True)
-            self._set_font(pdf, font_name, 10)
-            for idx, item in enumerate(recommendations, 1):
-                self._multi(pdf, font_name, f"{idx}. {item}", 10)
+        self._section_title(pdf, font_name, "四、训练反馈与 AI 建议")
+        self._multi(
+            pdf, font_name,
+            "以下内容来自姿态检测模型与千帆 AI，与「错误反馈」页面展示一致。",
+            10,
+        )
+        pdf.ln(4)
+
+        for view in views:
+            self._ensure_space(pdf, font_name, 50)
+            pdf.set_fill_color(241, 245, 249)
+            self._set_font(pdf, font_name, 12, "B")
+            header = (
+                f"{view['exercise_name']}  |  {view['date']} {view['time']}"
+                f"  |  评分 {int(view['score'])}"
+            )
+            pdf.cell(self._text_width(pdf), 9, header, ln=True, fill=True)
+            pdf.ln(3)
+
+            if view["cards"]:
+                self._ensure_space(pdf, font_name, 20)
+                self._set_font(pdf, font_name, 11, "B")
+                pdf.set_text_color(30, 64, 175)
+                pdf.cell(0, 7, "Session Feedback / 训练反馈", ln=True)
+                pdf.set_text_color(15, 23, 42)
+                self._set_font(pdf, font_name, 10)
+
+                for card in view["cards"]:
+                    self._ensure_space(pdf, font_name, 28)
+                    label = card.get("label", "")
+                    self._set_font(pdf, font_name, 10, "B")
+                    pdf.cell(0, 6, f"{view['exercise_name']}  ·  {label}  ·  {view['time']}", ln=True)
+                    self._set_font(pdf, font_name, 10)
+                    problem = card.get("problem", "")
+                    if problem:
+                        self._multi(pdf, font_name, problem, 10)
+                    heading = card.get("suggestion_heading", "建议")
+                    suggestion = card.get("suggestion", "")
+                    if suggestion:
+                        pdf.set_text_color(71, 85, 105)
+                        self._multi(pdf, font_name, f"{heading}:", 9)
+                        pdf.set_text_color(15, 23, 42)
+                        self._multi(pdf, font_name, suggestion, 10)
+                    pdf.ln(3)
+
+            if view["error_analysis"]:
+                self._ensure_space(pdf, font_name, 30)
+                self._set_font(pdf, font_name, 11, "B")
+                pdf.set_text_color(30, 64, 175)
+                pdf.cell(0, 7, "Session Analysis / 错误分析", ln=True)
+                pdf.set_text_color(15, 23, 42)
+                total_errors = sum(item["count"] for item in view["error_analysis"])
+                self._multi(
+                    pdf, font_name,
+                    f"{view['exercise_name']}  ·  Frequency: {total_errors} errors",
+                    10,
+                )
+                for item in view["error_analysis"]:
+                    self._multi(
+                        pdf, font_name,
+                        f"  · {item['type']}  ({item['percent']}%)",
+                        10,
+                    )
+                pdf.ln(3)
+
+            if view["ai_advice"]:
+                self._ensure_space(pdf, font_name, 40)
+                self._set_font(pdf, font_name, 11, "B")
+                pdf.set_text_color(30, 64, 175)
+                pdf.cell(0, 7, "AI 智能建议", ln=True)
+                pdf.set_text_color(100, 116, 139)
+                self._multi(pdf, font_name, "基于该次训练数据自动生成的个性化指导", 9)
+                pdf.set_text_color(15, 23, 42)
+                self._multi(pdf, font_name, _strip_markdown(view["ai_advice"]), 9)
+                pdf.ln(6)
 
     def _coach_page(self, pdf, font_name: str, summary: dict, sessions: list):
         pdf.add_page()
@@ -461,6 +545,7 @@ class PdfReportBuilder:
                     pdf.set_text_color(30, 64, 175 if key == "recommendations" else 15)
                     self._multi(pdf, font_name, f"{label}: " + "; ".join(items), 9)
                     pdf.set_text_color(15, 23, 42)
+
             pdf.ln(4)
 
     def _section_title(self, pdf, font_name: str, title: str):

@@ -85,9 +85,9 @@
     </div>
 
     <!-- 大视频播放器 -->
-    <div v-if="activeVideo && previewUrl" class="ref-player-overlay" @click.self="() => closePlayer()">
+    <div v-if="activeVideo && previewUrl" class="ref-player-overlay" @click.self="closePlayer">
       <div class="ref-player-card">
-        <button class="player-close" type="button" @click="() => closePlayer()">
+        <button class="player-close" @click="closePlayer">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
           </svg>

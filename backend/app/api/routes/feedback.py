@@ -11,33 +11,56 @@ except ModuleNotFoundError:
 
 router = APIRouter(prefix="/feedback", tags=["feedback"]) if APIRouter else None
 
-
-_ERROR_PATTERNS: dict[str, list[dict]] = {
-    "squat": [
-        {"issue": "下蹲深度不足", "severity": "high", "suggestion": "下蹲时继续降低重心，使膝关节弯曲更充分"},
-        {"issue": "膝盖内扣", "severity": "high", "suggestion": "保持膝盖与脚尖方向一致，避免内扣"},
-        {"issue": "躯干前倾过大", "severity": "medium", "suggestion": "收紧核心，保持背部挺直"},
-        {"issue": "左右不平衡", "severity": "medium", "suggestion": "注意调整站姿，保持左右平衡"},
-        {"issue": "后跟离地", "severity": "low", "suggestion": "脚跟贴地，重心保持在脚掌中部"},
-    ],
-    "push_up": [
-        {"issue": "身体塌腰", "severity": "high", "suggestion": "收紧核心肌群，保持肩-髋-踝一条直线"},
-        {"issue": "肘部弯曲不足", "severity": "high", "suggestion": "下降至肘关节约90度"},
-        {"issue": "左右不对称", "severity": "medium", "suggestion": "检查左右肩肘高度是否一致"},
-        {"issue": "头部姿态不当", "severity": "low", "suggestion": "保持颈椎中立，目视前下方"},
-    ],
-    "plank": [
-        {"issue": "髋部下沉", "severity": "high", "suggestion": "收紧核心，保持身体直线"},
-        {"issue": "肩膀不在手肘正上方", "severity": "medium", "suggestion": "调整手肘位置至肩膀正下方"},
-        {"issue": "头颈姿态异常", "severity": "low", "suggestion": "保持颈椎中立，目视地面"},
-    ],
-    "jumping_jack": [
-        {"issue": "手臂未举过肩", "severity": "medium", "suggestion": "手臂充分举过头顶"},
-        {"issue": "双脚打开不足", "severity": "medium", "suggestion": "双脚打开至肩宽1.5倍以上"},
-        {"issue": "手脚不同步", "severity": "medium", "suggestion": "手脚同时到达最大位置"},
-        {"issue": "节奏不稳定", "severity": "low", "suggestion": "保持匀速呼吸和动作节奏"},
-    ],
+_SEVERITY_TO_API = {
+    "error": "high",
+    "warning": "medium",
+    "info": "info",
+    "high": "high",
+    "medium": "medium",
+    "low": "low",
 }
+
+
+def _map_severity(raw: str) -> str:
+    return _SEVERITY_TO_API.get(raw, "medium")
+
+
+def _fallback_feedback_items(sess: SessionORM) -> list[dict]:
+    """当 feedback_summary 无结构化 items 时的兜底逻辑。"""
+    total = sess.total_count or 0
+    valid = sess.valid_count or 0
+
+    if total <= 0:
+        return [{
+            "id": f"fb-{sess.session_id}-none",
+            "session_id": sess.session_id,
+            "exercise": sess.exercise,
+            "issue": "未检测到完成的动作",
+            "severity": "medium",
+            "suggestion": "请确保身体完整出现在画面中，并完成至少一次完整动作",
+            "created_at": sess.created_at.isoformat(),
+        }]
+
+    if valid > 0:
+        return [{
+            "id": f"fb-{sess.session_id}-ok",
+            "session_id": sess.session_id,
+            "exercise": sess.exercise,
+            "issue": "",
+            "severity": "info",
+            "suggestion": "动作完成良好，继续保持良好的动作质量！",
+            "created_at": sess.created_at.isoformat(),
+        }]
+
+    return [{
+        "id": f"fb-{sess.session_id}-invalid",
+        "session_id": sess.session_id,
+        "exercise": sess.exercise,
+        "issue": "动作未达到有效标准",
+        "severity": "medium",
+        "suggestion": "关注动作深度、身体姿态与节奏，优先保证每次动作质量",
+        "created_at": sess.created_at.isoformat(),
+    }]
 
 
 if router:
@@ -57,7 +80,6 @@ if router:
             query = db.query(SessionORM).order_by(SessionORM.created_at.desc())
             user_id = current_user.id if current_user else None
 
-            # Non-admin users only see their own feedback
             if user_id and current_user.role != "admin":
                 query = query.filter(SessionORM.user_id == user_id)
 
@@ -68,20 +90,47 @@ if router:
             items: list[dict] = []
 
             for sess in sessions:
-                patterns = _ERROR_PATTERNS.get(sess.exercise, [])
-                err_count = sess.error_count or 0
-                if err_count > 0 and patterns:
-                    for i in range(min(err_count, len(patterns))):
-                        pat = patterns[i % len(patterns)]
+                if not sess.feedback_summary:
+                    items.extend(_fallback_feedback_items(sess))
+                    continue
+
+                try:
+                    import json
+                    fb_data = json.loads(sess.feedback_summary)
+                except Exception:
+                    items.extend(_fallback_feedback_items(sess))
+                    continue
+
+                structured_items = fb_data.get("items") or []
+                if structured_items:
+                    for index, entry in enumerate(structured_items):
                         items.append({
-                            "id": f"fb-{sess.session_id}-{i}",
+                            "id": f"fb-{sess.session_id}-{index}",
                             "session_id": sess.session_id,
                             "exercise": sess.exercise,
-                            "issue": pat["issue"],
-                            "severity": pat["severity"],
-                            "suggestion": pat["suggestion"],
+                            "issue": entry.get("issue", ""),
+                            "severity": _map_severity(entry.get("severity", "warning")),
+                            "suggestion": entry.get("suggestion", ""),
                             "created_at": sess.created_at.isoformat(),
                         })
+                    continue
+
+                issues = fb_data.get("issues", [])
+                suggestions = fb_data.get("suggestions", [])
+
+                if issues:
+                    for index, (issue, suggestion) in enumerate(zip(issues, suggestions)):
+                        items.append({
+                            "id": f"fb-{sess.session_id}-{index}",
+                            "session_id": sess.session_id,
+                            "exercise": sess.exercise,
+                            "issue": issue,
+                            "severity": "high" if index == 0 else "medium" if index == 1 else "low",
+                            "suggestion": suggestion,
+                            "created_at": sess.created_at.isoformat(),
+                        })
+                else:
+                    items.extend(_fallback_feedback_items(sess))
 
             return {"items": items, "total": len(items)}
         finally:

@@ -14,6 +14,7 @@ import ProfileView from "../views/ProfileView.vue";
 import SettingsView from "../views/SettingsView.vue";
 import ReferenceVideosView from "../views/ReferenceVideosView.vue";
 import TrainingResultView from "../views/TrainingResultView.vue";
+import UserManagementView from "../views/UserManagementView.vue";
 import ExportReportsView from "../views/ExportReportsView.vue";
 import ExerciseLibraryView from "../views/ExerciseLibraryView.vue";
 import ErrorFeedbackView from "../views/ErrorFeedbackView.vue";
@@ -25,6 +26,8 @@ import AdminSessionsView from "../views/AdminSessionsView.vue";
 import AdminReportsView from "../views/AdminReportsView.vue";
 import AdminTemplatesView from "../views/AdminTemplatesView.vue";
 import AdminSettingsView from "../views/AdminSettingsView.vue";
+
+const STANDALONE_PATHS = ["/profile", "/settings"];
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -41,16 +44,12 @@ export const router = createRouter({
     { path: "/score-trends", component: ScoreTrendsView, meta: { userOnly: true } },
     { path: "/motion-quality", component: MotionQualityView, meta: { userOnly: true } },
     { path: "/export", component: ExportReportsView, meta: { userOnly: true } },
+    { path: "/rules", redirect: "/admin/rules" },
+    { path: "/users", component: UserManagementView, meta: { adminOnly: true } },
+    { path: "/profile", component: ProfileView, meta: { userOnly: true } },
+    { path: "/settings", component: SettingsView, meta: { userOnly: true } },
     { path: "/reference-videos", component: ReferenceVideosView, meta: { userOnly: true } },
     { path: "/training-result", component: TrainingResultView, meta: { userOnly: true } },
-    { path: "/profile", component: ProfileView, meta: { userOnly: true, layoutTransition: "page-soft-forward" } },
-    { path: "/settings", component: SettingsView, meta: { userOnly: true, layoutTransition: "page-soft-forward" } },
-
-    // 兼容 main 分支的管理路由（重定向到 admin 后台）
-    { path: "/rules", redirect: "/admin/rules" },
-    { path: "/users", redirect: "/admin/users" },
-
-    // 管理员后台路由
     { path: "/admin", component: AdminDashboardView, meta: { adminOnly: true } },
     { path: "/admin/users", component: AdminUsersView, meta: { adminOnly: true } },
     { path: "/admin/admins", component: AdminAdminsView, meta: { adminOnly: true } },
@@ -62,7 +61,18 @@ export const router = createRouter({
   ]
 });
 
-router.beforeEach(async (to, _from, next) => {
+router.beforeEach(async (to, from, next) => {
+  const toStandalone = STANDALONE_PATHS.includes(to.path);
+  const fromStandalone = STANDALONE_PATHS.includes(from.path);
+
+  if (toStandalone && !fromStandalone) {
+    to.meta.layoutTransition = "page-soft-forward";
+  } else if (!toStandalone && fromStandalone) {
+    to.meta.layoutTransition = "page-soft-back";
+  } else {
+    to.meta.layoutTransition = undefined;
+  }
+
   const authStore = useAuthStore();
 
   if (authStore.token && !authStore.user) {

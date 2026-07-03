@@ -150,7 +150,11 @@ export function useRealtimeVideoTest(options: {
 
     try {
       finishStatusText.value = "实时通道异常，正在用当前统计补存训练记录...";
-      const session = await createSession(payload);
+      const session = await createSession({
+        ...payload,
+        issues: [...new Set(store.errors.filter(Boolean))],
+        suggestions: [...new Set(store.feedbacks.filter(Boolean))],
+      });
       resetFinishState();
       trainingState.value = "finished";
       await routeToFeedback(session.session_id, successMessage);
@@ -218,6 +222,7 @@ export function useRealtimeVideoTest(options: {
       valid_count: Number(frame.valid_count ?? 0),
       score: Number(frame.score ?? 0),
       errors: Array.isArray(frame.errors) ? frame.errors : [],
+      feedback: Array.isArray(frame.feedback) ? frame.feedback : [],
     });
   }
 
@@ -308,7 +313,7 @@ export function useRealtimeVideoTest(options: {
     }
 
     const landmarks = detectPose(poseLandmarker, video, timestamp);
-    drawPose(canvas, landmarks);
+    drawPose(canvas, landmarks, video, "contain");
 
     if (!landmarks) {
       poseStatus.value = "未检测到人体，请确认视频中人物清晰可见";

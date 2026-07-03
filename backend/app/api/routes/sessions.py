@@ -22,6 +22,8 @@ if router and BaseModel:
         valid_count: int
         error_count: int
         average_score: int
+        issues: list[str] = []
+        suggestions: list[str] = []
 
 
 if router:
@@ -95,6 +97,40 @@ if router:
             average_score=body.average_score,
             user_id=user_id,
         )
+
+        if body.issues or body.suggestions:
+            from app.db.session import SessionLocal
+            from app.services.session.feedback_persistence import (
+                build_feedback_data,
+                save_session_feedback_summary,
+            )
+
+            formatted = {
+                "errors": body.issues or [],
+                "feedbacks": body.suggestions or [],
+                "metrics": {},
+                "score": body.average_score,
+                "level": "unknown",
+            }
+            unified = {"items": []}
+            feedback_data = build_feedback_data(unified, formatted)
+            save_session_feedback_summary(
+                session.session_id,
+                feedback_data,
+                generate_ai=True,
+                exercise=body.exercise,
+            )
+            db = SessionLocal()
+            try:
+                sess = db.query(SessionORM).filter(
+                    SessionORM.session_id == session.session_id
+                ).first()
+                if sess:
+                    db.refresh(sess)
+                    session = sess
+            finally:
+                db.close()
+
         return session.to_dict()
 
     @router.delete("/{session_id}")
