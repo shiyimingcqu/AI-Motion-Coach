@@ -17,7 +17,7 @@ def generate_ai_advice(payload: dict) -> dict:
     env_overrides = _load_env_example()
     api_url = os.getenv("AI_API_URL", "").strip() or env_overrides.get("AI_API_URL", "")
     api_key = os.getenv("AI_API_KEY", "").strip() or env_overrides.get("AI_API_KEY", "")
-    model = os.getenv("AI_MODEL", "").strip() or env_overrides.get("AI_MODEL", "deepseek-v3.1-250821")
+    model = os.getenv("AI_MODEL", "").strip() or env_overrides.get("AI_MODEL", "ernie-4.5-turbo-32k")
     timeout_raw = os.getenv("AI_API_TIMEOUT", "").strip() or env_overrides.get("AI_API_TIMEOUT", "60")
     timeout = int(timeout_raw)
     if "/chat/completions" not in api_url:

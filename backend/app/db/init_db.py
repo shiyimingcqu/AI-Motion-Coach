@@ -175,30 +175,39 @@ def init_db():
         db.close()
 
 
+def _add_column_if_missing(connection, table: str, column: str, ddl: str):
+    inspector = inspect(engine)
+    columns = {c["name"] for c in inspector.get_columns(table)}
+    if column not in columns:
+        connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {ddl}"))
+
+
 def _migrate_legacy_schema():
     """Patch old SQLite schemas so newer ORM fields don't crash at runtime."""
     inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
 
-    if "sessions" not in inspector.get_table_names():
-        return
-
-    session_columns = {column["name"] for column in inspector.get_columns("sessions")}
     with engine.begin() as connection:
-        if "user_id" not in session_columns:
-            connection.execute(text("ALTER TABLE sessions ADD COLUMN user_id INTEGER"))
-        if "calories_burned" not in session_columns:
-            connection.execute(text("ALTER TABLE sessions ADD COLUMN calories_burned FLOAT DEFAULT 0"))
-        if "evaluation_json" not in session_columns:
-            connection.execute(text("ALTER TABLE sessions ADD COLUMN evaluation_json TEXT"))
-        if "feedback_summary" not in session_columns:
-            connection.execute(text("ALTER TABLE sessions ADD COLUMN feedback_summary TEXT"))
+        if "users" in tables:
+            _add_column_if_missing(connection, "users", "openid", "openid VARCHAR(64)")
+            _add_column_if_missing(connection, "users", "nickname", "nickname VARCHAR(64)")
+            _add_column_if_missing(connection, "users", "avatar_mode", "avatar_mode VARCHAR(16) DEFAULT 'default'")
+            _add_column_if_missing(connection, "users", "avatar_image", "avatar_image TEXT")
+            _add_column_if_missing(connection, "users", "occupation", "occupation VARCHAR(32)")
+            _add_column_if_missing(connection, "users", "height", "height VARCHAR(8)")
+            _add_column_if_missing(connection, "users", "weight", "weight VARCHAR(8)")
+            _add_column_if_missing(connection, "users", "training_goal", "training_goal VARCHAR(256)")
+            _add_column_if_missing(connection, "users", "training_preferences", "training_preferences TEXT")
 
-    # Add camera_view column to analysis_tasks
-    if "analysis_tasks" in inspector.get_table_names():
-        task_columns = {column["name"] for column in inspector.get_columns("analysis_tasks")}
-        if "camera_view" not in task_columns:
-            with engine.begin() as connection:
-                connection.execute(text("ALTER TABLE analysis_tasks ADD COLUMN camera_view VARCHAR(16) DEFAULT 'front'"))
+        if "sessions" in tables:
+            _add_column_if_missing(connection, "sessions", "user_id", "user_id INTEGER")
+            _add_column_if_missing(connection, "sessions", "calories_burned", "calories_burned FLOAT DEFAULT 0")
+            _add_column_if_missing(connection, "sessions", "evaluation_json", "evaluation_json TEXT")
+            _add_column_if_missing(connection, "sessions", "feedback_summary", "feedback_summary TEXT")
+
+        if "analysis_tasks" in tables:
+            _add_column_if_missing(connection, "analysis_tasks", "user_id", "user_id INTEGER")
+            _add_column_if_missing(connection, "analysis_tasks", "camera_view", "camera_view VARCHAR(16) DEFAULT 'front'")
 
 
 def _create_default_users(db: Session):

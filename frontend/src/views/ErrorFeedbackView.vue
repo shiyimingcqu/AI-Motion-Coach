@@ -736,6 +736,9 @@ onMounted(async () => {
 
 <style scoped>
 .feedback-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 18px;
   perspective: 1200px;
 }
 
@@ -1279,7 +1282,17 @@ onMounted(async () => {
   }
 }
 
+@media (max-width: 1280px) {
+  .feedback-stats-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 768px) {
+  .feedback-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .stat-card-btn {
     min-height: 78px;
     padding: 14px;
