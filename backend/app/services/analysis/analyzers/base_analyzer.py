@@ -50,6 +50,21 @@ class BaseExerciseAnalyzer:
         """Return {'score': float, 'issues': list[str], 'feedback': list[str]}."""
         raise NotImplementedError
 
+    def _should_count_rep(self, current_stage: str, phase: str) -> bool:
+        """Return True when a full repetition has just completed."""
+        return (
+            current_stage in ("bottom", "down")
+            and phase in ("up", "standing", "top_support", "ascending")
+        )
+
+    def _mark_rep_checkpoint(self, phase: str, score_result: dict) -> None:
+        """Record whether the latest lowering/open phase was valid."""
+        if phase in ("bottom", "open_peak", "down"):
+            self._last_down_was_valid = len(score_result["issues"]) == 0
+
+    def _track_frame_score(self, score_result: dict, phase: str) -> None:
+        """Optional per-frame score accumulation (e.g. static holds)."""
+
     # ─── public entry point ──────────────────────────────────
 
     def analyze_frame(self, landmarks: Keypoints, state: dict) -> dict:
@@ -63,17 +78,14 @@ class BaseExerciseAnalyzer:
 
         score_result = self.score_frame(smoothed, phase)
 
-        # Count a rep only when we cross once from the lowering/bottom phase
-        # into the rising/finished phase. Using the committed current stage
-        # avoids double-counting on sequences like bottom -> up -> standing.
-        if current_stage in ("bottom", "down") and phase in ("up", "standing", "top_support"):
+        if self._should_count_rep(current_stage, phase):
             self.count += 1
             if self._last_down_was_valid:
                 self.valid_count += 1
             self.scores_history.append(score_result["score"])
 
-        if phase in ("bottom", "open_peak"):
-            self._last_down_was_valid = len(score_result["issues"]) == 0
+        self._mark_rep_checkpoint(phase, score_result)
+        self._track_frame_score(score_result, phase)
 
         self.previous_stage = current_stage
         self.stage = phase

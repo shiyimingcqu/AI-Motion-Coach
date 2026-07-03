@@ -28,7 +28,7 @@ if router:
 
         try:
             source_uri = await local_storage.save_upload(file)
-            output_uri = video_analysis_service.analyze_video(
+            output_uri, session_record = video_analysis_service.analyze_video(
                 source_uri,
                 exercise,
                 user_id=user_id,
@@ -39,7 +39,11 @@ if router:
                 status="success",
                 output_uri=output_uri,
             )
-            return {"file_uri": source_uri, "task": task}
+            response = {"file_uri": source_uri, "task": task}
+            if session_record is not None:
+                response["session_id"] = session_record.session_id
+                response["session"] = session_record.to_dict()
+            return response
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:

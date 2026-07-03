@@ -158,7 +158,12 @@ if router:
                 return saved_session
 
             summary = analyzer.get_session_summary()
-            if summary["total_count"] <= 0:
+            summary = video_analysis_service._normalize_session_summary(
+                summary,
+                analyzer.exercise_type,
+                processed_frames=1,
+            )
+            if summary["total_count"] <= 0 and summary["duration_seconds"] <= 0:
                 return None
 
             saved_session = session_service.create_session(

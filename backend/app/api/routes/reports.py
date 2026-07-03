@@ -19,26 +19,34 @@ if router:
     def list_reports(
         date_from: str = Query("", description="Start date (YYYY-MM-DD)"),
         date_to: str = Query("", description="End date (YYYY-MM-DD)"),
+        exercise: str = Query("", description="Filter by exercise key"),
         current_user=Depends(get_current_active_user) if get_current_active_user else None,
     ):
         user_id = current_user.id if current_user else None
+        include_all = bool(current_user and current_user.role == "admin")
         return report_service.list_reports(
             user_id=user_id,
             date_from=date_from or None,
             date_to=date_to or None,
+            include_all_users=include_all,
+            exercise=exercise or None,
         )
 
     @router.get("/personal")
     def personal_report(
         date_from: str = Query("", description="Start date (YYYY-MM-DD)"),
         date_to: str = Query("", description="End date (YYYY-MM-DD)"),
+        exercise: str = Query("", description="Filter by exercise key"),
         current_user=Depends(get_current_active_user) if get_current_active_user else None,
     ):
         user_id = current_user.id if current_user else None
+        include_all = bool(current_user and current_user.role == "admin")
         return report_service.personal_summary(
             user_id=user_id,
             date_from=date_from or None,
             date_to=date_to or None,
+            include_all_users=include_all,
+            exercise=exercise or None,
         )
 
     @router.get("/export")
@@ -46,16 +54,21 @@ if router:
         format: str = Query("pdf", description="Export format: pdf or csv"),
         date_from: str = Query("", description="Start date (YYYY-MM-DD)"),
         date_to: str = Query("", description="End date (YYYY-MM-DD)"),
+        exercise: str = Query("", description="Filter by exercise key"),
         current_user=Depends(get_current_active_user) if get_current_active_user else None,
     ):
         user_id = current_user.id if current_user else None
         username = current_user.username if current_user else "学员"
+        include_all = bool(current_user and current_user.role == "admin")
+        exercise_key = exercise or None
 
         if format == "csv":
             csv_content = report_service.export_csv(
                 user_id=user_id,
                 date_from=date_from or None,
                 date_to=date_to or None,
+                include_all_users=include_all,
+                exercise=exercise_key,
             )
             return PlainTextResponse(
                 content=csv_content,
@@ -70,6 +83,8 @@ if router:
                     date_from=date_from or None,
                     date_to=date_to or None,
                     username=username,
+                    include_all_users=include_all,
+                    exercise=exercise_key,
                 )
             except Exception as exc:
                 raise HTTPException(status_code=500, detail=f"PDF 生成失败: {exc}") from exc
@@ -87,6 +102,8 @@ if router:
             user_id=user_id,
             date_from=date_from or None,
             date_to=date_to or None,
+            include_all_users=include_all,
+            exercise=exercise_key,
         )
         return HTMLResponse(
             content=html,
@@ -111,6 +128,7 @@ if router:
         if (
             current_user
             and current_user.role != "admin"
+            and session.user_id is not None
             and session.user_id != current_user.id
         ):
             raise HTTPException(status_code=403, detail="无权访问该报告")
@@ -142,6 +160,7 @@ if router:
         if (
             current_user
             and current_user.role != "admin"
+            and session.user_id is not None
             and session.user_id != current_user.id
         ):
             raise HTTPException(status_code=403, detail="无权访问该报告")

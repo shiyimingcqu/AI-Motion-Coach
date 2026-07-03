@@ -31,7 +31,28 @@ class PlankAnalyzer(BaseExerciseAnalyzer):
         super().__init__(smooth_window)
         self.hold_start = None
         self.total_hold = 0.0
+        self.hold_scores: list[float] = []
         self.jitter_buffer = deque(maxlen=30)  # for shake detection
+
+    def _track_frame_score(self, score_result: dict, phase: str) -> None:
+        if phase in ("holding", "unstable") and score_result["score"] > 0:
+            self.hold_scores.append(score_result["score"])
+
+    def get_session_summary(self) -> dict:
+        duration_seconds = int(max(self.total_hold, time.time() - self.start_time))
+        average_score = (
+            int(sum(self.hold_scores) / len(self.hold_scores))
+            if self.hold_scores else 0
+        )
+        held = self.total_hold >= 5
+        return {
+            "exercise": self.exercise_type,
+            "duration_seconds": duration_seconds,
+            "total_count": 1 if held else 0,
+            "valid_count": 1 if held and average_score >= 60 else 0,
+            "error_count": 0 if held and average_score >= 60 else (1 if held else 0),
+            "average_score": average_score,
+        }
 
     def extract_features(self, landmarks: Keypoints) -> dict[str, float]:
         missing = REQUIRED - set(landmarks)

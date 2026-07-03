@@ -22,10 +22,25 @@ export interface ReportItem {
 
 export interface ChartData {
   score_trend: { date: string; score: number }[];
+  score_trend_by_exercise?: { exercise: string; name: string; trend: { date: string; score: number }[] }[];
   calorie_by_exercise: { name: string; value: number }[];
   exercise_distribution: { name: string; value: number }[];
   quality_radar: { dimensions: string[]; values: number[] };
+  per_exercise_radar?: Record<string, { dimensions: string[]; values: number[] }>;
   error_by_exercise: { name: string; value: number }[];
+}
+
+export interface ExerciseComparisonItem {
+  exercise: string;
+  name: string;
+  count: number;
+  avg_score: number;
+  calories: number;
+  total_errors?: number;
+  valid_rate?: number;
+  best_score?: number;
+  latest_score?: number;
+  duration_minutes?: number;
 }
 
 export interface PersonalReport {
@@ -37,13 +52,10 @@ export interface PersonalReport {
   error_count: number;
   total_calories: number;
   trend: { date: string; score: number }[];
-  exercise_breakdown: {
-    exercise: string;
-    name: string;
-    count: number;
-    avg_score: number;
-    calories: number;
-  }[];
+  exercise_breakdown: ExerciseComparisonItem[];
+  exercise_comparison?: ExerciseComparisonItem[];
+  exercise_trends?: { exercise: string; name: string; trend: { date: string; score: number }[] }[];
+  feedback_summary?: { weaknesses: string[]; recommendations: string[] };
   recent_sessions: {
     session_id: string;
     exercise: string;
@@ -89,18 +101,26 @@ export interface ReportDetail {
   report_item: ReportItem;
 }
 
-export function getReports(params?: { date_from?: string; date_to?: string }) {
+export interface ReportQuery {
+  date_from?: string;
+  date_to?: string;
+  exercise?: string;
+}
+
+export function getReports(params?: ReportQuery) {
   const query = new URLSearchParams();
   if (params?.date_from) query.set("date_from", params.date_from);
   if (params?.date_to) query.set("date_to", params.date_to);
+  if (params?.exercise) query.set("exercise", params.exercise);
   const qs = query.toString();
   return apiGet<{ items: ReportItem[]; total: number }>(`/reports${qs ? `?${qs}` : ""}`);
 }
 
-export function getPersonalReport(params?: { date_from?: string; date_to?: string }) {
+export function getPersonalReport(params?: ReportQuery) {
   const query = new URLSearchParams();
   if (params?.date_from) query.set("date_from", params.date_from);
   if (params?.date_to) query.set("date_to", params.date_to);
+  if (params?.exercise) query.set("exercise", params.exercise);
   const qs = query.toString();
   return apiGet<PersonalReport>(`/reports/personal${qs ? `?${qs}` : ""}`);
 }
@@ -111,7 +131,7 @@ export function getReportDetail(sessionId: string) {
 
 export async function exportReport(
   format: "pdf" | "csv",
-  params?: { date_from?: string; date_to?: string },
+  params?: ReportQuery,
 ): Promise<Blob> {
   const { useAuthStore } = await import("@/stores/auth");
   const authStore = useAuthStore();
@@ -119,6 +139,7 @@ export async function exportReport(
   query.set("format", format);
   if (params?.date_from) query.set("date_from", params.date_from);
   if (params?.date_to) query.set("date_to", params.date_to);
+  if (params?.exercise) query.set("exercise", params.exercise);
 
   const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
   const response = await fetch(`${API_BASE}/reports/export?${query.toString()}`, {

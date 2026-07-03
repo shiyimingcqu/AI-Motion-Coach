@@ -22,6 +22,16 @@ REQUIRED = {
 class JumpingJackAnalyzer(BaseExerciseAnalyzer):
     exercise_type = "jumping_jack"
 
+    def _should_count_rep(self, current_stage: str, phase: str) -> bool:
+        return (
+            current_stage in ("open_peak", "closing", "opening")
+            and phase in ("complete", "closed")
+        ) or (current_stage == "complete" and phase == "closed")
+
+    def _mark_rep_checkpoint(self, phase: str, score_result: dict) -> None:
+        if phase in ("open_peak", "opening"):
+            self._last_down_was_valid = len(score_result["issues"]) == 0
+
     def extract_features(self, landmarks: Keypoints) -> dict[str, float]:
         missing = REQUIRED - set(landmarks)
         if missing:
@@ -77,7 +87,8 @@ class JumpingJackAnalyzer(BaseExerciseAnalyzer):
         foot = features.get("foot_distance", 0)
         arm_h = features.get("avg_arm_height", 0)
 
-        prev_phase = state.get("phase", "closed")
+        prev_phase = self.stage if self.stage not in ("ready", "") else "closed"
+        state["phase"] = prev_phase
 
         if foot < 0.15 and arm_h < 0.05:
             return "closed"

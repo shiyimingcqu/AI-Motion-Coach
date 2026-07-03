@@ -22,6 +22,8 @@ class ReportService:
         user_id: int | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
+        include_all_users: bool = False,
+        exercise: str | None = None,
     ) -> list[SessionORM]:
         if SessionLocal is None:
             return []
@@ -29,8 +31,10 @@ class ReportService:
         db = SessionLocal()
         try:
             query = db.query(SessionORM).order_by(SessionORM.created_at.desc())
-            if user_id is not None:
+            if user_id is not None and not include_all_users:
                 query = query.filter(SessionORM.user_id == user_id)
+            if exercise:
+                query = query.filter(SessionORM.exercise == exercise)
             if date_from:
                 query = query.filter(SessionORM.created_at >= datetime.fromisoformat(date_from))
             if date_to:
@@ -40,6 +44,185 @@ class ReportService:
             return query.all()
         finally:
             db.close()
+
+    @staticmethod
+    def _build_daily_trend(trend_map: dict[str, list[float]], limit: int = 7) -> list[dict]:
+        return sorted(
+            (
+                {"date": day, "score": round(sum(values) / len(values), 1)}
+                for day, values in trend_map.items()
+            ),
+            key=lambda item: item["date"],
+        )[-limit:]
+
+    def _aggregate_personal_data(self, sessions: list[SessionORM]) -> dict:
+        total = len(sessions)
+        total_duration = sum(s.duration_seconds for s in sessions)
+        avg_score = sum(s.average_score for s in sessions) / total
+        total_count = sum(s.total_count for s in sessions)
+        valid_count = sum(s.valid_count for s in sessions)
+        total_calories = 0.0
+
+        trend_map: dict[str, list[float]] = {}
+        trend_by_exercise: dict[str, dict[str, list[float]]] = {}
+        calorie_map: dict[str, float] = {}
+        exercise_stats: dict[str, dict] = {}
+        error_map: dict[str, int] = {}
+        radar_accumulator: dict[str, list[float]] = {}
+        per_exercise_radar: dict[str, dict[str, list[float]]] = {}
+        feedback_weaknesses: list[str] = []
+        feedback_recommendations: list[str] = []
+
+        for session in sessions:
+            calories, evaluation = self._ensure_session_metrics(session)
+            total_calories += calories
+
+            day = session.created_at.strftime("%Y-%m-%d")
+            trend_map.setdefault(day, []).append(session.average_score)
+            trend_by_exercise.setdefault(session.exercise, {}).setdefault(day, []).append(
+                session.average_score
+            )
+
+            exercise_name = evaluation.get("exercise_name") or get_exercise_display_name(session.exercise)
+            calorie_map[exercise_name] = calorie_map.get(exercise_name, 0) + calories
+            error_map[exercise_name] = error_map.get(exercise_name, 0) + session.error_count
+
+            stats = exercise_stats.setdefault(
+                session.exercise,
+                {
+                    "exercise": session.exercise,
+                    "name": exercise_name,
+                    "count": 0,
+                    "total_score": 0.0,
+                    "calories": 0.0,
+                    "total_errors": 0,
+                    "valid_count": 0,
+                    "total_count": 0,
+                    "duration_seconds": 0,
+                    "scores": [],
+                },
+            )
+            stats["count"] += 1
+            stats["total_score"] += session.average_score
+            stats["calories"] += calories
+            stats["total_errors"] += session.error_count
+            stats["valid_count"] += session.valid_count
+            stats["total_count"] += session.total_count
+            stats["duration_seconds"] += session.duration_seconds
+            stats["scores"].append(session.average_score)
+
+            for label, value in evaluation.get("dimension_scores", {}).items():
+                radar_accumulator.setdefault(label, []).append(float(value))
+                per_exercise_radar.setdefault(session.exercise, {}).setdefault(label, []).append(
+                    float(value)
+                )
+
+            for item in evaluation.get("weaknesses", []):
+                if item and item not in feedback_weaknesses:
+                    feedback_weaknesses.append(item)
+            for item in evaluation.get("recommendations", []):
+                if item and item not in feedback_recommendations:
+                    feedback_recommendations.append(item)
+
+        trend = self._build_daily_trend(trend_map)
+        exercise_trends = [
+            {
+                "exercise": exercise_key,
+                "name": get_exercise_display_name(exercise_key),
+                "trend": self._build_daily_trend(day_map),
+            }
+            for exercise_key, day_map in trend_by_exercise.items()
+        ]
+
+        exercise_breakdown = [
+            {
+                "exercise": key,
+                "name": value["name"],
+                "count": value["count"],
+                "avg_score": round(value["total_score"] / value["count"], 1),
+                "calories": round(value["calories"], 1),
+                "total_errors": value["total_errors"],
+                "valid_rate": round(
+                    (value["valid_count"] / value["total_count"] * 100)
+                    if value["total_count"] > 0 else 100.0,
+                    1,
+                ),
+                "best_score": round(max(value["scores"]), 1),
+                "latest_score": round(value["scores"][0], 1) if value["scores"] else 0,
+                "duration_minutes": round(value["duration_seconds"] / 60, 1),
+            }
+            for key, value in exercise_stats.items()
+        ]
+        exercise_breakdown.sort(key=lambda item: item["count"], reverse=True)
+
+        exercise_comparison = exercise_breakdown
+
+        radar_dimensions = list(radar_accumulator.keys())
+        radar_values = [
+            round(sum(values) / len(values), 1) for values in radar_accumulator.values()
+        ]
+        if not radar_dimensions:
+            radar_dimensions = ["动作规范", "节奏控制", "稳定性"]
+            radar_values = [round(avg_score, 1)] * 3
+
+        per_exercise_radar_output = {
+            exercise_key: {
+                "dimensions": list(dim_map.keys()),
+                "values": [
+                    round(sum(values) / len(values), 1) for values in dim_map.values()
+                ],
+            }
+            for exercise_key, dim_map in per_exercise_radar.items()
+        }
+
+        return {
+            "average_score": round(avg_score, 1),
+            "total_sessions": total,
+            "total_duration_minutes": round(total_duration / 60),
+            "total_count": total_count,
+            "valid_count": valid_count,
+            "error_count": max(0, total_count - valid_count),
+            "total_calories": round(total_calories, 1),
+            "trend": trend,
+            "exercise_breakdown": exercise_breakdown,
+            "exercise_comparison": exercise_comparison,
+            "exercise_trends": exercise_trends,
+            "feedback_summary": {
+                "weaknesses": feedback_weaknesses[:8],
+                "recommendations": feedback_recommendations[:8],
+            },
+            "recent_sessions": [
+                {
+                    "session_id": s.session_id,
+                    "exercise": s.exercise,
+                    "score": s.average_score,
+                    "calories": self._ensure_session_metrics(s)[0],
+                    "created_at": s.created_at.isoformat(),
+                }
+                for s in sessions[:5]
+            ],
+            "charts": {
+                "score_trend": trend,
+                "score_trend_by_exercise": exercise_trends,
+                "calorie_by_exercise": [
+                    {"name": name, "value": round(value, 1)}
+                    for name, value in sorted(calorie_map.items(), key=lambda x: x[1], reverse=True)
+                ],
+                "exercise_distribution": [
+                    {"name": item["name"], "value": item["count"]}
+                    for item in exercise_breakdown
+                ],
+                "quality_radar": {
+                    "dimensions": radar_dimensions,
+                    "values": radar_values,
+                },
+                "per_exercise_radar": per_exercise_radar_output,
+                "error_by_exercise": [
+                    {"name": name, "value": count}
+                    for name, count in error_map.items()
+                ],
+            },
+        }
 
     def _ensure_session_metrics(self, session: SessionORM) -> tuple[float, dict]:
         evaluation = parse_evaluation(session.evaluation_json)
@@ -90,8 +273,12 @@ class ReportService:
         user_id: int | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
+        include_all_users: bool = False,
+        exercise: str | None = None,
     ) -> dict:
-        sessions = self._query_sessions(user_id, date_from, date_to)
+        sessions = self._query_sessions(
+            user_id, date_from, date_to, include_all_users, exercise
+        )
         items = [self._session_to_report_item(session) for session in sessions]
         return {"items": items, "total": len(items)}
 
@@ -100,6 +287,13 @@ class ReportService:
         dimension_scores = evaluation.get("dimension_scores", {})
         radar_dimensions = list(dimension_scores.keys())
         radar_values = list(dimension_scores.values())
+
+        if session.exercise == "plank":
+            rep_labels = ["有效保持", "姿态问题"]
+            rep_values = [session.valid_count, max(0, session.error_count)]
+        else:
+            rep_labels = ["有效次数", "错误次数"]
+            rep_values = [session.valid_count, max(0, session.error_count)]
 
         return {
             "session_id": session.session_id,
@@ -119,11 +313,8 @@ class ReportService:
                     "values": radar_values,
                 },
                 "rep_breakdown": {
-                    "labels": ["有效次数", "错误次数"],
-                    "values": [
-                        session.valid_count,
-                        max(0, session.error_count),
-                    ],
+                    "labels": rep_labels,
+                    "values": rep_values,
                 },
                 "score_gauge": {
                     "value": round(session.average_score, 1),
@@ -137,125 +328,27 @@ class ReportService:
         user_id: int | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
+        include_all_users: bool = False,
+        exercise: str | None = None,
     ) -> dict:
-        sessions = self._query_sessions(user_id, date_from, date_to)
+        sessions = self._query_sessions(
+            user_id, date_from, date_to, include_all_users, exercise
+        )
         if not sessions:
             return self._empty_summary()
-
-        total = len(sessions)
-        total_duration = sum(s.duration_seconds for s in sessions)
-        avg_score = sum(s.average_score for s in sessions) / total
-        total_count = sum(s.total_count for s in sessions)
-        valid_count = sum(s.valid_count for s in sessions)
-        total_calories = 0.0
-
-        trend_map: dict[str, list[float]] = {}
-        calorie_map: dict[str, float] = {}
-        exercise_stats: dict[str, dict] = {}
-        error_map: dict[str, int] = {}
-        radar_accumulator: dict[str, list[float]] = {}
-
-        for session in sessions:
-            calories, evaluation = self._ensure_session_metrics(session)
-            total_calories += calories
-
-            day = session.created_at.strftime("%Y-%m-%d")
-            trend_map.setdefault(day, []).append(session.average_score)
-
-            exercise_name = evaluation.get("exercise_name") or get_exercise_display_name(session.exercise)
-            calorie_map[exercise_name] = calorie_map.get(exercise_name, 0) + calories
-            error_map[exercise_name] = error_map.get(exercise_name, 0) + session.error_count
-
-            stats = exercise_stats.setdefault(
-                session.exercise,
-                {
-                    "exercise": session.exercise,
-                    "name": exercise_name,
-                    "count": 0,
-                    "total_score": 0.0,
-                    "calories": 0.0,
-                },
-            )
-            stats["count"] += 1
-            stats["total_score"] += session.average_score
-            stats["calories"] += calories
-
-            for label, value in evaluation.get("dimension_scores", {}).items():
-                radar_accumulator.setdefault(label, []).append(float(value))
-
-        trend = sorted(
-            {"date": day, "score": round(sum(values) / len(values), 1)}
-            for day, values in trend_map.items()
-        )[-7:]
-
-        exercise_breakdown = [
-            {
-                "exercise": key,
-                "name": value["name"],
-                "count": value["count"],
-                "avg_score": round(value["total_score"] / value["count"], 1),
-                "calories": round(value["calories"], 1),
-            }
-            for key, value in exercise_stats.items()
-        ]
-        exercise_breakdown.sort(key=lambda item: item["count"], reverse=True)
-
-        radar_dimensions = list(radar_accumulator.keys())
-        radar_values = [
-            round(sum(values) / len(values), 1) for values in radar_accumulator.values()
-        ]
-        if not radar_dimensions:
-            radar_dimensions = ["动作规范", "节奏控制", "稳定性"]
-            radar_values = [round(avg_score, 1)] * 3
-
-        return {
-            "average_score": round(avg_score, 1),
-            "total_sessions": total,
-            "total_duration_minutes": round(total_duration / 60),
-            "total_count": total_count,
-            "valid_count": valid_count,
-            "error_count": max(0, total_count - valid_count),
-            "total_calories": round(total_calories, 1),
-            "trend": trend,
-            "exercise_breakdown": exercise_breakdown,
-            "recent_sessions": [
-                {
-                    "session_id": s.session_id,
-                    "exercise": s.exercise,
-                    "score": s.average_score,
-                    "calories": self._ensure_session_metrics(s)[0],
-                    "created_at": s.created_at.isoformat(),
-                }
-                for s in sessions[:5]
-            ],
-            "charts": {
-                "score_trend": trend,
-                "calorie_by_exercise": [
-                    {"name": name, "value": round(value, 1)}
-                    for name, value in sorted(calorie_map.items(), key=lambda x: x[1], reverse=True)
-                ],
-                "exercise_distribution": [
-                    {"name": item["name"], "value": item["count"]}
-                    for item in exercise_breakdown
-                ],
-                "quality_radar": {
-                    "dimensions": radar_dimensions,
-                    "values": radar_values,
-                },
-                "error_by_exercise": [
-                    {"name": name, "value": count}
-                    for name, count in error_map.items()
-                ],
-            },
-        }
+        return self._aggregate_personal_data(sessions)
 
     def export_csv(
         self,
         user_id: int | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
+        include_all_users: bool = False,
+        exercise: str | None = None,
     ) -> str:
-        sessions = self._query_sessions(user_id, date_from, date_to)
+        sessions = self._query_sessions(
+            user_id, date_from, date_to, include_all_users, exercise
+        )
 
         output = io.StringIO()
         writer = csv.writer(output)
@@ -284,8 +377,16 @@ class ReportService:
         user_id: int | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
+        include_all_users: bool = False,
+        exercise: str | None = None,
     ) -> str:
-        summary = self.personal_summary(user_id=user_id, date_from=date_from, date_to=date_to)
+        summary = self.personal_summary(
+            user_id=user_id,
+            date_from=date_from,
+            date_to=date_to,
+            include_all_users=include_all_users,
+            exercise=exercise,
+        )
 
         rows_html = ""
         for session in summary.get("recent_sessions", []):
@@ -343,12 +444,29 @@ th {{ background: #f1f5f9; }}
         date_from: str | None = None,
         date_to: str | None = None,
         username: str = "学员",
+        include_all_users: bool = False,
+        exercise: str | None = None,
     ) -> bytes:
         from app.services.report.pdf_report_service import pdf_report_builder
 
-        summary = self.personal_summary(user_id=user_id, date_from=date_from, date_to=date_to)
-        sessions = self._query_sessions(user_id, date_from, date_to)
-        return pdf_report_builder.build(summary, sessions, username=username)
+        summary = self.personal_summary(
+            user_id=user_id,
+            date_from=date_from,
+            date_to=date_to,
+            include_all_users=include_all_users,
+            exercise=exercise,
+        )
+        sessions = self._query_sessions(
+            user_id, date_from, date_to, include_all_users, exercise
+        )
+        return pdf_report_builder.build(
+            summary,
+            sessions,
+            username=username,
+            date_from=date_from,
+            date_to=date_to,
+            exercise=exercise,
+        )
 
     def class_summary(self) -> dict:
         return self.personal_summary(user_id=None)
@@ -365,12 +483,17 @@ th {{ background: #f1f5f9; }}
             "total_calories": 0,
             "trend": [],
             "exercise_breakdown": [],
+            "exercise_comparison": [],
+            "exercise_trends": [],
+            "feedback_summary": {"weaknesses": [], "recommendations": []},
             "recent_sessions": [],
             "charts": {
                 "score_trend": [],
+                "score_trend_by_exercise": [],
                 "calorie_by_exercise": [],
                 "exercise_distribution": [],
                 "quality_radar": {"dimensions": [], "values": []},
+                "per_exercise_radar": {},
                 "error_by_exercise": [],
             },
         }

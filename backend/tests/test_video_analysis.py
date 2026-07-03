@@ -25,7 +25,7 @@ def test_video_analysis_generates_readable_output_video(tmp_path):
     source = tmp_path / "source.mp4"
     _make_test_video(source)
 
-    output_uri = video_analysis_service.analyze_video(
+    output_uri, _session = video_analysis_service.analyze_video(
         source_uri=str(source),
         exercise="squat",
     )

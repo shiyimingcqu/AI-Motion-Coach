@@ -70,7 +70,7 @@ def _render_chart_images(summary: dict) -> dict[str, bytes]:
         ax.plot(dates, scores, color="#60a5fa", linewidth=2.5, marker="o", markersize=6)
         ax.fill_between(range(len(scores)), scores, alpha=0.15, color="#3b82f6")
         ax.set_ylim(0, 100)
-        ax.set_title("近7日评分趋势", fontsize=12, fontweight="bold", pad=10)
+        ax.set_title("近7日综合评分趋势", fontsize=12, fontweight="bold", pad=10)
         ax.set_ylabel("评分")
         ax.grid(True, alpha=0.2)
         buf = io.BytesIO()
@@ -78,6 +78,32 @@ def _render_chart_images(summary: dict) -> dict[str, bytes]:
         fig.savefig(buf, format="png", dpi=150)
         plt.close(fig)
         images["trend"] = buf.getvalue()
+
+    exercise_trends = charts.get("score_trend_by_exercise", [])
+    if exercise_trends:
+        fig, ax = plt.subplots(figsize=(7, 3.2))
+        colors = ["#60a5fa", "#34d399", "#f59e0b", "#a78bfa"]
+        for idx, item in enumerate(exercise_trends):
+            trend_points = item.get("trend", [])
+            if not trend_points:
+                continue
+            dates = [p["date"][5:] for p in trend_points]
+            scores = [p["score"] for p in trend_points]
+            ax.plot(
+                dates, scores,
+                label=item.get("name", item.get("exercise", "")),
+                color=colors[idx % len(colors)],
+                linewidth=2, marker="o", markersize=5,
+            )
+        ax.set_ylim(0, 100)
+        ax.set_title("分动作 7 日评分趋势", fontsize=12, fontweight="bold", pad=10)
+        ax.legend(fontsize=8)
+        ax.grid(True, alpha=0.2)
+        buf = io.BytesIO()
+        fig.tight_layout()
+        fig.savefig(buf, format="png", dpi=150)
+        plt.close(fig)
+        images["trend_by_exercise"] = buf.getvalue()
 
     calories = charts.get("calorie_by_exercise", [])
     if calories:
@@ -130,6 +156,9 @@ class PdfReportBuilder:
         summary: dict,
         sessions: list,
         username: str = "学员",
+        date_from: str | None = None,
+        date_to: str | None = None,
+        exercise: str | None = None,
     ) -> bytes:
         from fpdf import FPDF
 
@@ -145,20 +174,24 @@ class PdfReportBuilder:
 
         chart_images = _render_chart_images(summary)
         temp_files: list[str] = []
+        filter_label = self._filter_label(date_from, date_to, exercise)
 
         try:
-            self._cover_page(pdf, font_name, username, summary)
-            self._summary_page(pdf, font_name, username, summary)
+            self._cover_page(pdf, font_name, username, summary, filter_label)
+            self._summary_page(pdf, font_name, username, summary, filter_label)
             self._coach_page(pdf, font_name, summary, sessions)
 
             for key, title in [
-                ("trend", "评分趋势分析"),
-                ("calories", "卡路里消耗分析"),
-                ("radar", "动作质量维度"),
+                ("trend", "综合评分趋势（近7日）"),
+                ("trend_by_exercise", "分动作评分趋势（近7日）"),
+                ("calories", "各动作卡路里消耗分析"),
+                ("radar", "动作质量维度雷达图"),
             ]:
                 if key in chart_images:
                     self._chart_page(pdf, font_name, title, chart_images[key], temp_files)
 
+            self._exercise_comparison_page(pdf, font_name, summary)
+            self._feedback_page(pdf, font_name, summary)
             self._sessions_table(pdf, font_name, sessions)
             self._evaluation_details(pdf, font_name, sessions)
 
@@ -170,6 +203,21 @@ class PdfReportBuilder:
                 except OSError:
                     pass
 
+    @staticmethod
+    def _filter_label(date_from: str | None, date_to: str | None, exercise: str | None) -> str:
+        parts = []
+        if date_from and date_to and date_from == date_to:
+            parts.append(f"日期：{date_from}")
+        elif date_from or date_to:
+            parts.append(f"日期：{date_from or '起始'} ~ {date_to or '今'}")
+        else:
+            parts.append("日期：全部记录")
+        if exercise:
+            parts.append(f"动作：{get_exercise_display_name(exercise)}")
+        else:
+            parts.append("动作：全部")
+        return " · ".join(parts)
+
     def _set_font(self, pdf, font_name: str, size: int = 11, style: str = ""):
         pdf.set_font(font_name, style, size)
 
@@ -180,38 +228,43 @@ class PdfReportBuilder:
         self._set_font(pdf, font_name, size)
         pdf.multi_cell(self._text_width(pdf), 5, text)
 
-    def _cover_page(self, pdf, font_name: str, username: str, summary: dict):
+    def _cover_page(self, pdf, font_name: str, username: str, summary: dict, filter_label: str):
         pdf.add_page()
         pdf.set_fill_color(15, 23, 42)
         pdf.rect(0, 0, 210, 297, "F")
         pdf.set_text_color(248, 250, 252)
         self._set_font(pdf, font_name, 28, "B")
         pdf.set_y(60)
-        pdf.cell(0, 14, "运动姿态评估报告", ln=True, align="C")
+        pdf.cell(0, 14, "运动姿态综合评估报告", ln=True, align="C")
         self._set_font(pdf, font_name, 13)
         pdf.set_text_color(148, 163, 184)
-        pdf.cell(0, 10, "Pose Training AI · Fitness Assessment Report", ln=True, align="C")
+        pdf.cell(0, 10, "Pose Training AI · Comprehensive Fitness Report", ln=True, align="C")
         pdf.ln(20)
         pdf.set_text_color(203, 213, 225)
         self._set_font(pdf, font_name, 12)
         pdf.cell(0, 9, f"学员姓名：{username}", ln=True, align="C")
         pdf.cell(0, 9, f"报告日期：{datetime.now(timezone.utc).strftime('%Y-%m-%d')}", ln=True, align="C")
+        pdf.cell(0, 9, f"筛选范围：{filter_label}", ln=True, align="C")
         pdf.cell(0, 9, f"训练次数：{summary.get('total_sessions', 0)} 次", ln=True, align="C")
         pdf.cell(0, 9, f"综合评分：{summary.get('average_score', 0)} 分", ln=True, align="C")
         pdf.cell(0, 9, f"总消耗：{summary.get('total_calories', 0)} kcal", ln=True, align="C")
-        pdf.ln(30)
+        pdf.ln(20)
         pdf.set_text_color(100, 116, 139)
         self._set_font(pdf, font_name, 10)
         self._multi(
             pdf, font_name,
-            "本报告面向健身爱好者及其私人教练，基于 AI 姿态分析生成，供训练计划制定与动作纠正参考。",
+            "本报告综合实时姿态检测、视频上传分析、评估打分、卡路里估算与纠错建议，"
+            "为健身爱好者及私人教练提供可执行的训练反馈。",
             10,
         )
 
-    def _summary_page(self, pdf, font_name: str, username: str, summary: dict):
+    def _summary_page(self, pdf, font_name: str, username: str, summary: dict, filter_label: str):
         pdf.add_page()
         pdf.set_text_color(15, 23, 42)
         self._section_title(pdf, font_name, "一、训练概览")
+        self._set_font(pdf, font_name, 10)
+        self._multi(pdf, font_name, f"数据范围：{filter_label}", 10)
+        pdf.ln(4)
         self._set_font(pdf, font_name, 11)
 
         metrics = [
@@ -231,23 +284,67 @@ class PdfReportBuilder:
             pdf.ln(18)
 
         pdf.ln(8)
-        breakdown = summary.get("exercise_breakdown", [])
+        breakdown = summary.get("exercise_comparison") or summary.get("exercise_breakdown", [])
         if breakdown:
             self._set_font(pdf, font_name, 11, "B")
             pdf.cell(0, 8, "按动作类型统计", ln=True)
-            self._set_font(pdf, font_name, 10)
+            self._set_font(pdf, font_name, 9)
             pdf.set_fill_color(30, 41, 59)
             pdf.set_text_color(255, 255, 255)
-            for col, w in [("动作", 40), ("次数", 25), ("均分", 25), ("卡路里", 30)]:
+            for col, w in [("动作", 28), ("次数", 16), ("均分", 16), ("最新", 16), ("最高", 16), ("有效率", 20), ("错误", 16), ("kcal", 22)]:
                 pdf.cell(w, 8, col, border=1, fill=True)
             pdf.ln(8)
             pdf.set_text_color(15, 23, 42)
             for item in breakdown:
-                pdf.cell(40, 8, str(item.get("name", "")), border=1)
-                pdf.cell(25, 8, str(item.get("count", 0)), border=1)
-                pdf.cell(25, 8, str(item.get("avg_score", 0)), border=1)
-                pdf.cell(30, 8, f"{item.get('calories', 0)} kcal", border=1)
+                pdf.cell(28, 8, str(item.get("name", ""))[:6], border=1)
+                pdf.cell(16, 8, str(item.get("count", 0)), border=1)
+                pdf.cell(16, 8, str(item.get("avg_score", 0)), border=1)
+                pdf.cell(16, 8, str(item.get("latest_score", item.get("avg_score", 0))), border=1)
+                pdf.cell(16, 8, str(item.get("best_score", item.get("avg_score", 0))), border=1)
+                pdf.cell(20, 8, f"{item.get('valid_rate', 100)}%", border=1)
+                pdf.cell(16, 8, str(item.get("total_errors", 0)), border=1)
+                pdf.cell(22, 8, str(item.get("calories", 0)), border=1)
                 pdf.ln(8)
+
+    def _exercise_comparison_page(self, pdf, font_name: str, summary: dict):
+        trends = summary.get("exercise_trends") or summary.get("charts", {}).get("score_trend_by_exercise", [])
+        if not trends:
+            return
+        pdf.add_page()
+        self._section_title(pdf, font_name, "三、分动作 7 日训练趋势")
+        self._set_font(pdf, font_name, 10)
+        for item in trends:
+            name = item.get("name") or get_exercise_display_name(item.get("exercise", ""))
+            trend = item.get("trend", [])
+            if not trend:
+                self._multi(pdf, font_name, f"· {name}：暂无近7日记录", 10)
+                continue
+            points = " → ".join(f"{p['date'][5:]}:{p['score']}" for p in trend)
+            self._multi(pdf, font_name, f"· {name}：{points}", 10)
+        pdf.ln(4)
+
+    def _feedback_page(self, pdf, font_name: str, summary: dict):
+        feedback = summary.get("feedback_summary", {})
+        weaknesses = feedback.get("weaknesses", [])
+        recommendations = feedback.get("recommendations", [])
+        if not weaknesses and not recommendations:
+            return
+        pdf.add_page()
+        self._section_title(pdf, font_name, "四、纠错分析与训练建议")
+        self._set_font(pdf, font_name, 10)
+        if weaknesses:
+            self._set_font(pdf, font_name, 11, "B")
+            pdf.cell(0, 8, "常见待改进项（来自姿态检测与评估）", ln=True)
+            self._set_font(pdf, font_name, 10)
+            for idx, item in enumerate(weaknesses, 1):
+                self._multi(pdf, font_name, f"{idx}. {item}", 10)
+            pdf.ln(4)
+        if recommendations:
+            self._set_font(pdf, font_name, 11, "B")
+            pdf.cell(0, 8, "个性化训练建议", ln=True)
+            self._set_font(pdf, font_name, 10)
+            for idx, item in enumerate(recommendations, 1):
+                self._multi(pdf, font_name, f"{idx}. {item}", 10)
 
     def _coach_page(self, pdf, font_name: str, summary: dict, sessions: list):
         pdf.add_page()
@@ -294,7 +391,7 @@ class PdfReportBuilder:
         if not sessions:
             return
         pdf.add_page()
-        self._section_title(pdf, font_name, "三、训练记录明细")
+        self._section_title(pdf, font_name, "五、训练记录明细")
         self._set_font(pdf, font_name, 9)
         pdf.set_fill_color(30, 41, 59)
         pdf.set_text_color(255, 255, 255)
@@ -331,7 +428,7 @@ class PdfReportBuilder:
         if not sessions:
             return
         pdf.add_page()
-        self._section_title(pdf, font_name, "四、分项评估与训练建议")
+        self._section_title(pdf, font_name, "六、分项评估与训练建议")
 
         for session in sessions[:10]:
             evaluation = parse_evaluation(getattr(session, "evaluation_json", None))

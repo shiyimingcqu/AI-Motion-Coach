@@ -3,7 +3,7 @@
     <header class="section-page-header">
       <div>
         <h1>Evaluation Reports / 评估报告</h1>
-        <p>面向健身爱好者与私人教练的专业姿态评估报告 · 含图表、建议与卡路里分析</p>
+        <p>面向健身爱好者与私人教练的专业姿态评估报告 · 单次训练详情与建议</p>
       </div>
       <button
         class="blue-action-button"
@@ -31,7 +31,7 @@
       </article>
     </section>
 
-    <ReportCharts v-if="summary.total_sessions > 0" :charts="summary.charts" />
+    <p v-if="loadError" class="report-load-error">{{ loadError }}</p>
 
     <section class="filter-card report-filter-card">
       <label class="session-search">
@@ -40,7 +40,7 @@
       </label>
       <select v-model="exerciseFilter">
         <option value="">全部动作</option>
-        <option v-for="ex in exerciseOptions" :key="ex" :value="ex">{{ ex }}</option>
+        <option v-for="ex in exerciseOptions" :key="ex.key" :value="ex.key">{{ ex.name }}</option>
       </select>
       <select v-model="sortOrder">
         <option value="desc">最新优先</option>
@@ -157,11 +157,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, ref } from "vue";
+import { useRoute } from "vue-router";
 import * as echarts from "echarts";
 import { Download, Eye, FileText, Filter, X } from "lucide-vue-next";
 import StateDisplay from "../components/StateDisplay.vue";
-import ReportCharts from "../components/ReportCharts.vue";
 import {
   getPersonalReport,
   getReportDetail,
@@ -175,6 +175,7 @@ import {
   type ReportItem,
 } from "../api/reports";
 
+const route = useRoute();
 const reports = ref<ReportItem[]>([]);
 const summary = ref<PersonalReport>({
   average_score: 0,
@@ -197,6 +198,7 @@ const summary = ref<PersonalReport>({
 });
 
 const loading = ref(true);
+const loadError = ref("");
 const downloading = ref(false);
 const keyword = ref("");
 const exerciseFilter = ref("");
@@ -209,16 +211,29 @@ const detailRadarRef = ref<HTMLElement | null>(null);
 const detailRepRef = ref<HTMLElement | null>(null);
 let detailCharts: echarts.ECharts[] = [];
 
-const exerciseOptions = computed(() =>
-  [...new Set(reports.value.map((r) => r.exercise_name || r.exercise))],
-);
+const EXERCISE_OPTIONS = [
+  { key: "squat", name: "深蹲" },
+  { key: "push_up", name: "俯卧撑" },
+  { key: "jumping_jack", name: "开合跳" },
+  { key: "plank", name: "平板支撑" },
+];
+
+const exerciseOptions = computed(() => {
+  const fromData = reports.value.map((r) => ({
+    key: r.exercise,
+    name: r.exercise_name || r.exercise,
+  }));
+  const merged = new Map<string, { key: string; name: string }>();
+  for (const item of [...EXERCISE_OPTIONS, ...fromData]) {
+    merged.set(item.key, item);
+  }
+  return [...merged.values()];
+});
 
 const filteredReports = computed(() => {
   let list = [...reports.value];
   if (exerciseFilter.value) {
-    list = list.filter(
-      (r) => (r.exercise_name || r.exercise) === exerciseFilter.value,
-    );
+    list = list.filter((r) => r.exercise === exerciseFilter.value);
   }
   const query = keyword.value.trim().toLowerCase();
   if (query) {
@@ -329,25 +344,62 @@ async function downloadSingle(report: ReportItem) {
 }
 
 onMounted(async () => {
+  await loadReports();
+});
+
+onActivated(async () => {
+  await loadReports();
+});
+
+async function loadReports() {
+  loading.value = true;
+  loadError.value = "";
   try {
-    const [reportList, personal] = await Promise.all([
+    const [reportListRes, personalRes] = await Promise.allSettled([
       getReports(),
       getPersonalReport(),
     ]);
-    reports.value = reportList.items;
-    summary.value = personal;
-  } catch {
-    reports.value = [];
+
+    if (reportListRes.status === "fulfilled") {
+      reports.value = reportListRes.value.items;
+    } else {
+      reports.value = [];
+      loadError.value = reportListRes.reason instanceof Error
+        ? reportListRes.reason.message
+        : "加载报告列表失败";
+    }
+
+    if (personalRes.status === "fulfilled") {
+      summary.value = personalRes.value;
+    } else if (reports.value.length > 0) {
+      summary.value = {
+        ...summary.value,
+        total_sessions: reports.value.length,
+        average_score: reports.value.reduce((s, r) => s + r.average_score, 0) / reports.value.length,
+        total_calories: reports.value.reduce((s, r) => s + (r.calories || 0), 0),
+      };
+      loadError.value = "概览统计加载失败，已显示报告列表";
+    } else if (!loadError.value) {
+      loadError.value = personalRes.reason instanceof Error
+        ? personalRes.reason.message
+        : "加载报告失败，请重新登录后重试";
+    }
+
+    const sessionId = route.query.session;
+    if (typeof sessionId === "string" && sessionId) {
+      await openDetail(sessionId);
+    }
   } finally {
     loading.value = false;
   }
-});
+}
 
 onBeforeUnmount(disposeDetailCharts);
 </script>
 
 <style scoped>
 .evaluation-page { display: grid; gap: 24px; }
+.report-load-error { color: #f87171; font-size: 13px; margin: 0; }
 
 .coach-banner {
   display: flex;

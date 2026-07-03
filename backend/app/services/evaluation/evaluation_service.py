@@ -68,7 +68,7 @@ def build_evaluation(
         }
 
     strengths, weaknesses, recommendations = _build_feedback(
-        exercise, average_score, valid_rate, error_count
+        exercise, average_score, valid_rate, error_count, duration_seconds
     )
 
     return {
@@ -82,13 +82,43 @@ def build_evaluation(
         "strengths": strengths,
         "weaknesses": weaknesses,
         "recommendations": recommendations,
-        "summary": (
-            f"本次{exercise_name}训练综合评分 {average_score:.0f} 分，"
-            f"等级 {grade_info['grade_label']}。"
-            f"有效动作占比 {valid_rate:.0f}%，"
-            f"共检测到 {error_count} 次需改进动作。"
+        "summary": _build_summary_text(
+            exercise_name=exercise_name,
+            exercise=exercise,
+            average_score=average_score,
+            grade_label=grade_info["grade_label"],
+            valid_rate=valid_rate,
+            error_count=error_count,
+            duration_seconds=duration_seconds,
+            total_count=total_count,
         ),
     }
+
+
+def _build_summary_text(
+    *,
+    exercise_name: str,
+    exercise: str,
+    average_score: float,
+    grade_label: str,
+    valid_rate: float,
+    error_count: int,
+    duration_seconds: int,
+    total_count: int,
+) -> str:
+    if exercise == "plank":
+        return (
+            f"本次{exercise_name}训练综合评分 {average_score:.0f} 分，"
+            f"等级 {grade_label}。"
+            f"有效保持时长 {duration_seconds} 秒，"
+            f"共检测到 {error_count} 项姿态问题。"
+        )
+    return (
+        f"本次{exercise_name}训练综合评分 {average_score:.0f} 分，"
+        f"等级 {grade_label}。"
+        f"有效动作占比 {valid_rate:.0f}%，"
+        f"共检测到 {error_count} 次需改进动作。"
+    )
 
 
 def _build_feedback(
@@ -96,6 +126,7 @@ def _build_feedback(
     average_score: float,
     valid_rate: float,
     error_count: int,
+    duration_seconds: int = 0,
 ) -> tuple[list[str], list[str], list[str]]:
     strengths: list[str] = []
     weaknesses: list[str] = []
@@ -119,6 +150,8 @@ def _build_feedback(
         weaknesses.append(f"有效动作占比仅 {valid_rate:.0f}%，需加强动作质量")
 
     recommendations.extend(tips.get("recommendations", ["建议放慢动作速度，先保证动作质量"])[:2])
+    if exercise == "plank" and duration_seconds >= 30:
+        strengths.append(f"平板支撑保持 {duration_seconds} 秒，耐力表现良好")
     if average_score < 60:
         recommendations.append("建议观看标准动作示范，从低强度开始练习")
     elif average_score >= 90:

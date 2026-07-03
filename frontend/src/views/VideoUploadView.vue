@@ -53,6 +53,11 @@
         <p v-if="message" class="upload-message" :class="{ danger: uploadState === 'failed' }">
           {{ message }}
         </p>
+        <div v-if="uploadState === 'success' && latestSessionId" class="upload-success-actions">
+          <button class="blue-action-button" type="button" @click="goToReport">
+            查看评估报告
+          </button>
+        </div>
       </div>
     </section>
 
@@ -124,6 +129,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import {
   BarChart3,
   CheckCircle2,
@@ -148,6 +154,12 @@ interface AnalysisTask {
 interface UploadResponse {
   file_uri: string;
   task: AnalysisTask;
+  session_id?: string;
+  session?: {
+    session_id: string;
+    exercise: string;
+    average_score: number;
+  };
 }
 
 interface HistoryItem {
@@ -161,6 +173,7 @@ interface HistoryItem {
   reportUrl?: string;
 }
 
+const router = useRouter();
 const fileInput = ref<HTMLInputElement | null>(null);
 const selectedFile = ref<File | null>(null);
 const selectedExercise = ref("squat");
@@ -168,6 +181,7 @@ const isDragging = ref(false);
 const uploadState = ref<"idle" | "ready" | "uploading" | "success" | "failed">("idle");
 const message = ref("");
 const latestTask = ref<AnalysisTask | null>(null);
+const latestSessionId = ref("");
 const localPreviewUrl = ref("");
 const allTasks = ref<AnalysisTask[]>([]);
 const tasksLoading = ref(true);
@@ -214,11 +228,19 @@ const uploadStats = computed(() => {
 function exerciseDisplayName(key: string) {
   const names: Record<string, string> = {
     squat: "深蹲",
-    pushup: "俯卧撑",
+    push_up: "俯卧撑",
     jumping_jack: "开合跳",
-    plank: "平板支撑"
+    plank: "平板支撑",
   };
   return names[key] ?? key;
+}
+
+function goToReport() {
+  if (latestSessionId.value) {
+    router.push({ path: "/reports", query: { session: latestSessionId.value } });
+    return;
+  }
+  router.push("/reports");
 }
 
 function encodeFilePath(path: string) {
@@ -254,6 +276,7 @@ function chooseFile(file: File | null) {
 
   selectedFile.value = file;
   latestTask.value = null;
+  latestSessionId.value = "";
   localPreviewUrl.value = URL.createObjectURL(file);
   uploadState.value = "ready";
   message.value = `已选择：${file.name}`;
@@ -281,8 +304,14 @@ async function uploadVideo() {
   try {
     const result = await apiUpload<UploadResponse>("/videos/upload", formData);
     latestTask.value = result.task;
+    latestSessionId.value = result.session_id || result.session?.session_id || "";
     uploadState.value = "success";
-    message.value = `分析完成！任务 ID：${result.task.task_id.slice(0, 8)}… 可在评估报告页查看结果。`;
+    const exerciseName = exerciseDisplayName(selectedExercise.value);
+    if (latestSessionId.value) {
+      message.value = `分析完成！已生成${exerciseName}评估报告，可点击下方按钮查看。`;
+    } else {
+      message.value = `分析完成！任务 ID：${result.task.task_id.slice(0, 8)}… 请前往评估报告页查看。`;
+    }
     await loadTasks();
   } catch (err: unknown) {
     uploadState.value = "failed";

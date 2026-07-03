@@ -1,9 +1,9 @@
 <template>
   <section class="report-charts">
-    <article class="chart-card wide">
+    <article v-if="showTrend" class="chart-card wide">
       <header>
-        <h3>评分趋势 / Score Trend</h3>
-        <span>近 7 日训练平均分变化</span>
+        <h3>7日评分趋势 / 7-Day Score Trend</h3>
+        <span>{{ trendSubtitle }}</span>
       </header>
       <div ref="trendRef" class="chart-box" />
     </article>
@@ -26,32 +26,65 @@
       </article>
     </div>
 
-    <article class="chart-card wide">
-      <header>
-        <h3>动作质量雷达 / Quality Radar</h3>
-        <span>综合各维度动作质量评估</span>
-      </header>
-      <div ref="radarRef" class="chart-box radar-box" />
-    </article>
+    <div class="chart-row">
+      <article class="chart-card">
+        <header>
+          <h3>动作质量雷达 / Quality Radar</h3>
+          <span>{{ radarSubtitle }}</span>
+        </header>
+        <div ref="radarRef" class="chart-box radar-box" />
+      </article>
+
+      <article class="chart-card">
+        <header>
+          <h3>错误统计 / Errors</h3>
+          <span>各动作需改进次数</span>
+        </header>
+        <div ref="errorRef" class="chart-box" />
+      </article>
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as echarts from "echarts";
 import type { ChartData } from "@/api/reports";
 
-const props = defineProps<{
-  charts: ChartData;
-  compact?: boolean;
-}>();
+export interface TrendSeriesItem {
+  name: string;
+  trend: { date: string; score: number }[];
+}
+
+const props = withDefaults(
+  defineProps<{
+    charts: ChartData;
+    showTrend?: boolean;
+    trendSeries?: TrendSeriesItem[];
+    radarSubtitle?: string;
+    trendSubtitle?: string;
+  }>(),
+  {
+    showTrend: true,
+    trendSeries: () => [],
+    radarSubtitle: "综合各维度动作质量评估",
+    trendSubtitle: "近 7 日训练平均分变化（可按动作区分）",
+  },
+);
 
 const trendRef = ref<HTMLElement | null>(null);
 const calorieRef = ref<HTMLElement | null>(null);
 const pieRef = ref<HTMLElement | null>(null);
 const radarRef = ref<HTMLElement | null>(null);
+const errorRef = ref<HTMLElement | null>(null);
 
 const instances: echarts.ECharts[] = [];
+const lineColors = ["#60a5fa", "#34d399", "#f59e0b", "#a78bfa", "#f87171", "#22d3ee"];
+
+const chartTheme = {
+  backgroundColor: "transparent",
+  textStyle: { color: "#94a3b8", fontFamily: "system-ui, sans-serif" },
+};
 
 function initChart(el: HTMLElement | null, option: echarts.EChartsOption) {
   if (!el) return;
@@ -60,26 +93,45 @@ function initChart(el: HTMLElement | null, option: echarts.EChartsOption) {
   instances.push(chart);
 }
 
-function buildOptions(data: ChartData) {
-  const chartTheme = {
-    backgroundColor: "transparent",
-    textStyle: { color: "#94a3b8", fontFamily: "system-ui, sans-serif" },
-  };
+function buildTrendOption() {
+  const seriesList = props.trendSeries?.length
+    ? props.trendSeries
+    : [{ name: "综合", trend: props.charts.score_trend }];
 
-  const trendOption: echarts.EChartsOption = {
+  const allDates = [
+    ...new Set(seriesList.flatMap((s) => s.trend.map((p) => p.date))),
+  ].sort();
+
+  const series = seriesList
+    .filter((s) => s.trend.length > 0)
+    .map((item, index) => ({
+      name: item.name,
+      type: "line" as const,
+      smooth: true,
+      symbol: "circle",
+      symbolSize: 7,
+      data: allDates.map((date) => {
+        const point = item.trend.find((p) => p.date === date);
+        return point ? point.score : null;
+      }),
+      lineStyle: { color: lineColors[index % lineColors.length], width: 2.5 },
+      itemStyle: { color: lineColors[index % lineColors.length] },
+      connectNulls: true,
+    }));
+
+  return {
     ...chartTheme,
     animationDuration: 1200,
-    animationEasing: "cubicOut",
-    grid: { left: 48, right: 24, top: 36, bottom: 36 },
+    legend: series.length > 1 ? { top: 0, textStyle: { color: "#94a3b8" } } : undefined,
+    grid: { left: 48, right: 24, top: series.length > 1 ? 40 : 36, bottom: 36 },
     tooltip: {
       trigger: "axis",
       backgroundColor: "rgba(15,23,42,0.95)",
       borderColor: "rgba(59,130,246,0.3)",
-      textStyle: { color: "#e2e8f0" },
     },
     xAxis: {
       type: "category",
-      data: data.score_trend.map((item) => item.date.slice(5)),
+      data: allDates.map((d) => d.slice(5)),
       axisLine: { lineStyle: { color: "#334155" } },
       axisLabel: { color: "#94a3b8" },
     },
@@ -87,47 +139,22 @@ function buildOptions(data: ChartData) {
       type: "value",
       min: 0,
       max: 100,
-      axisLine: { show: false },
       splitLine: { lineStyle: { color: "rgba(59,130,246,0.08)" } },
       axisLabel: { color: "#94a3b8" },
     },
-    series: [{
-      type: "line",
-      smooth: true,
-      symbol: "circle",
-      symbolSize: 8,
-      data: data.score_trend.map((item) => item.score),
-      lineStyle: { color: "#60a5fa", width: 3, shadowColor: "rgba(96,165,250,0.4)", shadowBlur: 12 },
-      itemStyle: { color: "#93c5fd", borderColor: "#1e3a8a", borderWidth: 2 },
-      areaStyle: {
-        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: "rgba(96,165,250,0.45)" },
-          { offset: 0.6, color: "rgba(59,130,246,0.12)" },
-          { offset: 1, color: "rgba(59,130,246,0.01)" },
-        ]),
-      },
-    }],
+    series,
   };
+}
 
+function buildOptions(data: ChartData) {
   const calorieOption: echarts.EChartsOption = {
     ...chartTheme,
-    animationDuration: 1000,
     grid: { left: 48, right: 24, top: 36, bottom: 56 },
-    tooltip: {
-      trigger: "axis",
-      backgroundColor: "rgba(15,23,42,0.95)",
-      borderColor: "rgba(245,158,11,0.3)",
-      formatter: (p: unknown) => {
-        const items = Array.isArray(p) ? p : [p];
-        const item = items[0] as { name: string; value: number };
-        return `${item.name}<br/>消耗 <b>${item.value}</b> kcal`;
-      },
-    },
+    tooltip: { trigger: "axis" },
     xAxis: {
       type: "category",
       data: data.calorie_by_exercise.map((item) => item.name),
-      axisLabel: { color: "#94a3b8", rotate: 20, fontSize: 11 },
-      axisLine: { lineStyle: { color: "#334155" } },
+      axisLabel: { color: "#94a3b8", rotate: 15, fontSize: 11 },
     },
     yAxis: {
       type: "value",
@@ -137,107 +164,92 @@ function buildOptions(data: ChartData) {
     series: [{
       type: "bar",
       data: data.calorie_by_exercise.map((item) => item.value),
-      itemStyle: {
-        color: (params: { dataIndex: number }) => {
-          const palette = ["#f59e0b", "#fb923c", "#f97316", "#ef4444", "#ec4899"];
-          return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: palette[params.dataIndex % palette.length] },
-            { offset: 1, color: "rgba(239,68,68,0.6)" },
-          ]);
-        },
-        borderRadius: [8, 8, 0, 0],
-        shadowColor: "rgba(245,158,11,0.3)",
-        shadowBlur: 8,
-      },
+      itemStyle: { borderRadius: [8, 8, 0, 0], color: "#f59e0b" },
       barWidth: "48%",
     }],
   };
 
   const pieOption: echarts.EChartsOption = {
     ...chartTheme,
-    animationDuration: 1000,
-    tooltip: {
-      trigger: "item",
-      backgroundColor: "rgba(15,23,42,0.95)",
-      formatter: "{b}<br/>{c} 次 · {d}%",
-    },
-    legend: {
-      bottom: 0,
-      textStyle: { color: "#94a3b8", fontSize: 11 },
-    },
+    tooltip: { trigger: "item", formatter: "{b}<br/>{c} 次 · {d}%" },
+    legend: { bottom: 0, textStyle: { color: "#94a3b8", fontSize: 11 } },
     series: [{
       type: "pie",
       radius: ["46%", "72%"],
       center: ["50%", "44%"],
       data: data.exercise_distribution,
-      label: { color: "#e2e8f0", fontSize: 11, formatter: "{b}\n{d}%" },
-      itemStyle: { borderRadius: 8, borderColor: "#0f172a", borderWidth: 3 },
-      color: ["#3b82f6", "#8b5cf6", "#14b8a6", "#f59e0b", "#ef4444", "#06b6d4", "#ec4899"],
-      emphasis: {
-        scale: true,
-        scaleSize: 8,
-        itemStyle: { shadowBlur: 16, shadowColor: "rgba(59,130,246,0.4)" },
-      },
+      label: { color: "#e2e8f0", fontSize: 11 },
+      color: ["#3b82f6", "#8b5cf6", "#14b8a6", "#f59e0b"],
     }],
   };
 
   const radarOption: echarts.EChartsOption = {
     ...chartTheme,
-    animationDuration: 1200,
-    tooltip: { backgroundColor: "rgba(15,23,42,0.95)" },
     radar: {
       indicator: data.quality_radar.dimensions.map((name) => ({ name, max: 100 })),
-      shape: "polygon",
-      splitNumber: 4,
       splitLine: { lineStyle: { color: "rgba(59,130,246,0.15)" } },
-      splitArea: {
-        areaStyle: {
-          color: ["rgba(59,130,246,0.04)", "rgba(59,130,246,0.08)", "rgba(59,130,246,0.04)", "rgba(59,130,246,0.08)"],
-        },
-      },
-      axisLine: { lineStyle: { color: "rgba(59,130,246,0.2)" } },
-      axisName: { color: "#cbd5e1", fontSize: 12, fontWeight: 600 },
+      axisName: { color: "#cbd5e1", fontSize: 11 },
     },
     series: [{
       type: "radar",
       data: [{
         value: data.quality_radar.values,
-        name: "动作质量",
-        areaStyle: {
-          color: new echarts.graphic.RadialGradient(0.5, 0.5, 1, [
-            { offset: 0, color: "rgba(96,165,250,0.5)" },
-            { offset: 1, color: "rgba(59,130,246,0.05)" },
-          ]),
-        },
-        lineStyle: { color: "#60a5fa", width: 2.5 },
-        itemStyle: { color: "#93c5fd", borderColor: "#1e40af", borderWidth: 2 },
+        areaStyle: { color: "rgba(96,165,250,0.25)" },
+        lineStyle: { color: "#60a5fa" },
       }],
     }],
   };
 
-  return { trendOption, calorieOption, pieOption, radarOption };
+  const errorOption: echarts.EChartsOption = {
+    ...chartTheme,
+    grid: { left: 48, right: 24, top: 36, bottom: 56 },
+    tooltip: { trigger: "axis" },
+    xAxis: {
+      type: "category",
+      data: (data.error_by_exercise || []).map((item) => item.name),
+      axisLabel: { color: "#94a3b8", rotate: 15 },
+    },
+    yAxis: {
+      type: "value",
+      axisLabel: { color: "#94a3b8" },
+      splitLine: { lineStyle: { color: "rgba(59,130,246,0.08)" } },
+    },
+    series: [{
+      type: "bar",
+      data: (data.error_by_exercise || []).map((item) => item.value),
+      itemStyle: { color: "#ef4444", borderRadius: [6, 6, 0, 0] },
+      barWidth: "45%",
+    }],
+  };
+
+  return { calorieOption, pieOption, radarOption, errorOption };
 }
 
 function renderCharts() {
   instances.splice(0).forEach((chart) => chart.dispose());
 
-  const hasData = props.charts.score_trend.length > 0
+  const hasData =
+    props.charts.score_trend.length > 0
+    || props.trendSeries.some((s) => s.trend.length > 0)
     || props.charts.calorie_by_exercise.length > 0;
 
   if (!hasData) return;
 
+  if (props.showTrend) {
+    initChart(trendRef.value, buildTrendOption());
+  }
   const options = buildOptions(props.charts);
-  initChart(trendRef.value, options.trendOption);
   initChart(calorieRef.value, options.calorieOption);
   initChart(pieRef.value, options.pieOption);
   initChart(radarRef.value, options.radarOption);
+  initChart(errorRef.value, options.errorOption);
 }
 
 function handleResize() {
   instances.forEach((chart) => chart.resize());
 }
 
-watch(() => props.charts, renderCharts, { deep: true });
+watch(() => [props.charts, props.trendSeries, props.showTrend], renderCharts, { deep: true });
 
 onMounted(() => {
   renderCharts();
@@ -251,70 +263,19 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.report-charts {
-  display: grid;
-  gap: 16px;
-}
-
-.chart-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
+.report-charts { display: grid; gap: 16px; }
+.chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .chart-card {
   padding: 20px;
   border-radius: 16px;
   background: linear-gradient(145deg, rgba(15, 23, 42, 0.98), rgba(8, 13, 26, 0.99));
   border: 1px solid rgba(59, 130, 246, 0.14);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  position: relative;
-  overflow: hidden;
 }
-
-.chart-card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(59,130,246,0.5), rgba(139,92,246,0.5), transparent);
-}
-
-.chart-card.wide {
-  grid-column: 1 / -1;
-}
-
-.chart-card header {
-  display: grid;
-  gap: 4px;
-  margin-bottom: 12px;
-}
-
-.chart-card h3 {
-  margin: 0;
-  color: #f8fafc;
-  font-size: 15px;
-}
-
-.chart-card span {
-  color: #64748b;
-  font-size: 12px;
-}
-
-.chart-box {
-  width: 100%;
-  height: 240px;
-}
-
-.radar-box {
-  height: 280px;
-}
-
-@media (max-width: 900px) {
-  .chart-row {
-    grid-template-columns: 1fr;
-  }
-}
+.chart-card.wide { grid-column: 1 / -1; }
+.chart-card header { display: grid; gap: 4px; margin-bottom: 12px; }
+.chart-card h3 { margin: 0; color: #f8fafc; font-size: 15px; }
+.chart-card span { color: #64748b; font-size: 12px; }
+.chart-box { width: 100%; height: 260px; }
+.radar-box { height: 280px; }
+@media (max-width: 900px) { .chart-row { grid-template-columns: 1fr; } }
 </style>
