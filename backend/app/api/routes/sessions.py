@@ -117,7 +117,7 @@ if router:
             save_session_feedback_summary(
                 session.session_id,
                 feedback_data,
-                generate_ai=True,
+                generate_ai_async=True,
                 exercise=body.exercise,
             )
             db = SessionLocal()

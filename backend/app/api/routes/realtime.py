@@ -172,7 +172,7 @@ if router:
                 user_id=user_id,
             )
 
-            # 保存反馈摘要（含 AI 建议，生成失败则仅保存结构化反馈）
+            # 保存反馈摘要（AI 建议后台异步生成，不阻塞结束训练）
             try:
                 from app.services.analysis.unified_feedback_service import (
                     build_unified_feedback_from_analyzer,
@@ -189,7 +189,7 @@ if router:
                 save_session_feedback_summary(
                     saved_session.session_id,
                     feedback_data,
-                    generate_ai=True,
+                    generate_ai_async=True,
                     exercise=summary["exercise"],
                 )
             except Exception:

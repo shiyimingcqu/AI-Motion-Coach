@@ -1,6 +1,7 @@
 """Persist unified feedback and optional AI advice on training sessions."""
 
 import json
+import threading
 
 from app.db.session import SessionLocal
 from app.models.entities import SessionORM
@@ -45,16 +46,7 @@ def attach_ai_advice(feedback_data: dict, exercise: str) -> dict:
     return feedback_data
 
 
-def save_session_feedback_summary(
-    session_id: str,
-    feedback_data: dict,
-    *,
-    generate_ai: bool = True,
-    exercise: str = "",
-) -> None:
-    if generate_ai and exercise:
-        feedback_data = attach_ai_advice(dict(feedback_data), exercise)
-
+def _persist_feedback_summary(session_id: str, feedback_data: dict) -> None:
     db = SessionLocal()
     try:
         sess = db.query(SessionORM).filter(SessionORM.session_id == session_id).first()
@@ -63,3 +55,47 @@ def save_session_feedback_summary(
             db.commit()
     finally:
         db.close()
+
+
+def schedule_background_ai_advice(
+    session_id: str,
+    feedback_data: dict,
+    exercise: str,
+) -> None:
+    """Generate AI advice in a background thread so session save returns immediately."""
+
+    def _run() -> None:
+        data = dict(feedback_data)
+        try:
+            data = attach_ai_advice(data, exercise)
+            data.pop("ai_advice_pending", None)
+            if not data.get("ai_advice"):
+                data["ai_advice_status"] = "failed"
+        except Exception as exc:
+            print(f"Background AI advice failed for session {session_id}: {exc}")
+            data.pop("ai_advice_pending", None)
+            data["ai_advice_status"] = "failed"
+        _persist_feedback_summary(session_id, data)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def save_session_feedback_summary(
+    session_id: str,
+    feedback_data: dict,
+    *,
+    generate_ai: bool = False,
+    generate_ai_async: bool = True,
+    exercise: str = "",
+) -> None:
+    data = dict(feedback_data)
+
+    if generate_ai and exercise:
+        data = attach_ai_advice(data, exercise)
+    elif generate_ai_async and exercise:
+        data["ai_advice_pending"] = True
+
+    _persist_feedback_summary(session_id, data)
+
+    if generate_ai_async and exercise and not generate_ai:
+        schedule_background_ai_advice(session_id, feedback_data, exercise)
