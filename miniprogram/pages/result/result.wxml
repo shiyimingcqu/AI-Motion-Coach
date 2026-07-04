@@ -95,6 +95,8 @@
   <!-- 底部按钮 -->
   <view class="result-footer">
     <button class="btn btn-outline footer-btn" bindtap="onShare">↗ 分享报告</button>
-    <button class="btn btn-primary footer-btn" bindtap="onSave">↓ 保存报告</button>
+    <button class="btn btn-primary footer-btn" loading="{{isSavingRecord}}" disabled="{{isSavingRecord || recordSaved}}" bindtap="onSave">
+      {{recordSaved ? '已保存记录' : '保存记录'}}
+    </button>
   </view>
 </view>

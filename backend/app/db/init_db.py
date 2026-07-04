@@ -5,8 +5,10 @@ from app.core.security import get_password_hash
 from app.models.entities import Base, UserORM, ExerciseORM, ActiveTemplateORM
 
 try:
+    from sqlalchemy import inspect, text
     from sqlalchemy.orm import Session
 except ModuleNotFoundError:
+    inspect = text = None
     Session = None
 
 
@@ -187,6 +189,12 @@ def _migrate_legacy_schema():
         if "user_id" not in session_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE sessions ADD COLUMN user_id INTEGER"))
+        if "pose_replay_json" not in session_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE sessions ADD COLUMN pose_replay_json TEXT"))
+        if "pose_replay_meta_json" not in session_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE sessions ADD COLUMN pose_replay_meta_json TEXT"))
 
     if "active_templates" not in inspector.get_table_names():
         Base.metadata.tables["active_templates"].create(bind=engine)

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="sports-dashboard">
     <section class="top-header">
       <div class="th-left">
@@ -93,15 +93,68 @@
           </div>
         </div>
 
-        <div class="skel-area">
+        <div ref="replayFullscreenRef" class="replay-fullscreen-shell">
+        <div class="skel-area replay-stage">
           <div class="skel-grid"></div>
+          <PoseParticleViewer
+            v-model:progress="replayProgress"
+            :frames="selectedReplayFrames"
+            :playing="replayPlaying"
+            :speed="replaySpeed"
+            :background-image="selectedReplayBackgroundImage"
+            @frame-change="onReplayFrameChange"
+          />
           <div class="skel-stage-label">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
-            下蹲阶段 · 膝关节角度 73°
+            <span class="replay-stage-text">{{ replayStageLabel }}</span>
+            <span v-if="replaySessionsLoading" class="replay-loading-spinner"></span>
           </div>
+
+          <button
+            class="replay-fullscreen-button"
+            type="button"
+            :aria-label="isReplayFullscreen ? 'Exit fullscreen' : 'Fullscreen'"
+            :title="isReplayFullscreen ? 'Exit fullscreen' : 'Fullscreen'"
+            @click="toggleReplayFullscreen"
+          >
+            <Minimize2 v-if="isReplayFullscreen" :size="18" />
+            <Maximize2 v-else :size="18" />
+          </button>
+
+          <button
+            v-if="isReplayFullscreen"
+            class="replay-settings-button"
+            type="button"
+            :aria-label="showReplaySettings ? 'Hide settings' : 'Show settings'"
+            :title="showReplaySettings ? 'Hide settings' : 'Show settings'"
+            @click="showReplaySettings = !showReplaySettings"
+          >
+            <Settings :size="18" />
+          </button>
+
+          <aside v-if="isReplayFullscreen && showReplaySettings" class="replay-settings-panel">
+            <header>
+              <strong>背景设置</strong>
+              <button type="button" aria-label="Close settings" @click="showReplaySettings = false">×</button>
+            </header>
+            <div class="replay-background-list">
+              <button
+                v-for="option in replayBackgroundOptions"
+                :key="option.value"
+                type="button"
+                class="replay-background-option"
+                :class="{ active: selectedReplayBackground === option.value }"
+                @click="selectedReplayBackground = option.value"
+              >
+                <span v-if="!option.image" class="replay-background-none"></span>
+                <img v-else :src="option.image" :alt="option.label" />
+                <b>{{ option.label }}</b>
+              </button>
+            </div>
+          </aside>
 
           <div class="skel-layout">
             <svg viewBox="0 0 300 520" class="pose-skeleton">
@@ -151,20 +204,6 @@
             </svg>
           </div>
 
-          <div class="score-card-overlay">
-            <div class="score-ring-big">
-              <span class="score-ring-num">{{ scoreValueForRing }}</span>
-              <span class="score-ring-label">综合评分</span>
-            </div>
-            <div class="score-ring-meta">
-              <span class="score-ring-grade good">{{ scoreLabel }}</span>
-              <div class="score-ring-issues">
-                <span>主要问题：</span>
-                <strong>{{ issueSummary }}</strong>
-              </div>
-            </div>
-          </div>
-
           <div class="view-strip">
             <button class="view-angle active">正面</button>
             <button class="view-angle">侧面</button>
@@ -174,6 +213,32 @@
         </div>
 
         <div class="phase-flow-bar">
+          <div class="replay-toolbar">
+            <label class="replay-session-picker">
+              <span>选择运动记录</span>
+              <select v-model="selectedReplaySessionId" @change="loadSelectedReplay">
+                <option value="">{{ replaySessionsLoading ? '加载中...' : (replaySessions.length === 0 ? '暂无训练记录' : '请选择一次训练') }}</option>
+                <option v-for="(session, index) in replaySessions" :key="session ? session.session_id : index" :value="session ? session.session_id : ''">
+                  {{ session ? sessionOptionLabel(session) : '无效记录' }}
+                </option>
+              </select>
+            </label>
+
+            <div class="score-card-overlay">
+              <div class="score-ring-big">
+                <span class="score-ring-num">{{ selectedReplayScore }}</span>
+                <span class="score-ring-label">综合评分</span>
+              </div>
+              <div class="score-ring-meta">
+                <span class="score-ring-grade good">{{ selectedReplayExerciseName }}</span>
+                <div class="score-ring-issues">
+                  <span>回放帧数：</span>
+                  <strong>{{ selectedReplayFrames.length }} 帧</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="phase-flow">
             <div
               v-for="(phase, index) in phases"
@@ -196,24 +261,37 @@
           </div>
 
           <div class="play-controls">
-            <button class="play-btn-small">
+            <button class="play-btn-small" type="button" :disabled="selectedReplayFrames.length === 0" @click="replayPlaying = !replayPlaying">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <polygon points="8,5 19,12 8,19" />
+                <polygon v-if="!replayPlaying" points="8,5 19,12 8,19" />
+                <path v-else d="M7 5h4v14H7zM13 5h4v14h-4z" />
               </svg>
             </button>
             <div class="timeline-mini">
-              <div class="tl-track">
-                <div class="tl-fill" style="width: 38%"></div>
-                <div class="tl-thumb" style="left: 38%"></div>
-              </div>
-              <div class="tl-labels"><span>00:12</span><span>03:45</span></div>
+              <input
+                v-model.number="replayProgress"
+                class="replay-range"
+                type="range"
+                min="0"
+                max="1"
+                step="0.001"
+                :disabled="selectedReplayFrames.length === 0"
+              />
+              <div class="tl-labels"><span>{{ replayCurrentTime }}</span><span>{{ replayDurationText }}</span></div>
             </div>
             <div class="speed-mini">
-              <button v-for="speed in ['0.5x', '1.0x', '1.5x']" :key="speed" :class="{ active: speed === '1.0x' }">
-                {{ speed }}
+              <button
+                v-for="speed in [0.5, 1, 1.5]"
+                :key="speed"
+                type="button"
+                :class="{ active: replaySpeed === speed }"
+                @click="replaySpeed = speed"
+              >
+                {{ speed.toFixed(1) }}x
               </button>
             </div>
           </div>
+        </div>
         </div>
       </div>
 
@@ -394,9 +472,12 @@ import * as echarts from "echarts/core";
 import { BarChart, LineChart, RadarChart } from "echarts/charts";
 import { GridComponent, LegendComponent, RadarComponent, TooltipComponent } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
+import { Maximize2, Minimize2, Settings } from "lucide-vue-next";
 import { useAuthStore } from "@/stores/auth";
 import { getDashboardStats } from "../api/dashboard";
 import { getFeedbacks, type FeedbackItem } from "../api/feedback";
+import { getSessionReplay, getSessions, type PoseReplayFrame, type SessionRecord } from "../api/sessions";
+import PoseParticleViewer from "../components/PoseParticleViewer.vue";
 
 echarts.use([
   BarChart,
@@ -432,12 +513,39 @@ type AdviceGroup = {
   }>;
 };
 
+type ReplayBackgroundOption = {
+  label: string;
+  value: string;
+  image?: string;
+};
+
 const router = useRouter();
 const authStore = useAuthStore();
 
 const statsData = ref<any>(null);
 const statsLoading = ref(true);
 const feedbackItems = ref<FeedbackItem[]>([]);
+const replaySessions = ref<SessionRecord[]>([]);
+const replaySessionsLoading = ref(true);
+const selectedReplaySessionId = ref("");
+const selectedReplay = ref<SessionRecord | null>(null);
+const selectedReplayFrames = ref<PoseReplayFrame[]>([]);
+const replayPlaying = ref(false);
+const replaySpeed = ref(1);
+const replayProgress = ref(0);
+const replayFrame = ref<PoseReplayFrame | null>(null);
+const replayLoadError = ref("");
+const replayFullscreenRef = ref<HTMLDivElement | null>(null);
+const isReplayFullscreen = ref(false);
+const showReplaySettings = ref(false);
+const selectedReplayBackground = ref("none");
+
+const replayBackgroundOptions: ReplayBackgroundOption[] = [
+  { label: "默认", value: "none" },
+  { label: "背景 1", value: "bg-1", image: "/backgrounds/bg-1.png" },
+  { label: "背景 2", value: "bg-2", image: "/backgrounds/bg-2.png" },
+  { label: "背景 3", value: "bg-3", image: "/backgrounds/bg-3.png" },
+];
 
 const trendChartRef = ref<HTMLDivElement | null>(null);
 const radarChartRef = ref<HTMLDivElement | null>(null);
@@ -468,7 +576,6 @@ const feedbackSuggestionMap: Record<string, string> = {
   手臂未举过肩: "增加肩关节灵活性和胸椎伸展练习，再逐步提高举臂角度。",
   双脚打开不足: "将站距调整到肩宽到 1.5 倍肩宽之间，找到更稳定的发力位置。",
 };
-
 const userName = computed(() => authStore.username || "用户");
 const userInitial = computed(() => (userName.value || "U").charAt(0).toUpperCase());
 
@@ -498,7 +605,7 @@ const summarySubtitle = computed(() => {
   if (!stats || stats.total_sessions === 0) return "暂无训练记录，开始你的第一次训练吧";
   const last = stats.recent_sessions?.[0];
   if (last) {
-    return `${last.exercise} · ${(last.created_at || "").slice(0, 10)}`;
+    return `${last.exercise} · ${formatSessionDateTime(last.created_at)}`;
   }
   return `共 ${stats.total_sessions} 次训练`;
 });
@@ -567,7 +674,6 @@ const problems = computed<ProblemItem[]>(() => {
     };
   });
 });
-
 const currentProblem = computed(() => {
   if (selectedProblem.value === null) return null;
   return problems.value[selectedProblem.value] || null;
@@ -600,8 +706,175 @@ const adviceGroups = computed<AdviceGroup[]>(() => {
 
 const totalDeduction = computed(() => problems.value.reduce((sum, item) => sum + item.deduct, 0));
 
+const exerciseNameMap: Record<string, string> = {
+  squat: "深蹲",
+  push_up: "俯卧撑",
+  jumping_jack: "开合跳",
+  plank: "平板支撑",
+  lunge: "弓步蹲",
+  burpee: "波比跳",
+  high_knees: "高抬腿",
+  glute_bridge: "臀桥",
+};
+
+const selectedReplayExerciseName = computed(() => {
+  const exercise = selectedReplay.value?.exercise;
+  return exercise ? (exerciseNameMap[exercise] || exercise) : "未选择";
+});
+
+const selectedReplayScore = computed(() => {
+  return selectedReplay.value ? Math.round(selectedReplay.value.average_score || 0) : scoreValueForRing.value;
+});
+
+const replayDurationMs = computed(() => {
+  return Math.max(0, selectedReplayFrames.value[selectedReplayFrames.value.length - 1]?.timestamp_ms || 0);
+});
+
+const replayCurrentTime = computed(() => formatReplayTime(replayProgress.value * replayDurationMs.value));
+const replayDurationText = computed(() => formatReplayTime(replayDurationMs.value));
+const replayStageLabel = computed(() => {
+  if (replayLoadError.value) return replayLoadError.value;
+  if (!selectedReplaySessionId.value) return "请选择一次保存的运动";
+  if (selectedReplayFrames.value.length === 0) return "该记录暂无 3D 回放数据";
+  return `${selectedReplayExerciseName.value} · ${replayCurrentTime.value} / ${replayDurationText.value}`;
+});
+
+const selectedReplayBackgroundImage = computed(() => {
+  const selected = replayBackgroundOptions.find((option) => option.value === selectedReplayBackground.value);
+  return selected?.image ?? "";
+});
+
 function toggleAccordion(index: number) {
   openAccordion.value = openAccordion.value === index ? null : index;
+}
+
+async function toggleReplayFullscreen() {
+  const target = replayFullscreenRef.value;
+  if (!target || !document.fullscreenEnabled) return;
+
+  if (document.fullscreenElement === target) {
+    await document.exitFullscreen();
+    return;
+  }
+
+  await target.requestFullscreen();
+}
+
+function syncReplayFullscreenState() {
+  isReplayFullscreen.value = document.fullscreenElement === replayFullscreenRef.value;
+  if (!isReplayFullscreen.value) {
+    showReplaySettings.value = false;
+  }
+}
+
+function formatReplayTime(ms: number) {
+  const totalSeconds = Math.max(0, Math.round(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatSessionDateTime(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value.slice(0, 16).replace("T", " ");
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+function sessionOptionLabel(session: SessionRecord) {
+  const date = formatSessionDateTime(session.created_at);
+  const exercise = exerciseNameMap[session.exercise] || session.exercise;
+  const replayMark = session.has_pose_replay ? " 🎬" : "  ·";
+  return `${date} · ${exercise} · ${Math.round(session.average_score || 0)}分${replayMark}`;
+}
+
+function onReplayFrameChange(frame: PoseReplayFrame | null) {
+  replayFrame.value = frame;
+}
+
+async function loadReplaySessions() {
+  replaySessionsLoading.value = true;
+  try {
+    const response = await getSessions({ limit: 20 });
+    replaySessions.value = (response.items || []).filter(Boolean);
+
+    if (!selectedReplaySessionId.value && replaySessions.value.length > 0) {
+      // 过滤掉可能的 null 项
+      const validItems = replaySessions.value.filter(Boolean);
+      // 优先使用 has_pose_replay 标记找到有回放数据的记录
+      const replaySession = validItems.find((s) => s.has_pose_replay);
+      if (replaySession) {
+        selectedReplaySessionId.value = replaySession.session_id;
+        selectedReplay.value = replaySession;
+        await loadSelectedReplay();
+        return;
+      }
+      // 没有回放标记时，回退到按顺序探测
+      for (const session of validItems) {
+        if (await tryLoadReplayForSession(session)) return;
+      }
+      // 实在没有，就加载最新一条
+      const firstValid = validItems[0];
+      if (firstValid) {
+        selectedReplaySessionId.value = firstValid.session_id;
+        await loadSelectedReplay();
+      }
+    }
+  } catch (error) {
+    console.warn("Replay sessions load failed:", error);
+    replaySessions.value = [];
+  } finally {
+    replaySessionsLoading.value = false;
+  }
+}
+
+async function tryLoadReplayForSession(session: SessionRecord) {
+  try {
+    const replay = await getSessionReplay(session.session_id);
+    if (!replay.has_replay || replay.frames.length === 0) return false;
+    selectedReplaySessionId.value = session.session_id;
+    selectedReplay.value = session;
+    selectedReplayFrames.value = replay.frames;
+    replayPlaying.value = true;
+    replayProgress.value = 0;
+    replayLoadError.value = "";
+    return true;
+  } catch (error) {
+    console.warn("Replay probe failed:", error);
+    return false;
+  }
+}
+
+async function loadSelectedReplay() {
+  replayLoadError.value = "";
+  replayPlaying.value = false;
+  replayProgress.value = 0;
+  selectedReplayFrames.value = [];
+  selectedReplay.value = (replaySessions.value.find((session) => session && session.session_id === selectedReplaySessionId.value)) || null;
+
+  if (!selectedReplaySessionId.value) return;
+
+  try {
+    const replay = await getSessionReplay(selectedReplaySessionId.value);
+    if (!replay) {
+      replayLoadError.value = "未找到回放数据";
+      return;
+    }
+    selectedReplayFrames.value = replay.has_replay ? replay.frames : [];
+    replayPlaying.value = selectedReplayFrames.value.length > 0;
+    if (replay.has_replay && replay.frames.length === 0) {
+      replayLoadError.value = "该记录已标记有回放但数据为空";
+    }
+  } catch (error) {
+    console.warn("Replay load failed:", error);
+    replayLoadError.value = "回放数据加载失败";
+  }
 }
 
 function disposeCharts() {
@@ -777,6 +1050,8 @@ onMounted(async () => {
     if (feedbackResult.status === "fulfilled") {
       feedbackItems.value = feedbackResult.value.items || [];
     }
+
+    await loadReplaySessions();
   } catch (error) {
     console.warn("Dashboard data load failed:", error);
     statsData.value = null;
@@ -788,10 +1063,12 @@ onMounted(async () => {
   }
 
   window.addEventListener("resize", resizeCharts);
+  document.addEventListener("fullscreenchange", syncReplayFullscreenState);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener("resize", resizeCharts);
+  document.removeEventListener("fullscreenchange", syncReplayFullscreenState);
   disposeCharts();
 });
 </script>
@@ -1095,17 +1372,68 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.replay-fullscreen-shell {
+  position: relative;
+  background: #01040a;
+}
+
+.replay-fullscreen-shell:fullscreen {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #01040a;
+}
+
+.replay-fullscreen-shell:fullscreen .replay-stage {
+  min-height: 0;
+  height: 100%;
+}
+
+.replay-fullscreen-shell:fullscreen .phase-flow-bar {
+  position: relative;
+  z-index: 10;
+  gap: 0;
+  padding: 14px 22px 18px;
+  background: rgba(1, 4, 10, 0.92);
+  border-top-color: rgba(96, 165, 250, 0.18);
+}
+
+.replay-fullscreen-shell:fullscreen .replay-toolbar,
+.replay-fullscreen-shell:fullscreen .phase-flow {
+  display: none;
+}
+
+.replay-fullscreen-shell:fullscreen .play-controls {
+  max-width: 960px;
+  width: min(960px, calc(100vw - 44px));
+  margin: 0 auto;
+}
+
+.replay-stage {
+  min-height: clamp(520px, 58vw, 720px);
+  background:
+    linear-gradient(rgba(1, 4, 10, 0.56), rgba(1, 4, 10, 0.64)),
+    radial-gradient(circle at 50% 46%, rgba(56, 213, 255, 0.13), transparent 26%),
+    radial-gradient(circle at 50% 82%, rgba(56, 213, 255, 0.1), transparent 16%),
+    linear-gradient(180deg, #000 0%, #01040a 54%, #020710 100%);
+}
+
+.replay-stage .skel-layout {
+  display: none;
+}
+
 .skel-grid {
   position: absolute;
   inset: 0;
-  background-image:
-    linear-gradient(rgba(59, 130, 246, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(59, 130, 246, 0.035) 1px, transparent 1px);
-  background-size: 28px 28px;
+  background:
+    linear-gradient(90deg, transparent, rgba(96, 224, 255, 0.055), transparent),
+    radial-gradient(circle at 50% 88%, rgba(96, 224, 255, 0.16), transparent 22%);
+  opacity: 0.55;
 }
 
 .skel-stage-label,
-.score-card-overlay,
 .view-strip {
   position: absolute;
   z-index: 5;
@@ -1144,13 +1472,149 @@ onBeforeUnmount(() => {
 }
 
 .score-card-overlay {
-  left: 14px;
-  bottom: 14px;
+  position: static;
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 10px 16px;
+  border: 1px solid rgba(59, 130, 246, 0.1);
   border-radius: 10px;
+  background: rgba(8, 13, 26, 0.42);
+}
+
+.replay-fullscreen-button {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 8;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  border-radius: 8px;
+  background: rgba(8, 13, 26, 0.72);
+  color: #dbeafe;
+  backdrop-filter: blur(10px);
+}
+
+.replay-settings-button {
+  position: absolute;
+  right: 16px;
+  bottom: 62px;
+  z-index: 8;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  border-radius: 8px;
+  background: rgba(8, 13, 26, 0.72);
+  color: #dbeafe;
+  backdrop-filter: blur(10px);
+}
+
+.replay-settings-button:hover {
+  border-color: rgba(147, 197, 253, 0.48);
+  background: rgba(15, 23, 42, 0.9);
+  color: #ffffff;
+}
+
+.replay-fullscreen-button:hover {
+  border-color: rgba(147, 197, 253, 0.48);
+  background: rgba(15, 23, 42, 0.9);
+  color: #ffffff;
+}
+
+.replay-fullscreen-shell:fullscreen .replay-fullscreen-button {
+  right: 22px;
+  bottom: 22px;
+}
+
+.replay-fullscreen-shell:fullscreen .replay-settings-button {
+  right: 22px;
+  bottom: 68px;
+}
+
+.replay-settings-panel {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  z-index: 12;
+  width: min(300px, calc(100vw - 44px));
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(96, 165, 250, 0.24);
+  border-radius: 12px;
+  background: rgba(5, 10, 24, 0.86);
+  color: #e2e8f0;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.36);
+}
+
+.replay-settings-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.replay-settings-panel header strong {
+  color: #f8fafc;
+  font-size: 14px;
+}
+
+.replay-settings-panel header button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 7px;
+  background: rgba(15, 23, 42, 0.78);
+  color: #cbd5e1;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.replay-background-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.replay-background-option {
+  display: grid;
+  gap: 7px;
+  padding: 7px;
+  border: 1px solid rgba(96, 165, 250, 0.16);
+  border-radius: 9px;
+  background: rgba(15, 23, 42, 0.56);
+  color: #cbd5e1;
+  text-align: left;
+}
+
+.replay-background-option.active {
+  border-color: rgba(125, 211, 252, 0.78);
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.28);
+  color: #ffffff;
+}
+
+.replay-background-option img,
+.replay-background-none {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: block;
+  border-radius: 6px;
+  object-fit: cover;
+  background:
+    radial-gradient(circle at 50% 45%, rgba(56, 213, 255, 0.18), transparent 42%),
+    linear-gradient(180deg, #000, #07101f);
+}
+
+.replay-background-option b {
+  font-size: 12px;
 }
 
 .score-ring-big {
@@ -1203,6 +1667,41 @@ onBeforeUnmount(() => {
   border-radius: 8px;
 }
 
+.replay-stage .view-strip {
+  display: none;
+}
+
+.replay-session-picker {
+  position: static;
+  width: min(360px, 100%);
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  border: 1px solid rgba(59, 130, 246, 0.16);
+  border-radius: 10px;
+  background: rgba(8, 13, 26, 0.42);
+}
+
+.replay-session-picker span {
+  padding: 8px 10px 0;
+  color: #93c5fd;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.replay-session-picker select {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-top: 1px solid rgba(59, 130, 246, 0.16);
+  border-radius: 0 0 10px 10px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #e2e8f0;
+  font-size: 12px;
+}
+
 .view-angle {
   padding: 4px 12px;
   border: none;
@@ -1228,7 +1727,15 @@ onBeforeUnmount(() => {
   gap: 12px;
   padding: 14px 18px;
   border-top: 1px solid rgba(59, 130, 246, 0.06);
-  background: rgba(8, 13, 26, 0.7);
+  background: rgba(2, 6, 16, 0.86);
+}
+
+.replay-toolbar {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
 }
 
 .phase-flow {
@@ -1322,6 +1829,11 @@ onBeforeUnmount(() => {
 .timeline-mini {
   display: grid;
   gap: 4px;
+}
+
+.replay-range {
+  width: 100%;
+  accent-color: #60a5fa;
 }
 
 .tl-track {
@@ -1711,5 +2223,20 @@ onBeforeUnmount(() => {
   .bottom-actions {
     flex-direction: column;
   }
+}
+
+.replay-loading-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-left: 6px;
+  border: 2px solid rgba(59, 130, 246, 0.2);
+  border-top-color: #60a5fa;
+  border-radius: 50%;
+  animation: replay-spin 0.6s linear infinite;
+}
+
+@keyframes replay-spin {
+  to { transform: rotate(360deg); }
 }
 </style>

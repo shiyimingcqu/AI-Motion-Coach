@@ -387,6 +387,7 @@ if router:
         state: dict = {}
         running = False
         saved_session = None
+        replay_frames: list[dict] = []
 
         def save_session_once():
             nonlocal saved_session
@@ -394,7 +395,7 @@ if router:
                 return saved_session
 
             summary = analyzer.get_session_summary()
-            if summary["total_count"] <= 0:
+            if summary["total_count"] <= 0 and not replay_frames:
                 return None
 
             saved_session = session_service.create_session(
@@ -405,6 +406,12 @@ if router:
                 error_count=summary["error_count"],
                 average_score=summary["average_score"],
                 user_id=user_id,
+                pose_replay_frames=replay_frames,
+                pose_replay_meta={
+                    "source": "web_realtime",
+                    "sample_interval_ms": 100,
+                    "frame_count": len(replay_frames),
+                },
             )
             return saved_session
 
@@ -419,6 +426,7 @@ if router:
                     analyzer.reset()
                     state = {}
                     saved_session = None
+                    replay_frames = []
                     running = True
                     await websocket.send_json({
                         "type": "status",
@@ -457,6 +465,15 @@ if router:
                         "type": "status", "state": "idle", "exercise_type": analyzer.exercise_type,
                     })
                     continue
+
+                replay_keypoints = payload.get("replay_keypoints")
+                if isinstance(replay_keypoints, list) and len(replay_keypoints) >= 33:
+                    replay_frames.append({
+                        "timestamp_ms": int(payload.get("timestamp_ms", len(replay_frames) * 100)),
+                        "landmarks": replay_keypoints[:33],
+                    })
+                    if len(replay_frames) > 60000:
+                        replay_frames = replay_frames[-60000:]
 
                 keypoints = _parse_keypoints(payload.get("keypoints", {}))
                 try:

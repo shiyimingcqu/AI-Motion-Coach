@@ -153,6 +153,60 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(summary["session"]["total_count"], 1)
         self.assertEqual(len(after), before + 1)
 
+    def test_session_replay_endpoint_returns_saved_pose_frames(self):
+        landmarks = [
+            {"x": 0.5, "y": 0.2, "z": -0.1, "visibility": 0.99}
+            for _ in range(33)
+        ]
+        response = self.client.post(
+            "/api/sessions",
+            json={
+                "exercise": "squat",
+                "duration_seconds": 12,
+                "total_count": 1,
+                "valid_count": 1,
+                "error_count": 0,
+                "average_score": 88,
+                "pose_replay": [
+                    {"timestamp_ms": 0, "landmarks": landmarks},
+                    {"timestamp_ms": 100, "landmarks": landmarks},
+                ],
+                "pose_replay_meta": {"sample_interval_ms": 100},
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        session_id = response.json()["session_id"]
+        replay = self.client.get(f"/api/sessions/{session_id}/replay")
+
+        self.assertEqual(replay.status_code, 200)
+        payload = replay.json()
+        self.assertTrue(payload["has_replay"])
+        self.assertEqual(len(payload["frames"]), 2)
+        self.assertEqual(len(payload["frames"][0]["landmarks"]), 33)
+
+    def test_session_replay_endpoint_handles_legacy_session_without_frames(self):
+        response = self.client.post(
+            "/api/sessions",
+            json={
+                "exercise": "plank",
+                "duration_seconds": 20,
+                "total_count": 1,
+                "valid_count": 1,
+                "error_count": 0,
+                "average_score": 82,
+            },
+        )
+
+        self.assertEqual(response.status_code, 201)
+        session_id = response.json()["session_id"]
+        replay = self.client.get(f"/api/sessions/{session_id}/replay")
+
+        self.assertEqual(replay.status_code, 200)
+        payload = replay.json()
+        self.assertFalse(payload["has_replay"])
+        self.assertEqual(payload["frames"], [])
+
     def test_realtime_video_test_endpoint_accepts_uploaded_video(self):
         original = realtime.video_analysis_service.run_realtime_video_test
         captured = {}

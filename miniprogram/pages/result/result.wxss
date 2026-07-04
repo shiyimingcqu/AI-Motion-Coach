@@ -386,3 +386,7 @@
 .footer-btn {
   flex: 1;
 }
+
+.footer-btn[disabled] {
+  opacity: 0.65;
+}

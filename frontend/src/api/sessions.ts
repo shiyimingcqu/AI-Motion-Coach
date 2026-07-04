@@ -9,7 +9,34 @@ export interface SessionRecord {
   valid_count: number;
   error_count: number;
   average_score: number;
+  has_pose_replay?: boolean;
   created_at: string;
+}
+
+export interface PoseReplayLandmark {
+  x: number;
+  y: number;
+  z: number;
+  visibility?: number;
+}
+
+export interface PoseReplayFrame {
+  timestamp_ms: number;
+  landmarks: PoseReplayLandmark[];
+}
+
+export interface PoseReplayResponse {
+  session_id: string;
+  exercise: string;
+  created_at: string | null;
+  has_replay: boolean;
+  meta: {
+    schema_version?: number;
+    source?: string;
+    sample_interval_ms?: number;
+    frame_count?: number;
+  } | null;
+  frames: PoseReplayFrame[];
 }
 
 export interface SessionsResponse {
@@ -34,6 +61,8 @@ export interface CreateSessionPayload {
   valid_count: number;
   error_count: number;
   average_score: number;
+  pose_replay?: PoseReplayFrame[];
+  pose_replay_meta?: Record<string, unknown>;
 }
 
 export function getSessions(params?: SessionsQuery) {
@@ -49,6 +78,10 @@ export function getSessions(params?: SessionsQuery) {
 
 export function getSession(session_id: string) {
   return apiGet<SessionRecord>(`/sessions/${session_id}`);
+}
+
+export function getSessionReplay(session_id: string) {
+  return apiGet<PoseReplayResponse>(`/sessions/${session_id}/replay`);
 }
 
 export function createSession(data: CreateSessionPayload) {

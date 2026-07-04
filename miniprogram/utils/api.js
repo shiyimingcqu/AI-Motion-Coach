@@ -32,7 +32,8 @@ class ApiClient {
             resolve(res.data);
           } else {
             const detail = res.data && res.data.detail ? res.data.detail : '请求失败';
-            reject(new Error(typeof detail === 'string' ? detail : JSON.stringify(detail)));
+            const message = typeof detail === 'string' ? detail : JSON.stringify(detail);
+            reject(new Error(`HTTP ${res.statusCode}: ${message}`));
           }
         },
         fail(err) {

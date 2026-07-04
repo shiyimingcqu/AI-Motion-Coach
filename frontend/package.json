@@ -10,11 +10,13 @@
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^0.10.35",
+    "@types/three": "^0.185.0",
     "@vitejs/plugin-vue": "^5.0.5",
     "echarts": "^5.5.0",
     "lucide-vue-next": "^0.468.0",
     "ogl": "^1.0.0",
     "pinia": "^2.1.7",
+    "three": "^0.185.1",
     "vite": "^5.2.12",
     "vue": "^3.4.27",
     "vue-router": "^4.3.2"
