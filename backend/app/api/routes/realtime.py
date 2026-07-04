@@ -1,6 +1,10 @@
 """Realtime analysis WebSocket and HTTP endpoints — multi-exercise support."""
 
+import base64
 import json
+import logging
+
+import numpy as np
 
 from app.api.deps import get_current_active_user
 from app.core.security import decode_access_token
@@ -8,15 +12,51 @@ from app.db.session import SessionLocal
 from app.models.entities import UserORM, SessionORM
 from app.services.analysis.models import NormalizedKeypoint
 from app.services.analysis.analyzers.registry import get_analyzer, ANALYZER_REGISTRY
+from app.services.pose.mediapipe_engine import MediaPipePoseEngine
 from app.services.storage.local_storage import local_storage
 from app.services.session.session_service import session_service
 from app.services.video.video_analysis_service import video_analysis_service
 
+logger = logging.getLogger(__name__)
+_pose_engine = None
+
+
+def _get_pose_engine():
+    global _pose_engine
+    if _pose_engine is None:
+        _pose_engine = MediaPipePoseEngine()
+    return _pose_engine
+
+
+def _landmarks_dict_to_array(landmarks_dict: dict) -> list:
+    """Convert MediaPipe engine output {idx: {x,y,visibility}} to array of 33 elements."""
+    arr = [None] * 33
+    for idx_str, kp in landmarks_dict.items():
+        idx = int(idx_str)
+        if 0 <= idx < 33:
+            arr[idx] = {"x": kp["x"], "y": kp["y"], "visibility": kp.get("visibility", 1.0)}
+    return arr
+
+
+def _decode_base64_image(base64_str: str):
+    """Decode base64 image string to BGR numpy array."""
+    import cv2
+    try:
+        if "," in base64_str:
+            base64_str = base64_str.split(",", 1)[1]
+        img_bytes = base64.b64decode(base64_str)
+        nparr = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        return frame
+    except Exception as exc:
+        logger.warning("Failed to decode base64 image: %s", exc)
+        return None
+
 try:
-    from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect, Query
+    from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, Query
 except ModuleNotFoundError:
     APIRouter = None
-    File = Form = HTTPException = UploadFile = WebSocket = WebSocketDisconnect = Query = None
+    File = Form = HTTPException = Request = UploadFile = WebSocket = WebSocketDisconnect = Query = None
 
 router = APIRouter(prefix="/realtime", tags=["realtime"]) if APIRouter else None
 
@@ -33,6 +73,85 @@ def _parse_keypoints(raw_keypoints: dict) -> dict[str, NormalizedKeypoint]:
 
 
 if router:
+    @router.post("/pose-detect")
+    async def pose_detect(request: Request):
+        """
+        Detect pose keypoints from base64-encoded image frames.
+        Request body:
+        {
+            "exercise_type": "squat",
+            "frames": [{"image": "<base64 JPEG>"}],
+            "reset_state": false
+        }
+        Response:
+        {
+            "frames": [{
+                "keypoints": [{"x": 0.5, "y": 0.6, "visibility": 0.9}, ...],
+                "features": {...},
+                "analysis": {...}
+            }]
+        }
+        """
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+        exercise_type = body.get("exercise_type", "squat")
+        frames = body.get("frames", [])
+        reset_state = body.get("reset_state", False)
+
+        if not frames or not isinstance(frames, list):
+            raise HTTPException(status_code=400, detail="frames must be a non-empty list")
+
+        engine = _get_pose_engine()
+        results = []
+
+        for frame_item in frames[:5]:  # limit to 5 frames per request
+            img_b64 = frame_item.get("image", "")
+            if not img_b64:
+                results.append({"keypoints": [None] * 33})
+                continue
+
+            frame = _decode_base64_image(img_b64)
+            if frame is None:
+                results.append({"keypoints": [None] * 33})
+                continue
+
+            try:
+                landmarks_dict = engine.infer(frame)
+            except FileNotFoundError as exc:
+                raise HTTPException(status_code=500, detail=str(exc))
+            except Exception as exc:
+                logger.warning("Pose inference failed: %s", exc)
+                results.append({"keypoints": [None] * 33})
+                continue
+
+            keypoints_array = _landmarks_dict_to_array(landmarks_dict)
+
+            # Optionally run analysis if we have enough visible keypoints
+            analysis = None
+            try:
+                analyzer = get_analyzer(exercise_type)
+                named_kps = {}
+                for i, kp in enumerate(keypoints_array):
+                    if kp and kp.get("visibility", 0) > 0.3:
+                        named_kps[str(i)] = NormalizedKeypoint(
+                            x=kp["x"], y=kp["y"], visibility=kp["visibility"]
+                        )
+                if named_kps:
+                    features = analyzer.extract_features(named_kps)
+                    analysis = {"features": features}
+            except Exception:
+                pass
+
+            result = {"keypoints": keypoints_array}
+            if analysis:
+                result["analysis"] = analysis.get("features")
+            results.append(result)
+
+        return {"frames": results}
+
     @router.get("/analyzers")
     def list_analyzers(
         current_user=Depends(get_current_active_user) if get_current_active_user else None,

@@ -3,13 +3,29 @@ from datetime import datetime, timezone
 import json
 
 try:
-    from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Text, ForeignKey
-    from sqlalchemy.dialects.mysql import MEDIUMTEXT
+    from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Text, ForeignKey, TypeDecorator
     from sqlalchemy.orm import declarative_base
 except ModuleNotFoundError:
     Column = Integer = String = Boolean = DateTime = Float = Text = None
     declarative_base = None
-    MEDIUMTEXT = None
+    TypeDecorator = None
+
+
+if TypeDecorator is not None:
+    class _MediumTextType(TypeDecorator):
+        """Use MEDIUMTEXT for MySQL dialect, otherwise Text."""
+        impl = Text
+        cache_ok = True
+
+        def load_dialect_impl(self, dialect):
+            if dialect.name == "mysql":
+                from sqlalchemy.dialects.mysql import MEDIUMTEXT
+                return MEDIUMTEXT()
+            return Text()
+
+    _pose_replay_type = _MediumTextType()
+else:
+    _pose_replay_type = None
 
 
 @dataclass
@@ -201,8 +217,8 @@ class SessionORM(Base if Base is not None else object):
         valid_count = Column(Integer, default=0, nullable=False)
         error_count = Column(Integer, default=0, nullable=False)
         average_score = Column(Float, default=0.0, nullable=False)
-        pose_replay_json = Column(MEDIUMTEXT if MEDIUMTEXT else Text, nullable=True)
-        pose_replay_meta_json = Column(MEDIUMTEXT if MEDIUMTEXT else Text, nullable=True)
+        pose_replay_json = Column(_pose_replay_type, nullable=True)
+        pose_replay_meta_json = Column(_pose_replay_type, nullable=True)
         calories_burned = Column(Float, default=0.0, nullable=False)
         evaluation_json = Column(Text, nullable=True)  # JSON 综合评估
         feedback_summary = Column(Text, nullable=True)  # 反馈摘要（issues / suggestions / ai_advice）
