@@ -64,7 +64,6 @@ Page({
   _frameCanvasCtx: null,
   _processingFrame: false,
   _demoTimer: null,
-<<<<<<< HEAD
   _pendingScore: 0,
   _lastCommittedScoreCount: 0,
   _lastRealtimeScoreCommitTime: 0,
@@ -297,15 +296,13 @@ Page({
 
         // 更新骨架关键点
         if (frameData.keypoints && frameData.keypoints.length > 0) {
-          if (frameData.keypoints && frameData.keypoints.length > 0) {
-            let replayFrame = null;
-            const hasVisible = frameData.keypoints.some(kp => kp && kp.visibility > 0.5);
+          let replayFrame = null;
+          const hasVisible = frameData.keypoints.some(kp => kp && kp.visibility > 0.5);
             if (hasVisible) {
               const debugOkFrames = this.data.debugOkFrames + 1;
               this.setData({ debugOkFrames });
               replayFrame = this._captureReplayFrame(frameData.keypoints);
 
-<<<<<<< HEAD
               // 同时通过 setData 和组件方法更新
               const newMetrics = this._buildMetricsFromKeypoints(frameData.keypoints, frameData.features, this.data.metrics);
               this.setData({
@@ -322,6 +319,7 @@ Page({
                   console.warn('[Frame] 骨架绘制失败:', e);
                 }
               }
+            }
 
             if (this.data.exerciseKey === 'jumping_jack' && frameData.analysis) {
               this.handleWSMessage({ type: 'analysis', ...frameData.analysis });
@@ -337,15 +335,14 @@ Page({
               }
             }
           } else if (frameData.error) {
-          // 后端返回了错误信息
-          debugErrors = this.data.debugErrors + 1;
-          debugErrors = this.data.debugErrors + 1;
-          this.setData({ debugErrors, debugLastError: frameData.error });
-          this._showErrorToast(frameData.error.substring(0, 20));
-        } else {
-          // 没有关键点也没有错误 — 可能是没检测到人体
-          // 静默，避免刷屏
-        }
+            // 后端返回了错误信息
+            const debugErrors = this.data.debugErrors + 1;
+            this.setData({ debugErrors, debugLastError: frameData.error });
+            this._showErrorToast(frameData.error.substring(0, 20));
+          } else {
+            // 没有关键点也没有错误 — 可能是没检测到人体
+            // 静默，避免刷屏
+          }
         }
       } else {
         // API 返回空

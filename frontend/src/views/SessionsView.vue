@@ -199,10 +199,8 @@ onMounted(async () => {
     error.value = e?.message || t("common.networkError");
   } finally {
     loading.value = false;
-  };
-}
-
-onMounted(loadSessions);
+  }
+});
 
 async function loadSessions() {
   try {

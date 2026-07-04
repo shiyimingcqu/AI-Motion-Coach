@@ -2000,7 +2000,6 @@ onBeforeUnmount(() => {
   gap: 14px;
   flex-wrap: wrap;
 }
-}
 
 .phase-flow {
   position: relative;
