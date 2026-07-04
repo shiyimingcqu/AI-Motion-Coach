@@ -1,6 +1,6 @@
 """Report REST endpoints — evaluation reports with charts and calorie data."""
 
-from app.api.deps import get_current_active_user
+from app.api.deps import get_current_active_user, require_admin
 from app.services.report.report_service import report_service
 from app.services.session.session_service import session_service
 
@@ -112,7 +112,7 @@ if router:
 
     @router.get("/class")
     def class_report(
-        current_user=Depends(get_current_active_user) if get_current_active_user else None,
+        current_user=Depends(require_admin),
     ):
         return report_service.class_summary()
 

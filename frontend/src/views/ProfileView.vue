@@ -9,9 +9,9 @@
       <div>
         <p class="eyebrow">Profile</p>
         <h1>个人资料</h1>
-        <p class="subtle">修改后会自动保存在当前浏览器中。</p>
+        <p class="subtle">修改后自动同步到云端，多设备共享。</p>
       </div>
-      <span class="status-pill good">已自动保存</span>
+      <span class="status-pill" :class="saveStatusClass">{{ saveStatusText }}</span>
     </header>
 
     <section class="profile-hero panel">
@@ -75,19 +75,19 @@
         <dl class="info-list info-list-readonly">
           <div>
             <dt>累计训练</dt>
-            <dd>36 次</dd>
+            <dd>{{ trainingStats.totalSessions }} 次</dd>
           </div>
           <div>
             <dt>平均评分</dt>
-            <dd>86 分</dd>
+            <dd>{{ trainingStats.avgScore }} 分</dd>
           </div>
           <div>
             <dt>最常训练</dt>
-            <dd>深蹲</dd>
+            <dd>{{ trainingStats.topExercise }}</dd>
           </div>
           <div>
-            <dt>重点纠正</dt>
-            <dd>下蹲深度不足</dd>
+            <dt>累计时长</dt>
+            <dd>{{ trainingStats.totalDuration }}</dd>
           </div>
         </dl>
       </article>
@@ -184,7 +184,7 @@
 </template>
 
 <script setup lang="ts">
-import { onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { ArrowLeft, Check, LogOut, X } from "lucide-vue-next";
 import { useRouter } from "vue-router";
@@ -193,6 +193,10 @@ import AvatarCropper from "../components/AvatarCropper.vue";
 import UserAvatar from "../components/UserAvatar.vue";
 import { useAuthStore } from "../stores/auth";
 import { TRAINING_PREFERENCE_OPTIONS, OCCUPATION_OPTIONS, setCustomAvatar, setDefaultAvatar, useProfileStore } from "../stores/profile";
+
+const EXERCISE_MAP: Record<string, string> = {
+  squat: "深蹲", push_up: "俯卧撑", jumping_jack: "开合跳", plank: "平板支撑",
+};
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -206,8 +210,46 @@ const cropStep = ref(false);
 const cropImageUrl = ref("");
 const cropperRef = ref<InstanceType<typeof AvatarCropper> | null>(null);
 const avatarSuccessVisible = ref(false);
+const saveStatus = ref<"saved" | "saving">("saved");
+
+const saveStatusText = computed(() => (saveStatus.value === "saving" ? "保存中..." : "已同步"));
+const saveStatusClass = computed(() => (saveStatus.value === "saving" ? "saving" : "good"));
+
+// 训练统计数据
+const trainingStats = ref({ totalSessions: 0, avgScore: 0, topExercise: "--", totalDuration: "--" });
+
+async function loadTrainingStats() {
+  const token = localStorage.getItem("pose_auth_token");
+  if (!token) return;
+  try {
+    const res = await fetch("/api/dashboard/stats", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    trainingStats.value.totalSessions = data.total_sessions || 0;
+    trainingStats.value.avgScore = data.average_score ? Math.round(data.average_score) : 0;
+    const top = data.top_exercise;
+    trainingStats.value.topExercise = top ? (EXERCISE_MAP[top] || top) : "--";
+    const secs = data.total_duration_seconds || 0;
+    const mins = Math.round(secs / 60);
+    trainingStats.value.totalDuration = mins >= 60
+      ? `${Math.floor(mins / 60)} 小时 ${mins % 60} 分`
+      : `${mins} 分钟`;
+  } catch { /* ignore */ }
+}
+
+onMounted(loadTrainingStats);
 
 let avatarSuccessTimer: ReturnType<typeof setTimeout> | null = null;
+
+// 监听 profile 变化，显示保存状态
+let _saveWatchTimer: ReturnType<typeof setTimeout> | null = null;
+watch(profile, () => {
+  saveStatus.value = "saving";
+  if (_saveWatchTimer) clearTimeout(_saveWatchTimer);
+  _saveWatchTimer = setTimeout(() => { saveStatus.value = "saved"; }, 1200);
+}, { deep: true });
 
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024;
 

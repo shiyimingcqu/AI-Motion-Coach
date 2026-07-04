@@ -130,7 +130,7 @@ function buildTrendOption() {
       borderColor: "rgba(59,130,246,0.3)",
     },
     xAxis: {
-      type: "category",
+      type: "category" as const,
       data: allDates.map((d) => d.slice(5)),
       axisLine: { lineStyle: { color: "#334155" } },
       axisLabel: { color: "#94a3b8" },
@@ -152,7 +152,7 @@ function buildOptions(data: ChartData) {
     grid: { left: 48, right: 24, top: 36, bottom: 56 },
     tooltip: { trigger: "axis" },
     xAxis: {
-      type: "category",
+      type: "category" as const,
       data: data.calorie_by_exercise.map((item) => item.name),
       axisLabel: { color: "#94a3b8", rotate: 15, fontSize: 11 },
     },
@@ -205,7 +205,7 @@ function buildOptions(data: ChartData) {
     grid: { left: 48, right: 24, top: 36, bottom: 56 },
     tooltip: { trigger: "axis" },
     xAxis: {
-      type: "category",
+      type: "category" as const,
       data: (data.error_by_exercise || []).map((item) => item.name),
       axisLabel: { color: "#94a3b8", rotate: 15 },
     },

@@ -1,342 +1,353 @@
 <template>
-  <div class="upload-page">
-    <header class="section-page-header">
-      <div>
-        <h1>Video Upload Analysis / 视频上传分析</h1>
-        <p>Upload and analyze training videos</p>
+  <div class="page upload-page">
+    <div v-if="finishPending" class="finish-overlay" role="dialog" aria-modal="true" aria-label="分析中">
+      <div class="finish-modal">
+        <div class="finish-spinner" aria-hidden="true"></div>
+        <strong>正在完成分析</strong>
+        <p>{{ finishStatusText }}</p>
       </div>
-    </header>
+    </div>
 
-    <section class="upload-main-card">
-      <h2>Upload Video / 上传视频</h2>
-      <div
-        class="upload-drop-card"
-        :class="{ active: isDragging }"
-        @dragover.prevent="isDragging = true"
-        @dragleave.prevent="isDragging = false"
-        @drop.prevent="handleDrop"
-      >
-        <Upload :size="48" />
-        <strong>{{ selectedFile ? selectedFile.name : "Drop your video here / 拖拽视频到此处" }}</strong>
-        <span>or click to browse files (MP4, AVI, MOV up to 500MB)</span>
-
-        <label class="upload-exercise-select">
-          <span>Exercise / 动作</span>
-          <select v-model="selectedExercise">
-            <option v-for="exercise in exercises" :key="exercise.key" :value="exercise.key">
-              {{ exerciseDisplayName(exercise.key) }}
-            </option>
-          </select>
-        </label>
-
-        <input
-          ref="fileInput"
-          class="hidden-input"
-          type="file"
-          accept="video/mp4,video/avi,video/quicktime,.mp4,.avi,.mov"
-          @change="handleFileChange"
-        />
-        <button class="blue-action-button" type="button" @click="openFilePicker">
-          Browse Files / 选择文件
-        </button>
-        <button
-          v-if="selectedFile"
-          class="blue-action-button upload-start-button"
-          type="button"
-          :disabled="uploadState === 'uploading'"
-          @click="uploadVideo"
-        >
-          {{ uploadState === "uploading" ? "Analyzing... / 分析中..." : "Start Analysis / 开始分析" }}
-        </button>
-
-        <video v-if="localPreviewUrl" class="upload-preview-video" :src="localPreviewUrl" controls />
-        <p v-if="message" class="upload-message" :class="{ danger: uploadState === 'failed' }">
-          {{ message }}
-        </p>
-        <div v-if="uploadState === 'success' && latestSessionId" class="upload-success-actions">
-          <button class="blue-action-button" type="button" @click="goToReport">
-            查看评估报告
-          </button>
+    <!-- 上传前：独立上传模板 -->
+    <template v-if="!showAnalysisWorkspace">
+      <header class="section-page-header">
+        <div>
+          <h1>Video Upload Analysis / 视频上传分析</h1>
+          <p>上传训练视频，使用与实时检测相同的姿态识别与分析引擎</p>
         </div>
-      </div>
-    </section>
-
-    <section class="analysis-history-card">
-      <header>
-        <h2>Analysis History / 分析历史</h2>
-        <button class="link-button" type="button">View All</button>
       </header>
 
-      <div class="analysis-list">
-        <article v-for="item in analysisHistory" :key="item.id" class="analysis-row">
-          <button class="play-button" type="button">
-            <Play :size="27" />
+      <section class="upload-main-card">
+        <h2>Upload Video / 上传视频</h2>
+        <div
+          class="upload-drop-card"
+          :class="{ active: isDragging }"
+          @dragover.prevent="isDragging = true"
+          @dragleave.prevent="isDragging = false"
+          @drop.prevent="handleDrop"
+        >
+          <Upload :size="48" />
+          <strong>Drop your video here / 拖拽视频到此处</strong>
+          <span>支持 MP4、WebM、MOV、AVI（最大 500MB）</span>
+
+          <label class="upload-exercise-select">
+            <span>Exercise / 动作</span>
+            <select v-model="selectedExercise">
+              <option v-for="exercise in exercises" :key="exercise.key" :value="exercise.key">
+                {{ exercise.name }}
+              </option>
+            </select>
+          </label>
+
+          <input
+            ref="fileInput"
+            class="hidden-input"
+            type="file"
+            accept="video/mp4,video/webm,video/avi,video/quicktime,.mp4,.webm,.avi,.mov"
+            @change="handleFileChange"
+          />
+          <button class="blue-action-button" type="button" @click="openFilePicker">
+            Browse Files / 选择文件
           </button>
-          <div class="analysis-file">
-            <strong>
-              <File :size="16" />
-              {{ item.name }}
-            </strong>
-            <span>{{ item.date }} &nbsp;&nbsp; Duration: {{ item.duration }}</span>
+
+          <p v-if="message" class="upload-message" :class="{ danger: !!cameraError }">
+            {{ cameraError || message }}
+          </p>
+        </div>
+      </section>
+    </template>
+
+    <!-- 上传后：与实时检测视频分析相同的双栏版面 -->
+    <template v-else>
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Video Analysis</p>
+          <h1>{{ exerciseMeta.name }} 视频分析</h1>
+          <p class="subtle">{{ selectedFile?.name }}</p>
+        </div>
+        <div class="header-actions">
+          <select v-model="selectedExercise" class="exercise-select" :disabled="analyzing">
+            <option v-for="exercise in exercises" :key="exercise.key" :value="exercise.key">
+              {{ exercise.name }}
+            </option>
+          </select>
+          <span class="status-pill" :class="connectionClass">{{ statusLabel }}</span>
+          <button class="secondary-button" type="button" :disabled="analyzing" @click="openFilePicker">
+            <UploadCloud :size="18" />
+            更换视频
+          </button>
+          <button
+            class="primary-button"
+            type="button"
+            :disabled="analyzing"
+            @click="startAnalysis"
+          >
+            <Play :size="18" />
+            {{ analyzing ? "分析中..." : "开始分析" }}
+          </button>
+          <input
+            ref="fileInput"
+            class="hidden-input"
+            type="file"
+            accept="video/mp4,video/webm,video/avi,video/quicktime,.mp4,.webm,.avi,.mov"
+            @change="handleFileChange"
+          />
+        </div>
+      </header>
+
+      <section class="training-cockpit">
+        <div class="camera-panel">
+          <video
+            ref="videoRef"
+            autoplay
+            muted
+            playsinline
+            class="camera-video upload-analysis-video"
+          ></video>
+          <canvas ref="overlayRef" class="pose-overlay" aria-label="姿态骨架"></canvas>
+          <div v-if="poseStatus" class="pose-status">{{ poseStatus }}</div>
+        </div>
+
+        <aside class="metric-rail">
+          <div>
+            <p class="eyebrow">Analysis Metrics</p>
+            <h2>分析数据面板</h2>
+          </div>
+          <MetricTile label="当前动作" :value="exerciseMeta.name" :hint="selectedExercise" />
+          <MetricTile label="阶段" :value="store.stage" hint="当前动作阶段" />
+          <MetricTile label="评分" :value="store.score" hint="分析评分" />
+
+          <div v-if="message" class="alert-line">{{ message }}</div>
+          <div v-if="cameraError" class="alert-line danger">{{ cameraError }}</div>
+
+          <div class="error-stack error-stack--errors">
+            <strong>错误提示</strong>
+            <span v-if="store.errors.length === 0" class="stack-empty">暂无错误</span>
+            <span v-for="error in store.errors" :key="error">{{ error }}</span>
           </div>
 
-          <template v-if="item.status === 'completed'">
-            <div class="analysis-stat">
-              <span>Score</span>
-              <strong class="stat-score">{{ item.score }}</strong>
-            </div>
-            <div class="analysis-stat">
-              <span>Errors</span>
-              <strong class="stat-error">{{ item.errors }}</strong>
-            </div>
-            <a
-              v-if="item.reportUrl"
-              class="report-button"
-              :href="item.reportUrl"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <BarChart3 :size="17" />
-              View Report
-            </a>
-            <button v-else class="report-button" type="button">
-              <BarChart3 :size="17" />
-              View Report
-            </button>
-          </template>
+          <div class="error-stack error-stack--advice">
+            <strong>动作建议</strong>
+            <span v-if="store.feedbacks.length === 0" class="stack-empty">暂无建议</span>
+            <span v-for="advice in store.feedbacks" :key="advice">{{ advice }}</span>
+          </div>
 
-          <span v-else class="processing-pill">
-            <LoaderCircle :size="19" />
-            Processing...
-          </span>
-        </article>
-      </div>
-    </section>
-
-    <section class="upload-summary-grid">
-      <article v-for="item in uploadStats" :key="item.label" class="upload-stat-card">
-        <div>
-          <span>{{ item.label }}</span>
-          <strong>{{ item.value }}</strong>
-        </div>
-        <span class="upload-stat-icon" :class="item.tone">
-          <component :is="item.icon" :size="25" />
-        </span>
-      </article>
-    </section>
+          <p class="upload-analysis-hint">
+            分析结束后将自动跳转到反馈页，可查看完整错误分析与 AI 建议。
+          </p>
+        </aside>
+      </section>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
-import {
-  BarChart3,
-  CheckCircle2,
-  File,
-  FileText,
-  LoaderCircle,
-  Play,
-  Upload
-} from "lucide-vue-next";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { Play, Upload, UploadCloud } from "lucide-vue-next";
 
-import { apiGet, apiUpload, checkBackendHealth } from "../api/client";
-import { exercises } from "../stores/training";
+import MetricTile from "../components/MetricTile.vue";
+import { useRealtimeVideoTest } from "../composables/useRealtimeVideoTest";
+import { exercises, useTrainingStore } from "../stores/training";
 
-interface AnalysisTask {
-  task_id: string;
-  exercise: string;
-  source_uri: string;
-  status: string;
-  output_uri?: string | null;
-}
-
-interface UploadResponse {
-  file_uri: string;
-  task: AnalysisTask;
-  session_id?: string;
-  session?: {
-    session_id: string;
-    exercise: string;
-    average_score: number;
-  };
-}
-
-interface HistoryItem {
-  id: string;
-  name: string;
-  date: string;
-  duration: string;
-  score?: number;
-  errors?: number;
-  status: "completed" | "processing";
-  reportUrl?: string;
-}
-
-const router = useRouter();
+const store = useTrainingStore();
 const fileInput = ref<HTMLInputElement | null>(null);
+const videoRef = ref<HTMLVideoElement | null>(null);
+const overlayRef = ref<HTMLCanvasElement | null>(null);
 const selectedFile = ref<File | null>(null);
 const selectedExercise = ref("squat");
 const isDragging = ref(false);
-const uploadState = ref<"idle" | "ready" | "uploading" | "success" | "failed">("idle");
-const message = ref("");
-const latestTask = ref<AnalysisTask | null>(null);
-const latestSessionId = ref("");
-const localPreviewUrl = ref("");
-const allTasks = ref<AnalysisTask[]>([]);
-const tasksLoading = ref(true);
+const showAnalysisWorkspace = ref(false);
 
-const analysisHistory = computed<HistoryItem[]>(() => {
-  const items: HistoryItem[] = (allTasks.value || []).map(t => ({
-    id: t.task_id,
-    name: t.source_uri?.split("/").pop() || t.task_id.slice(0, 12) + ".mp4",
-    date: "uploaded",
-    duration: "-",
-    status: t.status === "pending" || t.status === "processing" ? "processing" : "completed",
-    reportUrl: t.output_uri ? `/api/files/${t.output_uri.replace(/\\/g, "/").split("/").map(encodeURIComponent).join("/")}` : undefined,
-  }));
+let previewUrl = "";
 
-  // Add latest upload at top if not yet in backend list
-  if (latestTask.value && !items.some(i => i.id === latestTask.value?.task_id)) {
-    const uploadedName = selectedFile.value?.name ?? "uploaded_training_video.mp4";
-    items.unshift({
-      id: latestTask.value.task_id,
-      name: uploadedName,
-      date: "Just now / 刚刚",
-      duration: "new",
-      score: uploadState.value === "success" ? 90 : undefined,
-      errors: uploadState.value === "success" ? 3 : undefined,
-      status: uploadState.value === "success" ? "completed" : "processing",
-      reportUrl: latestTask.value.output_uri ? `/api/files/${encodeFilePath(latestTask.value.output_uri)}` : undefined,
-    });
-  }
-
-  return items.slice(0, 20);
+const {
+  trainingState,
+  poseStatus,
+  cameraError,
+  message,
+  analyzing,
+  finishPending,
+  finishStatusText,
+  analyzeVideoFile,
+  cleanup,
+} = useRealtimeVideoTest({
+  exercise: selectedExercise,
+  videoRef,
+  overlayRef,
 });
 
-const uploadStats = computed(() => {
-  const total = allTasks.value.length + (latestTask.value ? 1 : 0);
-  const completed = allTasks.value.filter(t => t.status === "success" || t.status === "completed").length + (uploadState.value === "success" ? 1 : 0);
-  const processing = allTasks.value.filter(t => t.status === "pending" || t.status === "processing").length + (uploadState.value === "uploading" ? 1 : 0);
-  return [
-    { label: "Total Videos / 总视频数", value: total || "--", icon: FileText, tone: "tone-blue" },
-    { label: "Completed / 已完成", value: completed || "--", icon: CheckCircle2, tone: "tone-green" },
-    { label: "Processing / 处理中", value: processing || "--", icon: LoaderCircle, tone: "tone-orange" },
-  ];
-});
+const exerciseMeta = computed(
+  () => exercises.find((item) => item.key === selectedExercise.value) ?? exercises[0],
+);
 
-function exerciseDisplayName(key: string) {
-  const names: Record<string, string> = {
-    squat: "深蹲",
-    push_up: "俯卧撑",
-    jumping_jack: "开合跳",
-    plank: "平板支撑",
+const statusLabel = computed(() => {
+  const labels: Record<string, string> = {
+    idle: "等待分析",
+    connecting: "正在连接",
+    running: "分析中",
+    paused: "已暂停",
+    finished: "已完成",
+    error: "连接异常",
   };
-  return names[key] ?? key;
-}
+  return labels[trainingState.value] ?? trainingState.value;
+});
 
-function goToReport() {
-  if (latestSessionId.value) {
-    router.push({ path: "/reports", query: { session: latestSessionId.value } });
-    return;
+const connectionClass = computed(() => {
+  if (trainingState.value === "running" || trainingState.value === "finished") return "good";
+  if (trainingState.value === "error") return "danger";
+  return "idle";
+});
+
+watch(selectedExercise, (exercise) => {
+  store.setExercise(exercise);
+});
+
+function revokePreviewUrl() {
+  if (previewUrl) {
+    URL.revokeObjectURL(previewUrl);
+    previewUrl = "";
   }
-  router.push("/reports");
 }
 
-function encodeFilePath(path: string) {
-  return path.replace(/\\/g, "/").split("/").map(encodeURIComponent).join("/");
+function previewSelectedFile(file: File) {
+  revokePreviewUrl();
+  previewUrl = URL.createObjectURL(file);
+
+  if (videoRef.value) {
+    const stream = videoRef.value.srcObject as MediaStream | null;
+    stream?.getTracks().forEach((track) => track.stop());
+    videoRef.value.srcObject = null;
+    videoRef.value.src = previewUrl;
+    videoRef.value.loop = false;
+    videoRef.value.currentTime = 0;
+    void videoRef.value.play().catch(() => undefined);
+  }
 }
 
 function openFilePicker() {
   fileInput.value?.click();
 }
 
+async function chooseFile(file: File | null) {
+  if (!file) return;
+
+  if (!file.type.startsWith("video/") && !/\.(mp4|webm|avi|mov)$/i.test(file.name)) {
+    message.value = "请选择 MP4、WebM、AVI 或 MOV 格式的视频文件。";
+    return;
+  }
+
+  cameraError.value = "";
+  selectedFile.value = file;
+  store.setExercise(selectedExercise.value);
+  showAnalysisWorkspace.value = true;
+  message.value = `已选择：${file.name}`;
+
+  await nextTick();
+  previewSelectedFile(file);
+}
+
 function handleFileChange(event: Event) {
   const input = event.target as HTMLInputElement;
-  chooseFile(input.files?.[0] ?? null);
+  void chooseFile(input.files?.[0] ?? null);
+  input.value = "";
 }
 
 function handleDrop(event: DragEvent) {
   isDragging.value = false;
-  chooseFile(event.dataTransfer?.files?.[0] ?? null);
+  void chooseFile(event.dataTransfer?.files?.[0] ?? null);
 }
 
-function chooseFile(file: File | null) {
-  if (!file) return;
-
-  if (!file.type.startsWith("video/") && !/\.(mp4|avi|mov)$/i.test(file.name)) {
-    uploadState.value = "failed";
-    message.value = "请选择 MP4、AVI 或 MOV 格式的视频文件。";
-    return;
-  }
-
-  if (localPreviewUrl.value) {
-    URL.revokeObjectURL(localPreviewUrl.value);
-  }
-
-  selectedFile.value = file;
-  latestTask.value = null;
-  latestSessionId.value = "";
-  localPreviewUrl.value = URL.createObjectURL(file);
-  uploadState.value = "ready";
-  message.value = `已选择：${file.name}`;
-}
-
-async function uploadVideo() {
+async function startAnalysis() {
   if (!selectedFile.value) {
     message.value = "请先选择一个训练视频。";
     return;
   }
-
-  uploadState.value = "uploading";
-  latestTask.value = {
-    task_id: "processing-local",
-    exercise: selectedExercise.value,
-    source_uri: selectedFile.value.name,
-    status: "processing"
-  };
-  message.value = "正在上传视频并生成分析报告，请稍候...";
-
-  const formData = new FormData();
-  formData.append("exercise", selectedExercise.value);
-  formData.append("file", selectedFile.value);
-
-  try {
-    const result = await apiUpload<UploadResponse>("/videos/upload", formData);
-    latestTask.value = result.task;
-    latestSessionId.value = result.session_id || result.session?.session_id || "";
-    uploadState.value = "success";
-    const exerciseName = exerciseDisplayName(selectedExercise.value);
-    if (latestSessionId.value) {
-      message.value = `分析完成！已生成${exerciseName}评估报告，可点击下方按钮查看。`;
-    } else {
-      message.value = `分析完成！任务 ID：${result.task.task_id.slice(0, 8)}… 请前往评估报告页查看。`;
-    }
-    await loadTasks();
-  } catch (err: unknown) {
-    uploadState.value = "failed";
-    latestTask.value = null;
-    message.value = err instanceof Error ? err.message : "上传失败，请确认后端服务已启动。";
-  }
+  await analyzeVideoFile(selectedFile.value);
 }
 
-async function loadTasks() {
-  tasksLoading.value = true;
-  try {
-    const data = await apiGet<{ items: any[] }>("/analysis/tasks");
-    allTasks.value = data.items || [];
-  } catch {
-    allTasks.value = [];
-  } finally {
-    tasksLoading.value = false;
-  }
-}
-
-onMounted(async () => {
-  const ok = await checkBackendHealth();
-  if (!ok) {
-    message.value = "⚠ 后端未连接，请先启动后端服务 (uvicorn app.main:app --app-dir backend --port 8000)";
-  }
-  await loadTasks();
+onBeforeUnmount(() => {
+  revokePreviewUrl();
+  cleanup();
 });
 </script>
+
+<style scoped>
+.hidden-input {
+  display: none;
+}
+
+.exercise-select {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line, #d5ded2);
+  border-radius: 6px;
+  background: var(--panel, #111827);
+  color: var(--ink, #e6edf7);
+  font-size: 14px;
+}
+
+.upload-analysis-video {
+  object-fit: contain;
+}
+
+.upload-analysis-hint {
+  margin: 0;
+  color: var(--muted, #69756e);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.upload-message.danger {
+  color: #ef3f08 !important;
+}
+
+.finish-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.52);
+  backdrop-filter: blur(4px);
+}
+
+.finish-modal {
+  width: min(100%, 360px);
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  padding: 28px 24px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 22px 60px rgba(15, 23, 42, 0.22);
+  text-align: center;
+}
+
+.finish-modal strong {
+  color: #16211b;
+  font-size: 18px;
+}
+
+.finish-modal p {
+  margin: 0;
+  color: #5f6b63;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.finish-spinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid rgba(59, 130, 246, 0.16);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: finish-spin 0.8s linear infinite;
+}
+
+@keyframes finish-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+</style>

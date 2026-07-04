@@ -26,7 +26,7 @@
       </article>
     </section>
 
-    <StateDisplay v-if="loading" type="loading" skeleton="card" text="加载数据中..." />
+    <StateDisplay v-if="loading" type="loading" skeleton="cards" text="加载数据中..." />
 
     <section v-else class="export-layout">
       <div class="export-main">

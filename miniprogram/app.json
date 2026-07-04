@@ -10,17 +10,16 @@
     "pages/profile/profile"
   ],
   "window": {
-    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarBackgroundColor": "#3b82f6",
     "navigationBarTitleText": "运动姿态评估",
-    "navigationBarTextStyle": "black",
-    "backgroundColor": "#f5f7fb",
-    "navigationStyle": "default"
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f5f5f5"
   },
   "tabBar": {
-    "color": "#9aa1b3",
-    "selectedColor": "#4f8cff",
+    "color": "#999999",
+    "selectedColor": "#3b82f6",
     "backgroundColor": "#ffffff",
-    "borderStyle": "white",
+    "borderStyle": "black",
     "list": [
       {
         "pagePath": "pages/dashboard/dashboard",
@@ -30,13 +29,13 @@
       },
       {
         "pagePath": "pages/exercises/list",
-        "text": "评估",
+        "text": "动作库",
         "iconPath": "assets/icons/exercise.png",
         "selectedIconPath": "assets/icons/exercise-active.png"
       },
       {
         "pagePath": "pages/reports/reports",
-        "text": "记录",
+        "text": "报告",
         "iconPath": "assets/icons/report.png",
         "selectedIconPath": "assets/icons/report-active.png"
       },
