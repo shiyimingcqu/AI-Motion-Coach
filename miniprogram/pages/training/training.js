@@ -121,6 +121,9 @@ Page({
   _serverMetricConfig: {},
   _poseReplayFrames: [],
   _poseReplayStartedAt: 0,
+  _prevSmoothedLandmarks: null,
+  _smoothDt: 0,
+  _smoothHistory: [],
 
   FRAME_INTERVAL: 15,
   FRAME_INTERVALS: {
@@ -623,13 +626,14 @@ Page({
   },
 
   _captureReplayFrame(keypointsArray) {
-    const landmarks = this._normalizeReplayKeypoints(keypointsArray);
-    if (landmarks.length < 33) return null;
+    const raw = this._normalizeReplayKeypoints(keypointsArray);
+    if (raw.length < 33) return null;
 
-    const startedAt = this._poseReplayStartedAt || this.data.startTime || Date.now();
+    const now = Date.now();
+    const startedAt = this._poseReplayStartedAt || this.data.startTime || now;
     const frame = {
-      timestamp_ms: Math.max(0, Date.now() - startedAt),
-      landmarks,
+      timestamp_ms: Math.max(0, now - startedAt),
+      landmarks: raw,
     };
 
     this._poseReplayFrames.push(frame);
