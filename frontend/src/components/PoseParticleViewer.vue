@@ -119,10 +119,13 @@ let anatomyGlowPositions: Float32Array | null = null;
 let backgroundTexture: THREE.Texture | null = null;
 let backgroundLoadToken = 0;
 let _replayPrevPoints: THREE.Vector3[] | null = null;
+let _replayPrevTime = 0;
 
 let bodyParticles: THREE.Points | null = null;
 let bodyParticleHalo: THREE.Points | null = null;
 let jointParticles: THREE.Points | null = null;
+const sunglassLensMeshes: THREE.Mesh[] = [];
+let sunglassBridgeMesh: THREE.Mesh | null = null;
 let skeletonLines: THREE.LineSegments | null = null;
 let skeletonGlowLines: THREE.LineSegments | null = null;
 let anatomyLines: THREE.LineSegments | null = null;
@@ -264,6 +267,22 @@ function createParticleSystems() {
   jointParticles = new THREE.Points(jointGeometry, new THREE.PointsMaterial({ color: "#c9f8ff", size: 0.032, transparent: true, opacity: 0.1, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true }));
   skeletonGroup.add(jointParticles);
 
+  sunglassLensMeshes.length = 0;
+  const sunglassMaterial = new THREE.MeshBasicMaterial({ color: "#010101", transparent: true, opacity: 0.96, side: THREE.DoubleSide, depthWrite: false, depthTest: false });
+  for (let index = 0; index < 2; index += 1) {
+    const lens = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), sunglassMaterial);
+    lens.position.set(9999, 9999, 9999);
+    lens.scale.set(0.19, 0.105, 1);
+    lens.renderOrder = 30;
+    sunglassLensMeshes.push(lens);
+    skeletonGroup.add(lens);
+  }
+  sunglassBridgeMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), sunglassMaterial);
+  sunglassBridgeMesh.position.set(9999, 9999, 9999);
+  sunglassBridgeMesh.scale.set(0.08, 0.014, 1);
+  sunglassBridgeMesh.renderOrder = 30;
+  skeletonGroup.add(sunglassBridgeMesh);
+
   linePositions = new Float32Array(SKELETON_BONES.length * 2 * 3);
   lineGlowPositions = new Float32Array(SKELETON_BONES.length * 2 * 3);
   lineGeometry = new THREE.BufferGeometry();
@@ -296,7 +315,7 @@ function createBindings() {
     }
     for (let index = 0; index < bone.particleCount; index += 1) { particleBindings.push({ boneIndex, t: Math.random(), angle: Math.random() * Math.PI * 2, radiusScale: 0.38 + Math.random() * 0.62 }); }
   });
-  for (let index = 0; index < 480; index += 1) { headBindings.push({ theta: Math.random() * Math.PI * 2, phi: Math.acos(2 * Math.random() - 1), radiusScale: 0.72 + Math.random() * 0.28 }); }
+  for (let index = 0; index < 1050; index += 1) { headBindings.push({ theta: Math.random() * Math.PI * 2, phi: Math.acos(2 * Math.random() - 1), radiusScale: 0.72 + Math.random() * 0.28 }); }
   (["left", "right"] as const).forEach((side) => { for (let i = 0; i < PALM_PARTICLE_COUNT; i++) { const a = Math.random() * Math.PI * 2; const r = Math.sqrt(Math.random()); palmBindings.push({ side, u: Math.cos(a) * r, v: Math.sin(a) * r, depth: (Math.random() - 0.5) * 0.7 }); } });
   (["left", "right"] as const).forEach((side) => { for (let i = 0; i < FOOT_PARTICLE_COUNT; i++) { const a = Math.random() * Math.PI * 2; const r = Math.sqrt(Math.random()); footBindings.push({ side, u: Math.cos(a) * r, v: Math.sin(a) * r, depth: (Math.random() - 0.5) * 0.9 }); } });
 }
@@ -361,13 +380,28 @@ function updatePose(frame: PoseReplayFrame | null) {
   const skeletonGlowBuffer = lineGlowPositions;
   const points = frame.landmarks.map(convertLandmark);
 
-  // 展示端帧间平滑，消除抖动
+  // One Euro Filter — 静止时强平滑，快速运动时低延迟
+  const now = performance.now();
+  const dt = _replayPrevTime > 0 ? Math.min((now - _replayPrevTime) / 1000, 0.05) : 0.016;
+  _replayPrevTime = now;
+
   if (!_replayPrevPoints) { _replayPrevPoints = points.map(p => p.clone()); }
   else {
-    const smoothFactor = 0.4;
+    const minCutoff = 0.8;
+    const baseCutoff = 2.0;
+    const beta = 0.3;
     for (let i = 0; i < points.length; i++) {
       if (points[i] && _replayPrevPoints[i]) {
-        _replayPrevPoints[i].lerp(points[i], smoothFactor);
+        const dx = points[i].x - _replayPrevPoints[i].x;
+        const dy = points[i].y - _replayPrevPoints[i].y;
+        const dz = points[i].z - _replayPrevPoints[i].z;
+        const speed = Math.sqrt(dx * dx + dy * dy + dz * dz) / (dt || 0.016);
+        const cutoff = Math.max(minCutoff, baseCutoff + beta * speed);
+        const tau = 1 / (2 * Math.PI * cutoff);
+        const alpha = 1 / (1 + tau / (dt || 0.016));
+        _replayPrevPoints[i].x += alpha * (points[i].x - _replayPrevPoints[i].x);
+        _replayPrevPoints[i].y += alpha * (points[i].y - _replayPrevPoints[i].y);
+        _replayPrevPoints[i].z += alpha * (points[i].z - _replayPrevPoints[i].z);
         points[i].copy(_replayPrevPoints[i]);
       }
     }
@@ -431,6 +465,7 @@ function updatePose(frame: PoseReplayFrame | null) {
   });
 
   frame.landmarks.forEach((landmark, index) => { const offset = index * 3; if (!isVisible(landmark)) { hidePoint(jointBuffer, offset); } else { writePoint(jointBuffer, offset, points[index]); } });
+  updateSunglasses(points, frame.landmarks);
 
   SKELETON_BONES.forEach(([from, to], index) => {
     const offset = index * 6;
@@ -471,6 +506,57 @@ function getHeadCenter(points: THREE.Vector3[]) {
 
 function getSphereParticlePosition(center: THREE.Vector3, radius: number, theta: number, phi: number) {
   return new THREE.Vector3(center.x + radius * Math.sin(phi) * Math.cos(theta), center.y + radius * Math.cos(phi), center.z + radius * Math.sin(phi) * Math.sin(theta));
+}
+
+function updateSunglasses(points: THREE.Vector3[], landmarks: PoseReplayLandmark[]) {
+  const leftEyeBase = points[2];
+  const rightEyeBase = points[5];
+  const nosePoint = points[0];
+  if (!leftEyeBase || !rightEyeBase || !isVisible(landmarks[2]) || !isVisible(landmarks[5])) {
+    hideSunglasses();
+    return;
+  }
+
+  let facePushZ = 0.18;
+  if (leftEyeBase && rightEyeBase && nosePoint && isVisible(landmarks[0])) {
+    const eyeCenterZ = (leftEyeBase.z + rightEyeBase.z) * 0.5;
+    const frontSign = Math.sign(nosePoint.z - eyeCenterZ) || 1;
+    facePushZ = frontSign * 0.2;
+  }
+
+  const leftLens = leftEyeBase.clone();
+  const rightLens = rightEyeBase.clone();
+  leftLens.y += 0.018;
+  rightLens.y += 0.018;
+  leftLens.z += facePushZ;
+  rightLens.z += facePushZ;
+
+  const eyeAxis = new THREE.Vector3().subVectors(rightLens, leftLens);
+  const eyeDistance = Math.max(0.001, eyeAxis.length());
+  const angle = Math.atan2(eyeAxis.y, eyeAxis.x);
+  eyeAxis.normalize();
+  leftLens.addScaledVector(eyeAxis, -0.018);
+  rightLens.addScaledVector(eyeAxis, 0.018);
+
+  [leftLens, rightLens].forEach((point, index) => {
+    const lens = sunglassLensMeshes[index];
+    if (!lens) return;
+    lens.position.copy(point);
+    lens.rotation.set(0, 0, angle);
+    lens.scale.set(0.19, 0.105, 1);
+  });
+
+  if (sunglassBridgeMesh) {
+    const bridgePoint = new THREE.Vector3().lerpVectors(leftLens, rightLens, 0.5);
+    sunglassBridgeMesh.position.copy(bridgePoint);
+    sunglassBridgeMesh.rotation.set(0, 0, angle);
+    sunglassBridgeMesh.scale.set(Math.max(0.05, eyeDistance * 0.28), 0.012, 1);
+  }
+}
+
+function hideSunglasses() {
+  sunglassLensMeshes.forEach((lens) => lens.position.set(9999, 9999, 9999));
+  sunglassBridgeMesh?.position.set(9999, 9999, 9999);
 }
 
 function getFrameAt(timeMs: number) {
