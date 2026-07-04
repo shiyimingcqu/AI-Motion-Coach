@@ -1,31 +1,60 @@
 /* 全局样式 - 运动姿态评估与纠错系统 */
 
-/* CSS 变量 */
 page {
-  --primary: #3b82f6;
-  --primary-dark: #2563eb;
-  --primary-light: #93c5fd;
-  --success: #22c55e;
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  --info: #0ea5e9;
-  --bg: #f5f5f5;
+  /* 主色 */
+  --primary: #4f8cff;
+  --primary-dark: #2f6fe0;
+  --primary-light: #e8f0ff;
+  --primary-soft: #f4f8ff;
+
+  /* 状态色 */
+  --success: #34d399;
+  --success-soft: #e7faf2;
+  --warning: #fbbf24;
+  --warning-soft: #fff7e0;
+  --danger: #f87171;
+  --danger-soft: #fdecec;
+  --info: #60a5fa;
+  --info-soft: #e6f1ff;
+
+  /* 强调色（用于功能宫格） */
+  --accent-blue: #4f8cff;
+  --accent-cyan: #2ec4b6;
+  --accent-purple: #7c6cf5;
+  --accent-orange: #ff8a5b;
+
+  /* 背景 */
+  --bg: #f5f7fb;
   --bg-white: #ffffff;
-  --text: #1f2937;
-  --text-secondary: #6b7280;
-  --text-muted: #9ca3af;
-  --border: #e5e7eb;
-  --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.12);
-  --radius: 12rpx;
+  --bg-card: #ffffff;
+  --bg-soft: #f0f4fa;
+
+  /* 文字 */
+  --text: #1f2330;
+  --text-secondary: #5b6175;
+  --text-muted: #9aa1b3;
+  --text-placeholder: #c5cad6;
+
+  /* 边框与阴影 */
+  --border: #eceff5;
+  --border-light: #f3f5f9;
+  --shadow: 0 4rpx 16rpx rgba(28, 40, 80, 0.05);
+  --shadow-lg: 0 8rpx 32rpx rgba(28, 40, 80, 0.08);
+  --shadow-card: 0 6rpx 20rpx rgba(31, 35, 48, 0.04);
+
+  /* 圆角 */
+  --radius-xs: 8rpx;
+  --radius-sm: 12rpx;
+  --radius: 16rpx;
   --radius-lg: 20rpx;
+  --radius-xl: 28rpx;
   --radius-full: 9999rpx;
 
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 28rpx;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Helvetica Neue', Helvetica, 'Segoe UI', Roboto, sans-serif;
+  font-size: 26rpx;
   color: var(--text);
   background-color: var(--bg);
-  line-height: 1.6;
+  line-height: 1.55;
 }
 
 /* 通用布局 */
@@ -41,11 +70,11 @@ page {
 
 /* 卡片 */
 .card {
-  background: var(--bg-white);
+  background: var(--bg-card);
   border-radius: var(--radius-lg);
   padding: 24rpx;
   margin-bottom: 20rpx;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-card);
 }
 
 /* 按钮 */
@@ -71,13 +100,13 @@ page {
 }
 
 .btn-outline {
-  background: transparent;
+  background: #fff;
   color: var(--primary);
-  border: 2rpx solid var(--primary);
+  border: 2rpx solid var(--primary-light);
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, var(--danger), #dc2626);
+  background: linear-gradient(135deg, var(--danger), #ef4444);
   color: #fff;
 }
 
@@ -117,6 +146,7 @@ page {
 
 /* 间距 */
 .mt-8 { margin-top: 8rpx; }
+.mt-12 { margin-top: 12rpx; }
 .mt-16 { margin-top: 16rpx; }
 .mt-24 { margin-top: 24rpx; }
 .mt-32 { margin-top: 32rpx; }
@@ -173,30 +203,30 @@ page {
 .tag {
   display: inline-flex;
   align-items: center;
-  padding: 4rpx 16rpx;
+  padding: 4rpx 14rpx;
   border-radius: var(--radius-full);
   font-size: 22rpx;
   font-weight: 500;
 }
 
 .tag-primary {
-  background: rgba(59, 130, 246, 0.1);
+  background: var(--primary-light);
   color: var(--primary);
 }
 
 .tag-success {
-  background: rgba(34, 197, 94, 0.1);
-  color: var(--success);
+  background: var(--success-soft);
+  color: #0e9b6d;
 }
 
 .tag-warning {
-  background: rgba(245, 158, 11, 0.1);
-  color: var(--warning);
+  background: var(--warning-soft);
+  color: #b8830c;
 }
 
 .tag-danger {
-  background: rgba(239, 68, 68, 0.1);
-  color: var(--danger);
+  background: var(--danger-soft);
+  color: #c14a4a;
 }
 
 /* 隐藏滚动条 */

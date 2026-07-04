@@ -1,52 +1,224 @@
-/* 动作库列表 */
+/* 动作库列表 - 设计稿风格 */
 .exercises-page {
   min-height: 100vh;
-  background: var(--bg);
-  padding: 24rpx;
+  background:
+    radial-gradient(circle at 14% 0%, rgba(79, 140, 255, 0.16), transparent 36%),
+    linear-gradient(180deg, #f7fbff 0%, #eef5ff 46%, #f9fbff 100%);
+  padding: 0 28rpx 28rpx;
+}
+
+/* 顶部 */
+.top-bar {
+  background: transparent;
+}
+
+.top-bar-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 88rpx;
+}
+
+.top-title {
+  font-size: 38rpx;
+  font-weight: 800;
+  color: #101727;
 }
 
 /* 搜索 */
 .search-bar {
-  margin-bottom: 20rpx;
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: var(--radius-full);
+  padding: 0 22rpx 0 28rpx;
+  height: 86rpx;
+  margin-bottom: 24rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 12rpx 34rpx rgba(38, 69, 128, 0.08);
+}
+
+.search-icon {
+  width: 32rpx;
+  height: 32rpx;
+  border: 4rpx solid #73809b;
+  border-radius: 50%;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.search-icon::after {
+  content: '';
+  position: absolute;
+  right: -10rpx;
+  bottom: -8rpx;
+  width: 14rpx;
+  height: 4rpx;
+  border-radius: 4rpx;
+  background: #73809b;
+  transform: rotate(45deg);
+}
+
+.scan-icon {
+  width: 54rpx;
+  height: 54rpx;
+  border-radius: 18rpx;
+  background: #f2f6ff;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.scan-icon::before,
+.scan-icon::after {
+  content: '';
+  position: absolute;
+  inset: 13rpx;
+  border: 4rpx solid #4f65ff;
+  border-left-color: transparent;
+  border-right-color: transparent;
+  border-radius: 8rpx;
+}
+
+.scan-icon::after {
+  transform: rotate(90deg);
 }
 
 .search-input {
-  width: 100%;
-  height: 80rpx;
-  background: #fff;
-  border-radius: var(--radius-full);
-  padding: 0 32rpx;
-  font-size: 28rpx;
-  box-shadow: var(--shadow);
-  box-sizing: border-box;
+  flex: 1;
+  height: 100%;
+  font-size: 26rpx;
+  color: var(--text);
+}
+
+.search-placeholder {
+  color: var(--text-placeholder);
 }
 
 /* 分类 Tab */
 .category-tabs {
   white-space: nowrap;
-  margin-bottom: 24rpx;
+  margin-bottom: 28rpx;
 }
 
 .tab-item {
   display: inline-flex;
   align-items: center;
-  padding: 12rpx 28rpx;
+  padding: 16rpx 30rpx;
   margin-right: 16rpx;
   border-radius: var(--radius-full);
-  font-size: 26rpx;
-  color: var(--text-secondary);
-  background: #fff;
-  box-shadow: var(--shadow);
+  font-size: 27rpx;
+  font-weight: 700;
+  color: #768098;
+  background: rgba(255,255,255,0.88);
+  border: 1rpx solid rgba(255,255,255,0.95);
+  box-shadow: 0 10rpx 26rpx rgba(42, 70, 126, 0.08);
 }
 
 .tab-active {
-  background: var(--primary);
+  background: linear-gradient(135deg, #6687ff 0%, #2f6dff 100%);
   color: #fff;
+  box-shadow: 0 16rpx 34rpx rgba(55, 104, 255, 0.32);
 }
 
 /* 动作列表 */
 .exercise-list {
   display: flex;
   flex-direction: column;
-  gap: 16rpx;
+  gap: 18rpx;
+}
+
+.exercise-card-new {
+  background: rgba(255,255,255,0.92);
+  border-radius: 26rpx;
+  padding: 12rpx 22rpx 12rpx 12rpx;
+  display: flex;
+  align-items: center;
+  gap: 22rpx;
+  border: 1rpx solid rgba(255,255,255,0.96);
+  box-shadow: 0 12rpx 34rpx rgba(38, 69, 128, 0.08);
+  min-height: 132rpx;
+  overflow: hidden;
+}
+
+.exercise-thumb {
+  width: 180rpx;
+  height: 130rpx;
+  border-radius: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: none;
+}
+
+.exercise-thumb-icon {
+  font-size: 52rpx;
+  filter: brightness(1.05);
+}
+
+.exercise-thumb-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.exercise-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.exercise-name {
+  font-size: 34rpx;
+  font-weight: 800;
+  color: #101727;
+  margin-bottom: 14rpx;
+}
+
+.exercise-tags {
+  display: flex;
+  gap: 10rpx;
+  flex-wrap: wrap;
+}
+
+.exercise-arrow {
+  font-size: 54rpx;
+  color: #6b78ff;
+  line-height: 1;
+  flex-shrink: 0;
+  text-shadow: 0 8rpx 20rpx rgba(80, 104, 255, 0.2);
+}
+
+.empty-visual {
+  width: 104rpx;
+  height: 104rpx;
+  border-radius: 32rpx;
+  background: linear-gradient(145deg, #e9f2ff, #ffffff);
+  margin-bottom: 18rpx;
+  position: relative;
+}
+
+.empty-visual::before {
+  content: '';
+  position: absolute;
+  left: 30rpx;
+  top: 28rpx;
+  width: 34rpx;
+  height: 34rpx;
+  border: 5rpx solid #8ea0c4;
+  border-radius: 50%;
+}
+
+.empty-visual::after {
+  content: '';
+  position: absolute;
+  left: 61rpx;
+  top: 63rpx;
+  width: 22rpx;
+  height: 5rpx;
+  background: #8ea0c4;
+  border-radius: 5rpx;
+  transform: rotate(45deg);
 }
