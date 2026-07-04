@@ -73,5 +73,9 @@ Page({
   startTraining() {
     const key = this.data.exercise.key;
     wx.navigateTo({ url: `/pages/training/training?exercise=${key}` });
+  },
+
+  goBack() {
+    wx.navigateBack();
   }
 });

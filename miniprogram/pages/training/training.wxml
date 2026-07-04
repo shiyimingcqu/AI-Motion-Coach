@@ -7,13 +7,18 @@
     id="frameCanvas"
     style="position: fixed; left: -9999px; top: -9999px; width: 1px; height: 1px;"
   ></canvas>
-  <!-- 自定义顶部栏 -->
+
+  <!-- 顶部导航 -->
   <view class="top-bar" style="padding-top: {{statusBarHeight}}px;">
     <view class="top-bar-content">
-      <view class="back-btn" bindtap="handleBack">← 返回</view>
-      <text class="exercise-name">{{exerciseName}}</text>
-      <view class="debug-toggle" bindtap="toggleCamera">{{cameraPosLabel}}</view>
-      <view class="debug-toggle" bindtap="toggleDebug">调试</view>
+      <view class="back-btn" bindtap="handleBack">
+        <text class="back-arrow">‹</text>
+      </view>
+      <text class="exercise-name">实时体态评估</text>
+      <view class="top-bar-right">
+        <view class="topbar-icon" bindtap="toggleDebug">···</view>
+        <view class="topbar-icon" bindtap="toggleCamera">{{cameraPosition === 'front' ? '🔄' : '🔄'}}</view>
+      </view>
     </view>
   </view>
 
@@ -47,6 +52,23 @@
         style="width: 100%; height: 100%;"
       ></camera>
 
+      <!-- LIVE 标识 -->
+      <view class="live-badge" wx:if="{{state === 'running'}}">
+        <view class="live-dot"></view>
+        <text>LIVE</text>
+      </view>
+
+      <!-- 静音图标 -->
+      <view class="mute-icon" wx:if="{{state === 'running'}}">🔇</view>
+
+      <!-- 实时反馈气泡 -->
+      <view class="feedback-bubbles" wx:if="{{state === 'running' && issues.length > 0}}">
+        <view class="bubble" wx:for="{{issues}}" wx:key="index">
+          <text class="bubble-icon">⚠</text>
+          <text class="bubble-text">{{item}}</text>
+        </view>
+      </view>
+
       <!-- 骨架叠加 -->
       <skeleton-overlay
         id="skeleton"
@@ -55,13 +77,6 @@
         canvas-width="{{cameraWidth}}"
         canvas-height="{{cameraHeight}}"
       ></skeleton-overlay>
-    </view>
-
-    <!-- 状态指示 -->
-    <view class="camera-status" wx:if="{{state !== 'running'}}">
-      <view class="status-badge">
-        <text>{{state === 'paused' ? '已暂停' : state === 'finished' ? '训练结束' : '准备中'}}</text>
-      </view>
     </view>
   </view>
 
@@ -77,83 +92,74 @@
       <text>帧有效: {{debugOkFrames}}</text>
       <text>错误: {{debugErrors}}</text>
     </view>
-    <view class="debug-row" wx:if="{{debugFrameSize}}">
-      <text>帧尺寸: {{debugFrameSize}}</text>
-    </view>
     <view class="debug-row" wx:if="{{debugLastError}}">
       <text class="debug-error">{{debugLastError}}</text>
     </view>
   </view>
 
-  <!-- 训练信息面板 -->
-  <view class="info-panel">
-    <!-- 分数区域 -->
-    <view class="score-section">
-      <view class="score-main">
-        <text class="score-value" style="color: {{scoreColor}}">{{currentScore}}</text>
-        <text class="score-label">得分</text>
-      </view>
-
-      <view class="stats-row">
-        <view class="stat-item">
-          <text class="stat-value">{{totalCount}}</text>
-          <text class="stat-label">总次数</text>
-        </view>
-        <view class="stat-item">
-          <text class="stat-value" style="color: #22c55e">{{validCount}}</text>
-          <text class="stat-label">有效</text>
-        </view>
-        <view class="stat-item">
-          <text class="stat-value" style="color: #ef4444">{{errorCount}}</text>
-          <text class="stat-label">错误</text>
-        </view>
-      </view>
+  <!-- 指标卡片 -->
+  <view class="metrics-row">
+    <view class="metric-card" wx:for="{{metricCards}}" wx:key="key">
+      <text class="metric-value">{{item.value}}{{item.unit}}</text>
+      <text class="metric-label">{{item.label}}</text>
     </view>
+  </view>
 
-    <!-- 当前阶段 -->
-    <view class="phase-indicator" wx:if="{{currentPhase}}">
-      <text class="phase-text">{{phaseLabel}}</text>
+  <!-- 计数行 -->
+  <view class="count-row">
+    <view class="count-block">
+      <text class="count-value">{{totalCount}}</text>
+      <text class="count-unit">次</text>
+      <text class="count-label">动作计数</text>
     </view>
+    <view class="count-block count-block-highlight">
+      <text class="count-value" style="color: #ff8a5b;">{{currentScore}}</text>
+      <text class="count-unit" style="color: #ff8a5b;">分</text>
+      <text class="count-label">当前评分</text>
+    </view>
+    <view class="count-block">
+      <text class="count-value">{{calories}}</text>
+      <text class="count-unit">kcal</text>
+      <text class="count-label">消耗卡路里</text>
+    </view>
+  </view>
 
-    <!-- 实时反馈 -->
-    <view class="feedback-area" wx:if="{{issues.length > 0}}">
-      <view class="feedback-item" wx:for="{{issues}}" wx:key="index">
-        <text class="feedback-icon">⚠️</text>
-        <text class="feedback-text">{{item}}</text>
-      </view>
+  <!-- 控制按钮 -->
+  <view class="controls-row">
+    <view class="ctrl-mini" bindtap="toggleCamera">
+      <view class="ctrl-mini-icon">📷</view>
+      <text class="ctrl-mini-text">切换摄像头</text>
     </view>
+    <view class="ctrl-main" bindtap="togglePause" wx:if="{{state === 'running' || state === 'paused'}}">
+      <view class="ctrl-main-icon">{{state === 'running' ? '❚❚' : '▶'}}</view>
+      <text class="ctrl-main-text">{{state === 'running' ? '暂停' : '继续'}}</text>
+    </view>
+    <view class="ctrl-main ctrl-main-start" bindtap="startTraining" wx:elif="{{state === 'ready'}}">
+      <view class="ctrl-main-icon">▶</view>
+      <text class="ctrl-main-text">开始</text>
+    </view>
+    <view class="ctrl-mini" bindtap="finishTraining">
+      <view class="ctrl-mini-icon">■</view>
+      <text class="ctrl-mini-text">结束评估</text>
+    </view>
+  </view>
 
-    <!-- 控制按钮 -->
-    <view class="controls">
-      <block wx:if="{{state === 'ready'}}">
-        <button class="btn btn-primary btn-lg" bindtap="startTraining">开始训练</button>
-        <button class="btn btn-outline btn-lg" bindtap="startDemoMode">演示模式</button>
-      </block>
-      <block wx:elif="{{state === 'countdown'}}">
-        <button class="btn btn-lg btn-disabled">准备中...</button>
-        <button class="btn btn-sm btn-ghost force-exit" bindtap="forceExit">强制退出</button>
-      </block>
-      <block wx:elif="{{state === 'running'}}">
-        <button class="btn btn-outline" bindtap="pauseTraining">暂停</button>
-        <button class="btn btn-danger" bindtap="finishTraining">结束训练</button>
-      </block>
-      <block wx:elif="{{state === 'paused'}}">
-        <button class="btn btn-primary btn-lg" bindtap="resumeTraining">继续训练</button>
-        <button class="btn btn-danger" bindtap="finishTraining">结束训练</button>
-      </block>
+  <!-- 底部动作切换 -->
+  <view class="action-tabs">
+    <view
+      class="action-tab {{exerciseKey === item.key ? 'action-tab-active' : ''}}"
+      wx:for="{{quickActions}}"
+      wx:key="key"
+      bindtap="switchExercise"
+      data-key="{{item.key}}"
+    >
+      <view class="action-tab-icon">{{item.icon}}</view>
+      <text class="action-tab-text">{{item.name}}</text>
     </view>
+  </view>
 
-    <!-- 调试按钮（训练前） -->
-    <view class="debug-buttons" wx:if="{{state === 'ready'}}">
-      <view class="debug-btn-row">
-        <button class="btn btn-outline" bindtap="debugPhoto" style="flex:1;">📷 拍照测试</button>
-        <button class="btn btn-outline" bindtap="switchAndStart" style="flex:1;">📷 后置训练</button>
-      </view>
-    </view>
-
-    <!-- 强制退出（始终显示） -->
-    <view class="force-exit-area" wx:if="{{state !== 'ready'}}">
-      <text class="force-exit-link" bindtap="forceExit">强制退出（不保存）</text>
-    </view>
+  <!-- 调试按钮（训练前） -->
+  <view class="debug-buttons" wx:if="{{state === 'ready'}}">
+    <button class="debug-btn" bindtap="startDemoMode">📹 演示模式</button>
   </view>
 </view>
