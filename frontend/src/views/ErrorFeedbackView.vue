@@ -228,9 +228,9 @@
         </label>
       </header>
 
-      <div v-if="aiLoading" class="ai-advice-loading">
+      <div v-if="aiAdvicePending || aiLoading" class="ai-advice-loading">
         <div class="ai-advice-spinner" aria-hidden="true"></div>
-        <span>正在加载已保存的 AI 建议...</span>
+        <span>{{ aiAdvicePending ? "AI 建议正在生成中，请稍候..." : "正在加载已保存的 AI 建议..." }}</span>
       </div>
 
       <div class="ai-advice-body" :class="{ 'is-loading': aiLoading, 'is-lost': aiAdviceLost }">
@@ -246,7 +246,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronRight, Info, Layers, Sparkles, ThumbsUp, Volume2 } from "lucide-vue-next";
 import StateDisplay from "../components/StateDisplay.vue";
@@ -385,6 +385,73 @@ const { aiAdvice, aiLoading, voiceEnabled, clearAdvice } = useAiAdvice();
 
 const AI_ADVICE_LOST_MESSAGE = "该次训练的 AI 建议未保存，信息已丢失。";
 const aiAdviceLost = ref(false);
+const aiAdvicePending = ref(false);
+
+const AI_ADVICE_POLL_INTERVAL_MS = 2000;
+const AI_ADVICE_POLL_TIMEOUT_MS = 90000;
+let aiAdvicePollTimer: ReturnType<typeof setInterval> | null = null;
+
+function clearAiAdvicePoll() {
+  if (aiAdvicePollTimer) {
+    clearInterval(aiAdvicePollTimer);
+    aiAdvicePollTimer = null;
+  }
+}
+
+function hasStructuredFeedback(summary: Record<string, unknown>) {
+  const items = summary.items;
+  const issues = summary.issues;
+  const suggestions = summary.suggestions;
+  return Boolean(
+    (Array.isArray(items) && items.length > 0)
+    || (Array.isArray(issues) && issues.length > 0)
+    || (Array.isArray(suggestions) && suggestions.length > 0),
+  );
+}
+
+function startAiAdvicePoll(sessionId: string) {
+  clearAiAdvicePoll();
+  const startedAt = Date.now();
+
+  aiAdvicePollTimer = setInterval(async () => {
+    if (Date.now() - startedAt > AI_ADVICE_POLL_TIMEOUT_MS) {
+      clearAiAdvicePoll();
+      aiAdvicePending.value = false;
+      aiAdvice.value = "AI 建议生成超时，请稍后刷新页面重试。";
+      aiAdviceLost.value = true;
+      return;
+    }
+
+    try {
+      const session = await getSession(sessionId);
+      const raw = session.feedback_summary;
+      if (!raw) return;
+
+      const summary = JSON.parse(raw) as {
+        ai_advice?: string;
+        ai_advice_pending?: boolean;
+        ai_advice_status?: string;
+      };
+      const text = typeof summary.ai_advice === "string" ? summary.ai_advice.trim() : "";
+
+      if (text) {
+        clearAiAdvicePoll();
+        aiAdvicePending.value = false;
+        aiAdvice.value = text;
+        return;
+      }
+
+      if (summary.ai_advice_status === "failed") {
+        clearAiAdvicePoll();
+        aiAdvicePending.value = false;
+        aiAdvice.value = "AI 建议生成失败，请稍后刷新页面重试。";
+        aiAdviceLost.value = true;
+      }
+    } catch {
+      // ignore transient poll errors
+    }
+  }, AI_ADVICE_POLL_INTERVAL_MS);
+}
 
 const allDetections = ref<Detection[]>([]);
 const positiveNotes = ref<string[]>([]);
@@ -557,7 +624,9 @@ const exerciseNames: Record<string, string> = {
 };
 
 function loadSavedAiAdvice(session: SessionRecord) {
+  clearAiAdvicePoll();
   aiAdviceLost.value = false;
+  aiAdvicePending.value = false;
   const raw = session.feedback_summary;
   if (!raw) {
     aiAdvice.value = AI_ADVICE_LOST_MESSAGE;
@@ -566,10 +635,30 @@ function loadSavedAiAdvice(session: SessionRecord) {
   }
 
   try {
-    const summary = JSON.parse(raw) as { ai_advice?: string };
+    const summary = JSON.parse(raw) as {
+      ai_advice?: string;
+      ai_advice_pending?: boolean;
+      ai_advice_status?: string;
+      items?: unknown[];
+      issues?: unknown[];
+      suggestions?: unknown[];
+    };
     const text = typeof summary.ai_advice === "string" ? summary.ai_advice.trim() : "";
     if (text) {
       aiAdvice.value = text;
+      return;
+    }
+
+    if (summary.ai_advice_pending || hasStructuredFeedback(summary)) {
+      aiAdvicePending.value = true;
+      aiAdvice.value = "";
+      startAiAdvicePoll(session.session_id);
+      return;
+    }
+
+    if (summary.ai_advice_status === "failed") {
+      aiAdvice.value = "AI 建议生成失败，请稍后刷新页面重试。";
+      aiAdviceLost.value = true;
       return;
     }
   } catch {
@@ -583,7 +672,9 @@ function loadSavedAiAdvice(session: SessionRecord) {
 async function loadSessionFeedbacks(sid: string) {
   loading.value = true;
   clearAdvice();
+  clearAiAdvicePoll();
   aiAdviceLost.value = false;
+  aiAdvicePending.value = false;
   activeFilter.value = "all";
   try {
     const [fbRes, sessionRes] = await Promise.allSettled([
@@ -672,7 +763,9 @@ function formatDuration(seconds: number) {
 
 function resetSessionDetailState() {
   clearAdvice();
+  clearAiAdvicePoll();
   aiAdviceLost.value = false;
+  aiAdvicePending.value = false;
   allDetections.value = [];
   positiveNotes.value = [];
   stats.value = { critical: 0, warning: 0, minor: 0 };
@@ -731,6 +824,10 @@ onMounted(async () => {
 
   mode.value = "history";
   await loadHistorySessions();
+});
+
+onUnmounted(() => {
+  clearAiAdvicePoll();
 });
 </script>
 
