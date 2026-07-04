@@ -1,0 +1,33 @@
+/* 分数环形图 */
+.score-ring-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ring-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.ring-center {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ring-score {
+  font-size: 72rpx;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.ring-label {
+  font-size: 24rpx;
+  font-weight: 500;
+  margin-top: 8rpx;
+}

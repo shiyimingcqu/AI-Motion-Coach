@@ -1,0 +1,13 @@
+<!-- 分数环形图组件 -->
+<view class="score-ring-wrap" style="width: {{size}}rpx; height: {{size}}rpx;">
+  <canvas
+    type="2d"
+    id="scoreRingCanvas"
+    class="ring-canvas"
+    style="width: {{size}}rpx; height: {{size}}rpx;"
+  ></canvas>
+  <view class="ring-center">
+    <text class="ring-score" style="color: {{scoreColor}}">{{score}}</text>
+    <text class="ring-label" style="color: {{scoreColor}}">{{levelLabel}}</text>
+  </view>
+</view>

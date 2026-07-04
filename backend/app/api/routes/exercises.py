@@ -2,16 +2,17 @@ from pathlib import Path
 from uuid import uuid4
 
 try:
-    from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
+    from fastapi import APIRouter, Depends, File, Form, UploadFile, HTTPException
 except ModuleNotFoundError:
-    APIRouter = Depends = File = UploadFile = HTTPException = None
+    APIRouter = Depends = File = Form = UploadFile = HTTPException = None
 
 from app.api.deps import get_current_active_user, require_admin
 from app.db.session import SessionLocal
-from app.models.entities import ExerciseORM
+from app.models.entities import ExerciseORM, ActiveTemplateORM
 from app.services.exercise.registry import list_exercises
 from app.services.analysis.analyzers.registry import ANALYZER_REGISTRY
 from app.services.analysis.template_builder_service import template_builder_service
+from app.services.analysis.template_service import get_active_template_id
 from app.core.config import settings
 
 router = APIRouter(tags=["exercises"]) if APIRouter else None
@@ -129,21 +130,27 @@ if router:
         current_user=Depends(get_current_active_user) if get_current_active_user else None,
     ):
         """
-        获取指定动作的所有模板列表
+        获取指定动作的所有模板列表（包含启用状态）
         """
         if exercise not in ANALYZER_REGISTRY:
             raise HTTPException(status_code=400, detail=f"不支持的动作类型: {exercise}")
 
         templates = template_builder_service.list_templates(exercise)
+        active_id = get_active_template_id(exercise)
+
+        for t in templates:
+            t["is_enabled"] = (t["template_id"] == active_id)
+
         return {"items": templates}
 
     @router.post("/exercises/{exercise}/templates/from-video", status_code=201)
     def create_template_from_video(
         exercise: str,
-        video: UploadFile = File(...),
-        name: str = None,
-        view: str = "side",
-        version: str = "v1",
+        video: UploadFile | None = File(None),
+        file: UploadFile | None = File(None),
+        name: str | None = Form(None),
+        view: str = Form("side"),
+        version: str = Form("v1"),
         current_user=Depends(require_admin) if require_admin else None,
     ):
         """
@@ -151,6 +158,10 @@ if router:
         """
         if exercise not in ANALYZER_REGISTRY:
             raise HTTPException(status_code=400, detail=f"不支持的动作类型: {exercise}")
+
+        video_file = video or file
+        if video_file is None:
+            raise HTTPException(status_code=400, detail="请上传标准动作视频")
 
         valid_views = ["side", "front", "diagonal"]
         if view not in valid_views:
@@ -162,7 +173,7 @@ if router:
 
         try:
             with open(temp_path, 'wb') as f:
-                f.write(video.file.read())
+                f.write(video_file.file.read())
 
             result = template_builder_service.build_from_video(
                 video_path=str(temp_path),
@@ -171,6 +182,13 @@ if router:
                 name=name,
                 version=version
             )
+
+            for analyzer in ANALYZER_REGISTRY.values():
+                template_service = getattr(analyzer, "template_service", None)
+                if template_service is not None:
+                    template_service.templates.clear()
+                if hasattr(analyzer, "_template_reference_cache"):
+                    analyzer._template_reference_cache = None
 
             return {
                 "status": "success",

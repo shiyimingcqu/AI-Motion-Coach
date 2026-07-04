@@ -54,6 +54,9 @@ if router and BaseModel:
         old_password: str
         new_password: str
 
+    class WechatLoginRequest(BaseModel):
+        code: str = Field(..., min_length=1)
+
     class UpdateProfileRequest(BaseModel):
         nickname: str | None = None
 
@@ -106,12 +109,100 @@ if router:
         db = _get_db()
         try:
             user = db.query(UserORM).filter(UserORM.username == username).first()
-            if user is None or not verify_password(password, user.hashed_password):
+            if user is None or not verify_password(password, user.hashed_password or ""):
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="用户名或密码错误",
                     headers={"WWW-Authenticate": "Bearer"},
                 )
+
+            if not user.is_active:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="用户已被禁用")
+
+            access_token = create_access_token(data={"sub": user.username, "role": user.role})
+
+            return TokenResponse(
+                access_token=access_token,
+                token_type="bearer",
+                user=UserResponse(
+                    id=user.id,
+                    username=user.username,
+                    role=user.role,
+                    is_active=user.is_active,
+                ),
+            )
+        finally:
+            db.close()
+
+    @router.post("/wechat-login", response_model=TokenResponse if TokenResponse else None)
+    def wechat_login(request: WechatLoginRequest if WechatLoginRequest else None):
+        """微信小程序登录：code → openid → JWT"""
+        import json
+        import os
+        import urllib.request
+        import urllib.parse
+
+        if Session is None or request is None:
+            raise HTTPException(status_code=500, detail="依赖不可用")
+
+        # 微信小程序的 AppID 和 AppSecret（从环境变量读取）
+        appid = os.getenv("WECHAT_APPID", "")
+        secret = os.getenv("WECHAT_SECRET", "")
+
+        if not appid or not secret:
+            raise HTTPException(
+                status_code=500,
+                detail="微信小程序配置未设置（WECHAT_APPID / WECHAT_SECRET）",
+            )
+
+        # 调用微信 jscode2session 接口
+        try:
+            wx_url = "https://api.weixin.qq.com/sns/jscode2session"
+            wx_params = {
+                "appid": appid,
+                "secret": secret,
+                "js_code": request.code,
+                "grant_type": "authorization_code",
+            }
+            full_url = f"{wx_url}?{urllib.parse.urlencode(wx_params)}"
+            with urllib.request.urlopen(full_url, timeout=10) as resp:
+                wx_data = json.loads(resp.read().decode("utf-8"))
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"微信服务调用失败: {str(exc)}")
+
+        if "errcode" in wx_data and wx_data["errcode"] != 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"微信登录失败: {wx_data.get('errmsg', '未知错误')}",
+            )
+
+        openid = wx_data.get("openid")
+        if not openid:
+            raise HTTPException(status_code=400, detail="获取 openid 失败")
+
+        db = _get_db()
+        try:
+            # 用 openid 查找用户
+            user = db.query(UserORM).filter(UserORM.openid == openid).first()
+
+            if user is None:
+                # 自动创建新用户，username 用 openid 截取前缀
+                username = f"wx_{openid[:16]}"
+                counter = 0
+                while db.query(UserORM).filter(UserORM.username == username).first():
+                    counter += 1
+                    username = f"wx_{openid[:12]}{counter}"
+
+                from app.core.security import get_password_hash
+                user = UserORM(
+                    username=username,
+                    hashed_password=get_password_hash(openid),  # 用 openid 作为初始密码
+                    openid=openid,
+                    role="user",
+                )
+                db.add(user)
+                db.commit()
+                db.refresh(user)
 
             if not user.is_active:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="用户已被禁用")

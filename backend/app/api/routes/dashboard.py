@@ -40,9 +40,12 @@ if router:
             total_duration = sum(s.duration_seconds for s in sessions)
 
             # today's sessions
-            from datetime import datetime, timezone
-            today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-            today_sessions = [s for s in sessions if s.created_at >= today_start]
+            from datetime import date
+            today = date.today()
+            today_sessions = [
+                s for s in sessions
+                if s.created_at and s.created_at.date() == today
+            ]
 
             # trend (last 7 days)
             trend_map: dict[str, list[float]] = {}

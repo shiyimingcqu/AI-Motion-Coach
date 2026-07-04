@@ -1,0 +1,93 @@
+<!-- 训练报告页 -->
+<view class="reports-page">
+  <!-- 顶部 -->
+  <view class="top-bar">
+    <view class="top-bar-content">
+      <text class="top-title">训练报告</text>
+    </view>
+  </view>
+
+  <!-- 时间范围 Tab -->
+  <view class="time-tabs">
+    <view
+      class="time-tab {{timeRange === item.value ? 'time-tab-active' : ''}}"
+      wx:for="{{timeRanges}}"
+      wx:key="value"
+      bindtap="switchTimeRange"
+      data-value="{{item.value}}"
+    >{{item.label}}</view>
+  </view>
+
+  <!-- 概览统计 -->
+  <view class="card section-card">
+    <view class="overview-grid">
+      <view class="overview-item">
+        <text class="ov-value">{{summary.totalSessions}}</text>
+        <text class="ov-label">训练次数</text>
+      </view>
+      <view class="overview-item">
+        <text class="ov-value" style="color: var(--primary)">{{summary.averageScore}}</text>
+        <text class="ov-label">平均得分</text>
+      </view>
+      <view class="overview-item">
+        <text class="ov-value">{{summary.totalDuration}}</text>
+        <text class="ov-label">训练时长(分)</text>
+      </view>
+      <view class="overview-item">
+        <text class="ov-value" style="color: var(--success)">{{summary.accuracy}}%</text>
+        <text class="ov-label">正确率</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 各项运动表现 -->
+  <view class="card section-card" wx:if="{{exerciseStats.length > 0}}">
+    <view class="section-title-text">各项运动表现</view>
+    <view class="bar-chart">
+      <view class="bar-item" wx:for="{{exerciseStats}}" wx:key="key">
+        <view class="bar-label-row">
+          <text class="bar-name">{{item.name}}</text>
+          <text class="bar-score" style="color: {{item.color}}">{{item.score}}分</text>
+        </view>
+        <view class="bar-track">
+          <view class="bar-fill" style="width: {{item.score}}%; background: linear-gradient(90deg, {{item.color}}, {{item.color}}cc);"></view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 训练历史 -->
+  <view class="card section-card" wx:if="{{sessions.length > 0}}">
+    <view class="section-title-text">训练历史</view>
+    <view class="session-list">
+      <view class="session-item" wx:for="{{sessions}}" wx:key="session_id">
+        <view class="session-thumb">
+          <text class="session-thumb-icon">{{item.icon}}</text>
+        </view>
+        <view class="session-mid">
+          <text class="session-name">{{item.exercise_name}}训练</text>
+          <view class="session-meta">
+            <text class="session-time-icon">⏱</text>
+            <text class="session-time">{{item.date}}</text>
+            <text class="session-dot">·</text>
+            <text class="session-duration-icon">⏳</text>
+            <text class="session-duration">{{item.duration}}</text>
+          </view>
+        </view>
+        <view class="session-right">
+          <text class="session-score" style="color: {{item.scoreColor}}">{{item.score}}分</text>
+          <text class="session-status">已完成</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty-state" wx:if="{{sessions.length === 0 && !loading}}">
+    <text class="icon">📊</text>
+    <text>暂无训练报告</text>
+    <text class="text-muted" style="margin-top: 8rpx;">完成训练后这里会展示数据</text>
+  </view>
+
+  <view style="height: 40rpx;"></view>
+</view>

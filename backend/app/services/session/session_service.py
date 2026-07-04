@@ -5,6 +5,8 @@ from uuid import uuid4
 
 from app.db.session import SessionLocal
 from app.models.entities import SessionORM
+from app.services.evaluation.calorie_service import calculate_calories
+from app.services.evaluation.evaluation_service import build_evaluation, serialize_evaluation
 
 
 class SessionService:
@@ -42,11 +44,25 @@ class SessionService:
         total_count: int,
         valid_count: int,
         error_count: int,
-        average_score: int,
+        average_score: int | float,
         user_id: int | None = None,
     ) -> SessionORM:
         if SessionLocal is None:
             raise RuntimeError("Database not available")
+
+        calories = calculate_calories(
+            exercise=exercise,
+            duration_seconds=duration_seconds,
+            total_count=total_count,
+        )
+        evaluation = build_evaluation(
+            exercise=exercise,
+            average_score=float(average_score),
+            total_count=total_count,
+            valid_count=valid_count,
+            error_count=error_count,
+            duration_seconds=duration_seconds,
+        )
 
         db = SessionLocal()
         try:
@@ -58,7 +74,9 @@ class SessionService:
                 total_count=total_count,
                 valid_count=valid_count,
                 error_count=error_count,
-                average_score=average_score,
+                average_score=float(average_score),
+                calories_burned=calories,
+                evaluation_json=serialize_evaluation(evaluation),
                 created_at=datetime.now(timezone.utc),
             )
             db.add(session)

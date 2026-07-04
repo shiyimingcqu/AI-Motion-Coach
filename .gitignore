@@ -9,10 +9,16 @@ venv/
 node_modules/
 dist/
 .vite/
+vite.config.ts.timestamp-*.mjs
 
 # IDE
 .vscode/
 .idea/
+.workbuddy/
+
+# Mini Program local/private files
+miniprogram/project.private.config.json
+miniprogram/assets/fitness/
 
 # Database
 *.db
@@ -28,6 +34,11 @@ backend/storage/outputs/*
 !storage/outputs/.gitkeep
 !storage/reports/.gitkeep
 !backend/storage/outputs/.gitkeep
+
+# Generated exercise templates not committed by default
+storage/templates/jumping_jack_template_side_v1.json
+storage/templates/plank_template_side_v1.json
+storage/templates/push_up_template_side_v1.json
 
 # Models / large files
 *.pt

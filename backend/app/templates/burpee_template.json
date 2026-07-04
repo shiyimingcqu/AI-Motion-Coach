@@ -1,0 +1,21 @@
+{
+  "action": "burpee",
+  "version": "1.0",
+  "description": "标准波比跳动作模板，用于对比评分",
+  "weights": {
+    "hip_angle": 0.40,
+    "shoulder_angle": 0.30,
+    "body_line_angle": 0.30
+  },
+  "template_sequence": {
+    "hip_angle": [170, 155, 135, 115, 95, 90, 100, 120, 145, 165, 175, 165, 140, 115, 95, 90, 110, 135, 155, 170],
+    "shoulder_angle": [10, 20, 35, 55, 70, 80, 65, 40, 20, 10, 5, 10, 25, 50, 70, 80, 60, 35, 15, 10],
+    "body_line_angle": [3, 8, 14, 18, 20, 20, 18, 12, 5, 3, 2, 3, 8, 15, 20, 20, 16, 8, 4, 3]
+  },
+  "thresholds": {
+    "excellent": 90,
+    "good": 75,
+    "fair": 60,
+    "poor": 0
+  }
+}

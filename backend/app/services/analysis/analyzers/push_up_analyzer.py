@@ -18,6 +18,15 @@ REQUIRED = {
 class PushUpAnalyzer(BaseExerciseAnalyzer):
     exercise_type = "push_up"
 
+    def __init__(self, smooth_window: int = 5):
+        super().__init__(smooth_window)
+        self._prev_elbow = 180.0
+
+    def _should_count_rep(self, current_stage: str, phase: str) -> bool:
+        return current_stage in ("bottom", "down") and phase in (
+            "ascending", "top_support", "up", "standing",
+        )
+
     def extract_features(self, landmarks: Keypoints) -> dict[str, float]:
         missing = REQUIRED - set(landmarks)
         if missing:
@@ -76,8 +85,9 @@ class PushUpAnalyzer(BaseExerciseAnalyzer):
 
     def detect_phase(self, features: dict, state: dict) -> str:
         elbow = features.get("elbow_angle", 180)
-        prev = state.get("prev_elbow", elbow)
+        prev = self._prev_elbow
         delta = elbow - prev
+        self._prev_elbow = elbow
         state["prev_elbow"] = elbow
 
         if elbow > 150 and delta >= 0:

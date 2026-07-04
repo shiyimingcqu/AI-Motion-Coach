@@ -1,0 +1,57 @@
+{
+  "pages": [
+    "pages/login/login",
+    "pages/dashboard/dashboard",
+    "pages/exercises/list",
+    "pages/exercises/detail",
+    "pages/training/training",
+    "pages/result/result",
+    "pages/reports/reports",
+    "pages/profile/profile"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTitleText": "运动姿态评估",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f5f7fb",
+    "navigationStyle": "default"
+  },
+  "tabBar": {
+    "color": "#9aa1b3",
+    "selectedColor": "#4f8cff",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/dashboard/dashboard",
+        "text": "首页",
+        "iconPath": "assets/icons/home.png",
+        "selectedIconPath": "assets/icons/home-active.png"
+      },
+      {
+        "pagePath": "pages/exercises/list",
+        "text": "评估",
+        "iconPath": "assets/icons/exercise.png",
+        "selectedIconPath": "assets/icons/exercise-active.png"
+      },
+      {
+        "pagePath": "pages/reports/reports",
+        "text": "记录",
+        "iconPath": "assets/icons/report.png",
+        "selectedIconPath": "assets/icons/report-active.png"
+      },
+      {
+        "pagePath": "pages/profile/profile",
+        "text": "我的",
+        "iconPath": "assets/icons/profile.png",
+        "selectedIconPath": "assets/icons/profile-active.png"
+      }
+    ]
+  },
+  "permission": {
+    "scope.camera": {
+      "desc": "需要使用摄像头进行姿态检测"
+    }
+  },
+  "lazyCodeLoading": "requiredComponents"
+}

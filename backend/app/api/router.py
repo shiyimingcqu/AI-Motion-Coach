@@ -15,7 +15,6 @@ def create_api_router():
     router.include_router(health.router)
     router.include_router(exercises.router)
     router.include_router(feedback.router)
-    router.include_router(admin.router)
     router.include_router(analysis.router)
     router.include_router(videos.router)
     router.include_router(files.router)

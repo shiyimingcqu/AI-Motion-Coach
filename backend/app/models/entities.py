@@ -41,7 +41,8 @@ class UserORM(Base if Base is not None else object):
 
         id = Column(Integer, primary_key=True, index=True)
         username = Column(String(64), unique=True, index=True, nullable=False)
-        hashed_password = Column(String(255), nullable=False)
+        hashed_password = Column(String(255), nullable=True)
+        openid = Column(String(64), unique=True, nullable=True, index=True)
         role = Column(String(16), nullable=False, default="user")
         is_active = Column(Boolean, default=True, nullable=False)
         created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
@@ -120,6 +121,27 @@ class AnalysisTaskORM(Base if Base is not None else object):
         }
 
 
+class ActiveTemplateORM(Base if Base is not None else object):
+    """启用的模板配置——每种动作只能启用一个模板"""
+    if Base is not None:
+        __tablename__ = "active_templates"
+
+        id = Column(Integer, primary_key=True, index=True)
+        action = Column(String(32), unique=True, index=True, nullable=False)
+        template_id = Column(String(128), nullable=False)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "action": self.action,
+            "template_id": self.template_id,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class SessionORM(Base if Base is not None else object):
     """训练记录数据库模型"""
     if Base is not None:
@@ -134,6 +156,8 @@ class SessionORM(Base if Base is not None else object):
         valid_count = Column(Integer, default=0, nullable=False)
         error_count = Column(Integer, default=0, nullable=False)
         average_score = Column(Float, default=0.0, nullable=False)
+        calories_burned = Column(Float, default=0.0, nullable=False)
+        evaluation_json = Column(Text, nullable=True)
         created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     def to_dict(self):
@@ -146,5 +170,7 @@ class SessionORM(Base if Base is not None else object):
             "valid_count": self.valid_count,
             "error_count": self.error_count,
             "average_score": self.average_score,
+            "calories_burned": self.calories_burned,
+            "evaluation_json": self.evaluation_json,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
