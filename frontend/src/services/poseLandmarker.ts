@@ -182,7 +182,12 @@ export function toReplayLandmarks(landmarks: NormalizedLandmark[]): PoseReplayLa
   }));
 }
 
-export function drawPose(canvas: HTMLCanvasElement, landmarks: NormalizedLandmark[] | null) {
+export function drawPose(
+  canvas: HTMLCanvasElement,
+  landmarks: NormalizedLandmark[] | null,
+  video?: HTMLVideoElement | null,
+  fit: "contain" | "cover" | "fill" = "fill",
+) {
   const context = canvas.getContext("2d");
   if (!context) return;
 
@@ -194,6 +199,8 @@ export function drawPose(canvas: HTMLCanvasElement, landmarks: NormalizedLandmar
     return;
   }
 
+  const displayRect = getVideoDisplayRect(canvas, video, fit);
+
   context.lineCap = "round";
   context.lineJoin = "round";
 
@@ -202,9 +209,12 @@ export function drawPose(canvas: HTMLCanvasElement, landmarks: NormalizedLandmar
     const end = landmarks[to];
     if (!isVisible(start) || !isVisible(end)) continue;
 
+    const startPoint = mapLandmarkToCanvas(start, displayRect);
+    const endPoint = mapLandmarkToCanvas(end, displayRect);
+
     context.beginPath();
-    context.moveTo(start.x * canvas.width, start.y * canvas.height);
-    context.lineTo(end.x * canvas.width, end.y * canvas.height);
+    context.moveTo(startPoint.x, startPoint.y);
+    context.lineTo(endPoint.x, endPoint.y);
     context.strokeStyle = "rgba(240, 178, 63, 0.96)";
     context.lineWidth = 5;
     context.shadowColor = "rgba(16, 23, 19, 0.7)";
@@ -216,8 +226,7 @@ export function drawPose(canvas: HTMLCanvasElement, landmarks: NormalizedLandmar
   for (const landmark of landmarks) {
     if (!isVisible(landmark)) continue;
 
-    const x = landmark.x * canvas.width;
-    const y = landmark.y * canvas.height;
+    const { x, y } = mapLandmarkToCanvas(landmark, displayRect);
     context.beginPath();
     context.arc(x, y, 5, 0, Math.PI * 2);
     context.fillStyle = "rgba(215, 239, 227, 0.96)";
@@ -232,6 +241,57 @@ export function clearPoseCanvas(canvas: HTMLCanvasElement | null) {
   const context = canvas?.getContext("2d");
   if (!canvas || !context) return;
   context.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function getVideoDisplayRect(
+  canvas: HTMLCanvasElement,
+  video: HTMLVideoElement | null | undefined,
+  fit: "contain" | "cover" | "fill",
+) {
+  const targetWidth = canvas.clientWidth || canvas.width;
+  const targetHeight = canvas.clientHeight || canvas.height;
+
+  if (!video || fit === "fill" || !video.videoWidth || !video.videoHeight) {
+    return { x: 0, y: 0, width: targetWidth, height: targetHeight };
+  }
+
+  const sourceWidth = video.videoWidth;
+  const sourceHeight = video.videoHeight;
+  const sourceRatio = sourceWidth / sourceHeight;
+  const targetRatio = targetWidth / targetHeight;
+
+  if (fit === "contain") {
+    if (sourceRatio > targetRatio) {
+      const width = targetWidth;
+      const height = targetWidth / sourceRatio;
+      return { x: 0, y: (targetHeight - height) / 2, width, height };
+    }
+
+    const height = targetHeight;
+    const width = targetHeight * sourceRatio;
+    return { x: (targetWidth - width) / 2, y: 0, width, height };
+  }
+
+  // object-fit: cover
+  if (sourceRatio > targetRatio) {
+    const height = targetHeight;
+    const width = targetHeight * sourceRatio;
+    return { x: (targetWidth - width) / 2, y: 0, width, height };
+  }
+
+  const width = targetWidth;
+  const height = targetWidth / sourceRatio;
+  return { x: 0, y: (targetHeight - height) / 2, width, height };
+}
+
+function mapLandmarkToCanvas(
+  landmark: NormalizedLandmark,
+  rect: { x: number; y: number; width: number; height: number },
+) {
+  return {
+    x: rect.x + landmark.x * rect.width,
+    y: rect.y + landmark.y * rect.height,
+  };
 }
 
 function syncCanvasSize(canvas: HTMLCanvasElement) {

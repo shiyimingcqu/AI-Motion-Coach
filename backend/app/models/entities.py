@@ -49,14 +49,41 @@ class UserORM(Base if Base is not None else object):
         __tablename__ = "users"
         id = Column(Integer, primary_key=True, index=True)
         username = Column(String(64), unique=True, index=True, nullable=False)
-        hashed_password = Column(String(255), nullable=True)
-        openid = Column(String(64), unique=True, nullable=True, index=True)
+        hashed_password = Column(String(255), nullable=True)  # 微信用户无密码
+        openid = Column(String(64), unique=True, nullable=True, index=True)  # 微信登录
         role = Column(String(16), nullable=False, default="user")
         is_active = Column(Boolean, default=True, nullable=False)
         created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+        # 个人资料字段
+        nickname = Column(String(64), nullable=True)
+        avatar_mode = Column(String(16), nullable=False, default="default")
+        avatar_image = Column(Text, nullable=True)
+        occupation = Column(String(32), nullable=True)
+        height = Column(String(8), nullable=True)
+        weight = Column(String(8), nullable=True)
+        training_goal = Column(String(256), nullable=True)
+        training_preferences = Column(Text, nullable=True)
 
-    def to_dict(self):
-        return {"id": self.id, "username": self.username, "role": self.role, "is_active": self.is_active, "created_at": _isoformat_utc(self.created_at)}
+    def to_dict(self, include_profile: bool = False):
+        result = {
+            "id": self.id,
+            "username": self.username,
+            "role": self.role,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() + "Z" if self.created_at else None,
+        }
+        if include_profile:
+            result.update({
+                "nickname": self.nickname,
+                "avatar_mode": self.avatar_mode,
+                "avatar_image": self.avatar_image,
+                "occupation": self.occupation,
+                "height": self.height,
+                "weight": self.weight,
+                "training_goal": self.training_goal,
+                "training_preferences": self.training_preferences,
+            })
+        return result
 
 
 class ExerciseORM(Base if Base is not None else object):
@@ -77,7 +104,21 @@ class ExerciseORM(Base if Base is not None else object):
         updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     def to_dict(self):
-        return {"id": self.id, "key": self.key, "name": self.name, "category": self.category, "level": self.level, "duration": self.duration, "description": self.description, "modes": [m.strip() for m in self.modes.split(",") if m.strip()], "errors": [e.strip() for e in self.errors.split(",") if e.strip()], "accent": self.accent, "is_active": self.is_active, "created_at": _isoformat_utc(self.created_at), "updated_at": _isoformat_utc(self.updated_at)}
+        return {
+            "id": self.id,
+            "key": self.key,
+            "name": self.name,
+            "category": self.category,
+            "level": self.level,
+            "duration": self.duration,
+            "description": self.description,
+            "modes": [m.strip() for m in self.modes.split(",") if m.strip()],
+            "errors": [e.strip() for e in self.errors.split(",") if e.strip()],
+            "accent": self.accent,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() + "Z" if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
 
 
 class AnalysisTaskORM(Base if Base is not None else object):
@@ -85,7 +126,9 @@ class AnalysisTaskORM(Base if Base is not None else object):
         __tablename__ = "analysis_tasks"
         id = Column(Integer, primary_key=True, index=True)
         task_id = Column(String(64), unique=True, index=True, nullable=False)
+        user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
         exercise = Column(String(32), nullable=False, default="squat")
+        camera_view = Column(String(16), nullable=False, default="front")
         source_uri = Column(String(512), nullable=False, default="")
         status = Column(String(32), nullable=False, default="pending")
         output_uri = Column(String(512), nullable=True)
@@ -94,7 +137,16 @@ class AnalysisTaskORM(Base if Base is not None else object):
         updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     def to_dict(self):
-        return {"task_id": self.task_id, "exercise": self.exercise, "source_uri": self.source_uri, "status": self.status, "output_uri": self.output_uri, "error_message": self.error_message, "created_at": _isoformat_utc(self.created_at)}
+        return {
+            "task_id": self.task_id,
+            "exercise": self.exercise,
+            "camera_view": self.camera_view,
+            "source_uri": self.source_uri,
+            "status": self.status,
+            "output_uri": self.output_uri,
+            "error_message": self.error_message,
+            "created_at": self.created_at.isoformat() + "Z" if self.created_at else None,
+        }
 
 
 class ActiveTemplateORM(Base if Base is not None else object):
@@ -124,6 +176,9 @@ class SessionORM(Base if Base is not None else object):
         average_score = Column(Float, default=0.0, nullable=False)
         pose_replay_json = Column(MySQLMediumText if MySQLMediumText else Text, nullable=True)
         pose_replay_meta_json = Column(MySQLMediumText if MySQLMediumText else Text, nullable=True)
+        calories_burned = Column(Float, default=0.0, nullable=False)
+        evaluation_json = Column(Text, nullable=True)  # JSON 综合评估
+        feedback_summary = Column(Text, nullable=True)  # 反馈摘要（issues / suggestions / ai_advice）
         created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     def to_dict(self):
@@ -136,4 +191,18 @@ class SessionORM(Base if Base is not None else object):
                 has_pose_replay = False
         except (json.JSONDecodeError, TypeError):
             has_pose_replay = bool(self.pose_replay_json)
-        return {"session_id": self.session_id, "user_id": self.user_id, "exercise": self.exercise, "duration_seconds": self.duration_seconds, "total_count": self.total_count, "valid_count": self.valid_count, "error_count": self.error_count, "average_score": self.average_score, "has_pose_replay": has_pose_replay, "created_at": _isoformat_utc(self.created_at)}
+        return {
+            "session_id": self.session_id,
+            "user_id": self.user_id,
+            "exercise": self.exercise,
+            "duration_seconds": self.duration_seconds,
+            "total_count": self.total_count,
+            "valid_count": self.valid_count,
+            "error_count": self.error_count,
+            "average_score": self.average_score,
+            "has_pose_replay": has_pose_replay,
+            "calories_burned": self.calories_burned,
+            "evaluation_json": self.evaluation_json,
+            "feedback_summary": self.feedback_summary,
+            "created_at": self.created_at.isoformat() + "Z" if self.created_at else None,
+        }

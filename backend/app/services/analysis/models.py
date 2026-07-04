@@ -19,6 +19,7 @@ class AnalysisResult:
     valid_count: int = 0
     score: int = 100
     errors: list[str] = field(default_factory=list)
+    feedback: list[str] = field(default_factory=list)
     features: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self):

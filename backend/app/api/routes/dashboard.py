@@ -40,12 +40,10 @@ if router:
             total_duration = sum(s.duration_seconds for s in sessions)
 
             # today's sessions
-            from datetime import date
-            today = date.today()
-            today_sessions = [
-                s for s in sessions
-                if s.created_at and s.created_at.date() == today
-            ]
+            from datetime import datetime, timezone
+            today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+            today_sessions = [s for s in sessions if s.created_at >= today_start]
+            today_avg = round(sum(s.average_score for s in today_sessions) / len(today_sessions), 1) if today_sessions else 0
 
             # trend (last 7 days)
             trend_map: dict[str, list[float]] = {}
@@ -58,6 +56,12 @@ if router:
                 key=lambda x: x["date"],
             )[-7:]
 
+            # most trained exercise
+            exercise_counts: dict[str, int] = {}
+            for s in sessions:
+                exercise_counts[s.exercise] = exercise_counts.get(s.exercise, 0) + 1
+            top_exercise = max(exercise_counts, key=exercise_counts.get) if exercise_counts else ""
+
             # score change vs previous session
             score_change = 0.0
             if len(sessions) >= 2:
@@ -65,10 +69,13 @@ if router:
 
             return {
                 "today_sessions": len(today_sessions),
+                "today_avg_score": today_avg,
                 "total_sessions": total,
                 "average_score": round(avg_score, 1),
                 "average_score_change": round(score_change, 1),
                 "total_duration_minutes": round(total_duration / 60),
+                "total_duration_seconds": total_duration,
+                "top_exercise": top_exercise,
                 "recent_trend": trend,
                 "recent_sessions": [
                     {
@@ -87,10 +94,13 @@ if router:
 def _empty_stats():
     return {
         "today_sessions": 0,
+        "today_avg_score": 0,
         "total_sessions": 0,
         "average_score": 0,
         "average_score_change": 0,
         "total_duration_minutes": 0,
+        "total_duration_seconds": 0,
+        "top_exercise": "",
         "recent_trend": [],
         "recent_sessions": [],
     }

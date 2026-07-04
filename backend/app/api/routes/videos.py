@@ -22,11 +22,19 @@ if router:
         current_user=Depends(get_current_active_user) if get_current_active_user else None,
     ):
         source_uri = await local_storage.save_upload(file)
-        output_uri = video_analysis_service.analyze_video(source_uri, exercise)
+        user_id = current_user.id if current_user else None
+        analysis_result = video_analysis_service.analyze_video(
+            source_uri, exercise, user_id=user_id
+        )
         task = task_service.create_task(
             exercise=exercise,
             source_uri=source_uri,
             status="success",
-            output_uri=output_uri,
+            output_uri=analysis_result["output_uri"],
         )
-        return {"file_uri": source_uri, "task": task.to_dict()}
+        return {
+            "file_uri": source_uri,
+            "task": task,
+            "analysis": analysis_result,
+            "session_id": analysis_result.get("session_id"),
+        }

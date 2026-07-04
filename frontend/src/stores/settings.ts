@@ -75,6 +75,7 @@ function loadSettings(): UserSettings {
 
 function syncThemeClass(theme: ThemeMode) {
   document.documentElement.classList.toggle("theme-light", theme === "light");
+  document.documentElement.classList.remove("theme-dark");
 }
 
 function syncLanguageClass(language: AppLanguage) {

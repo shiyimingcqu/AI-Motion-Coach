@@ -24,6 +24,8 @@ if router and BaseModel:
         average_score: int
         pose_replay: list[dict] | None = None
         pose_replay_meta: dict | None = None
+        issues: list[str] = []
+        suggestions: list[str] = []
 
 
 if router:
@@ -112,6 +114,40 @@ if router:
             pose_replay_frames=body.pose_replay,
             pose_replay_meta=body.pose_replay_meta,
         )
+
+        if body.issues or body.suggestions:
+            from app.db.session import SessionLocal
+            from app.services.session.feedback_persistence import (
+                build_feedback_data,
+                save_session_feedback_summary,
+            )
+
+            formatted = {
+                "errors": body.issues or [],
+                "feedbacks": body.suggestions or [],
+                "metrics": {},
+                "score": body.average_score,
+                "level": "unknown",
+            }
+            unified = {"items": []}
+            feedback_data = build_feedback_data(unified, formatted)
+            save_session_feedback_summary(
+                session.session_id,
+                feedback_data,
+                generate_ai_async=True,
+                exercise=body.exercise,
+            )
+            db = SessionLocal()
+            try:
+                sess = db.query(SessionORM).filter(
+                    SessionORM.session_id == session.session_id
+                ).first()
+                if sess:
+                    db.refresh(sess)
+                    session = sess
+            finally:
+                db.close()
+
         return session.to_dict()
 
     @router.delete("/{session_id}")

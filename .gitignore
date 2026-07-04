@@ -9,6 +9,7 @@ venv/
 node_modules/
 dist/
 .vite/
+vite.config.ts.timestamp-*.mjs
 
 # IDE
 .vscode/
@@ -51,6 +52,14 @@ storage/templates/push_up_template_side_v1.json
 *.log
 logs/
 
+# WorkBuddy workspace data
+.workbuddy/
+
+# Trae IDE
+.trae/
+
 # OS
 .DS_Store
 Thumbs.db
+
+db_stdout.txt

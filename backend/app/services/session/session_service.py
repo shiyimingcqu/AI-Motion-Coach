@@ -6,16 +6,21 @@ from uuid import uuid4
 
 from app.db.session import SessionLocal
 from app.models.entities import SessionORM, _isoformat_utc
+from app.services.evaluation.calorie_service import calculate_calories
+from app.services.evaluation.evaluation_service import build_evaluation, serialize_evaluation
 
 
 class SessionService:
-    def list_sessions(self, limit: int = 50, offset: int = 0) -> list[SessionORM]:
+    def list_sessions(self, limit: int = 50, offset: int = 0, user_id: int | None = None) -> list[SessionORM]:
         if SessionLocal is None:
             return []
         db = SessionLocal()
         try:
+            query = db.query(SessionORM)
+            if user_id is not None:
+                query = query.filter(SessionORM.user_id == user_id)
             sessions = (
-                db.query(SessionORM)
+                query
                 .order_by(SessionORM.created_at.desc())
                 .offset(offset)
                 .limit(limit)
@@ -43,13 +48,27 @@ class SessionService:
         total_count: int,
         valid_count: int,
         error_count: int,
-        average_score: int,
+        average_score: int | float,
         user_id: int | None = None,
         pose_replay_frames: list[dict] | None = None,
         pose_replay_meta: dict | None = None,
     ) -> SessionORM:
         if SessionLocal is None:
             raise RuntimeError("Database not available")
+
+        calories = calculate_calories(
+            exercise=exercise,
+            duration_seconds=duration_seconds,
+            total_count=total_count,
+        )
+        evaluation = build_evaluation(
+            exercise=exercise,
+            average_score=float(average_score),
+            total_count=total_count,
+            valid_count=valid_count,
+            error_count=error_count,
+            duration_seconds=duration_seconds,
+        )
 
         db = SessionLocal()
         try:
@@ -61,12 +80,15 @@ class SessionService:
                 total_count=total_count,
                 valid_count=valid_count,
                 error_count=error_count,
-                average_score=average_score,
+<<<<<<< HEAD
+                average_score=float(average_score),
                 pose_replay_json=self._dump_replay_frames(pose_replay_frames),
                 pose_replay_meta_json=self._dump_replay_meta(
                     pose_replay_meta,
                     pose_replay_frames,
                 ),
+                calories_burned=calories,
+                evaluation_json=serialize_evaluation(evaluation),
                 created_at=datetime.now(timezone.utc),
             )
             db.add(session)

@@ -11,6 +11,7 @@ export interface SessionRecord {
   average_score: number;
   has_pose_replay?: boolean;
   created_at: string;
+  feedback_summary?: string | null;
 }
 
 export interface PoseReplayLandmark {
@@ -63,6 +64,8 @@ export interface CreateSessionPayload {
   average_score: number;
   pose_replay?: PoseReplayFrame[];
   pose_replay_meta?: Record<string, unknown>;
+  issues?: string[];
+  suggestions?: string[];
 }
 
 export function getSessions(params?: SessionsQuery) {

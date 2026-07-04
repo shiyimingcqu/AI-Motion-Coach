@@ -1,114 +1,59 @@
-<!-- 个人中心 / 我的训练 -->
-<view class="profile-page">
-  <!-- 顶部导航 -->
-  <view class="top-bar" style="padding-top: {{statusBarHeight}}px;">
-    <view class="top-bar-content">
-      <view class="back-btn" bindtap="goBack">
-        <text class="back-arrow">‹</text>
-      </view>
-      <text class="top-title">我的训练</text>
-      <view class="more-btn">···</view>
+<!-- 个人中心 -->
+<scroll-view class="profile-page" scroll-y enhanced show-scrollbar="{{false}}">
+  <!-- 用户信息 -->
+  <view class="profile-header">
+    <image class="profile-avatar" src="{{userInfo.avatarUrl || '/assets/icons/profile.png'}}" mode="aspectFill"></image>
+    <text class="profile-name">{{userInfo.username || '用户'}}</text>
+    <text class="profile-role">{{userInfo.role === 'admin' ? '管理员' : '普通用户'}}</text>
+  </view>
+
+  <!-- 统计数据 -->
+  <view class="profile-stats card">
+    <view class="pstat-item">
+      <text class="pstat-value">{{stats.totalSessions}}</text>
+      <text class="pstat-label">总训练</text>
+    </view>
+    <view class="pstat-divider"></view>
+    <view class="pstat-item">
+      <text class="pstat-value" style="color: #3b82f6">{{stats.averageScore}}</text>
+      <text class="pstat-label">平均分</text>
+    </view>
+    <view class="pstat-divider"></view>
+    <view class="pstat-item">
+      <text class="pstat-value">{{stats.totalDuration}}</text>
+      <text class="pstat-label">总时长(分)</text>
     </view>
   </view>
 
-  <scroll-view class="profile-scroll" scroll-y enhanced show-scrollbar="{{false}}">
-    <!-- 用户卡 -->
-    <view class="user-card">
-      <image class="user-avatar" src="{{userInfo.avatarUrl || '/assets/icons/profile.png'}}" mode="aspectFill"></image>
-      <view class="user-info">
-        <view class="user-name-row">
-          <text class="user-name">{{userInfo.username || '运动爱好者'}}</text>
-          <view class="user-level">
-            <text>Lv.{{userInfo.level || 8}}</text>
-          </view>
-        </view>
-        <text class="user-sub">坚持运动，成为更好的自己！</text>
-      </view>
-      <view class="user-days">
-        <text class="user-days-num">{{userInfo.totalDays || 28}}</text>
-        <text class="user-days-unit">天</text>
-        <text class="user-days-label">累计训练</text>
-      </view>
+  <!-- 菜单列表 -->
+  <view class="menu-section">
+    <view class="menu-item" bindtap="goToReports">
+      <text class="menu-icon">📊</text>
+      <text class="menu-text">我的训练数据</text>
+      <text class="menu-arrow">›</text>
     </view>
 
-    <!-- 本周训练趋势 -->
-    <view class="card section-card" wx:if="{{trendDays.length > 0}}">
-      <view class="trend-header">
-        <view>
-          <text class="section-title-text">本周训练趋势</text>
-          <view class="trend-average">
-            <text class="trend-average-label">平均分：</text>
-            <text class="trend-average-value">{{weeklyAvg}}</text>
-          </view>
-        </view>
-      </view>
-      <view class="trend-chart-wrap">
-        <!-- 使用 rich-text 渲染 SVG 折线图 -->
-        <view class="trend-svg-wrap">
-          <rich-text nodes="{{trendSVG}}" class="trend-rich"></rich-text>
-        </view>
-        <view class="trend-xaxis">
-          <text class="trend-xaxis-label" wx:for="{{trendDays}}" wx:key="index">{{item.date}}</text>
-        </view>
-      </view>
+    <view class="menu-item" bindtap="goToSettings">
+      <text class="menu-icon">⚙️</text>
+      <text class="menu-text">设置</text>
+      <text class="menu-arrow">›</text>
     </view>
 
-    <!-- 训练记录 -->
-    <view class="card section-card" wx:if="{{recentSessions.length > 0}}">
-      <view class="section-header-row">
-        <text class="section-title-text">训练记录</text>
-        <text class="section-more" bindtap="goToReports">查看更多</text>
-      </view>
-      <view class="session-list">
-        <view class="session-item" wx:for="{{recentSessions}}" wx:key="session_id" bindtap="onTapSession" data-id="{{item.session_id}}">
-          <view class="session-thumb">
-            <text class="session-thumb-icon">{{item.icon}}</text>
-          </view>
-          <view class="session-mid">
-            <text class="session-name">{{item.exercise_name}}训练</text>
-            <view class="session-meta">
-              <text class="session-time-icon">⏱</text>
-              <text class="session-time">{{item.date}}</text>
-              <text class="session-dot">·</text>
-              <text class="session-duration-icon">⏳</text>
-              <text class="session-duration">{{item.duration}}</text>
-            </view>
-          </view>
-          <view class="session-right">
-            <text class="session-score" style="color: {{item.scoreColor}}">{{item.score}}分</text>
-            <text class="session-status">已完成</text>
-          </view>
-        </view>
-      </view>
+    <view class="menu-item">
+      <text class="menu-icon">❓</text>
+      <text class="menu-text">使用帮助</text>
+      <text class="menu-arrow">›</text>
     </view>
 
-    <!-- 底部 3 张荣誉卡 -->
-    <view class="honor-row">
-      <view class="honor-card honor-trophy">
-        <view class="honor-icon">🏆</view>
-        <view class="honor-num">{{honor.bestScore}}</view>
-        <view class="honor-unit">分</view>
-        <view class="honor-label">历史最佳成绩</view>
-      </view>
-      <view class="honor-card honor-fire">
-        <view class="honor-icon">🔥</view>
-        <view class="honor-num">{{honor.streakDays}}</view>
-        <view class="honor-unit">天</view>
-        <view class="honor-label">本周连续打卡</view>
-      </view>
-      <view class="honor-card honor-target">
-        <view class="honor-icon">🎯</view>
-        <view class="honor-num">{{honor.toImprove}}</view>
-        <view class="honor-unit">项</view>
-        <view class="honor-label">待改进动作</view>
-      </view>
+    <view class="menu-item">
+      <text class="menu-icon">ℹ️</text>
+      <text class="menu-text">关于我们</text>
+      <text class="menu-arrow">›</text>
     </view>
+  </view>
 
-    <!-- 退出登录按钮 -->
-    <view class="logout-section">
-      <button class="logout-btn" bindtap="handleLogout">退出登录</button>
-    </view>
-
-    <view style="height: 40rpx;"></view>
-  </scroll-view>
-</view>
+  <!-- 退出登录 -->
+  <view class="logout-area">
+    <button class="btn btn-outline" bindtap="handleLogout">退出登录</button>
+  </view>
+</scroll-view>

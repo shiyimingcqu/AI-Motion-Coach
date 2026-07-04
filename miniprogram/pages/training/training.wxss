@@ -1,16 +1,16 @@
-/* 训练页 - 设计稿风格 */
+/* 训练页样式 */
 .training-page {
   width: 100%;
-  min-height: 100vh;
-  background: var(--bg);
+  height: 100vh;
+  background: #000;
   display: flex;
   flex-direction: column;
-  padding-bottom: 40rpx;
+  overflow: hidden;
 }
 
 /* 顶部栏 */
 .top-bar {
-  background: #fff;
+  background: rgba(0, 0, 0, 0.6);
   position: relative;
   z-index: 100;
 }
@@ -24,38 +24,23 @@
 }
 
 .back-btn {
-  width: 60rpx;
-  height: 60rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.back-arrow {
-  font-size: 56rpx;
-  color: var(--text);
-  line-height: 1;
+  font-size: 28rpx;
+  color: #fff;
+  padding: 8rpx 16rpx;
 }
 
 .exercise-name {
-  font-size: 32rpx;
-  font-weight: 700;
-  color: var(--text);
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #fff;
 }
 
-.top-bar-right {
-  display: flex;
-  gap: 12rpx;
-}
-
-.topbar-icon {
-  width: 60rpx;
-  height: 60rpx;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28rpx;
-  color: var(--text);
+.debug-toggle {
+  font-size: 22rpx;
+  color: rgba(255,255,255,0.5);
+  padding: 8rpx 12rpx;
+  border: 1rpx solid rgba(255,255,255,0.3);
+  border-radius: 8rpx;
 }
 
 /* 倒计时覆盖层 */
@@ -74,10 +59,10 @@
 }
 
 .countdown-number {
-  font-size: 200rpx;
+  font-size: 160rpx;
   font-weight: 700;
-  color: #4f8cff;
-  text-shadow: 0 0 40rpx rgba(79, 140, 255, 0.5);
+  color: #3b82f6;
+  text-shadow: 0 0 40rpx rgba(59, 130, 246, 0.5);
 }
 
 .countdown-tip {
@@ -88,300 +73,152 @@
 
 /* 摄像头 */
 .camera-container {
+  flex: 1;
   position: relative;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 16rpx 24rpx;
-  border-radius: var(--radius-lg);
-  background: #000;
 }
 
 .camera-wrapper {
   position: relative;
   overflow: hidden;
-  border-radius: var(--radius-lg);
+  border-radius: 8rpx;
 }
 
-.live-badge {
+.camera-status {
   position: absolute;
-  top: 20rpx;
-  left: 20rpx;
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-  background: rgba(255, 77, 79, 0.9);
-  padding: 6rpx 14rpx;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+}
+
+.status-badge {
+  background: rgba(0, 0, 0, 0.6);
+  padding: 16rpx 32rpx;
   border-radius: var(--radius-full);
-  z-index: 10;
 }
 
-.live-dot {
-  width: 10rpx;
-  height: 10rpx;
-  border-radius: 50%;
-  background: #fff;
-  animation: pulse 1.2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-.live-badge text {
-  font-size: 22rpx;
-  color: #fff;
-  font-weight: 700;
-  letter-spacing: 1rpx;
-}
-
-.mute-icon {
-  position: absolute;
-  top: 20rpx;
-  right: 20rpx;
-  width: 56rpx;
-  height: 56rpx;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.status-badge text {
   font-size: 28rpx;
-  z-index: 10;
-}
-
-/* 反馈气泡 */
-.feedback-bubbles {
-  position: absolute;
-  top: 24%;
-  left: 24rpx;
-  right: 24rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 16rpx;
-  z-index: 10;
-  pointer-events: none;
-}
-
-.bubble {
-  align-self: flex-start;
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-  background: rgba(255, 138, 91, 0.92);
   color: #fff;
-  padding: 10rpx 20rpx;
-  border-radius: var(--radius-full);
-  font-size: 24rpx;
-  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.2);
 }
 
-.bubble-icon {
-  font-size: 24rpx;
+/* 信息面板 */
+.info-panel {
+  background: linear-gradient(180deg, rgba(0,0,0,0.85), rgba(0,0,0,0.95));
+  padding: 20rpx 24rpx;
+  padding-bottom: calc(20rpx + env(safe-area-inset-bottom));
 }
 
-.bubble-text {
-  font-size: 24rpx;
-  font-weight: 500;
-}
-
-/* 指标行 */
-.metrics-row {
-  display: flex;
-  gap: 12rpx;
-  padding: 20rpx 24rpx 0;
-}
-
-.metric-card {
-  flex: 1;
-  background: #fff;
-  border-radius: var(--radius-lg);
-  padding: 24rpx 16rpx;
-  text-align: center;
-  box-shadow: var(--shadow-card);
-}
-
-.metric-value {
-  font-size: 48rpx;
-  font-weight: 700;
-  color: var(--accent-blue);
-  display: block;
-  line-height: 1.1;
-}
-
-.metric-label {
-  font-size: 24rpx;
-  color: var(--text);
-  margin-top: 8rpx;
-  display: block;
-}
-
-.metric-target {
-  font-size: 20rpx;
-  color: var(--text-muted);
-  margin-top: 4rpx;
-  display: block;
-}
-
-/* 计数行 */
-.count-row {
-  display: flex;
-  gap: 12rpx;
-  padding: 20rpx 24rpx 0;
-}
-
-.count-block {
-  flex: 1;
-  background: #fff;
-  border-radius: var(--radius-lg);
-  padding: 24rpx 16rpx;
-  text-align: center;
-  box-shadow: var(--shadow-card);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.count-block-highlight {
-  background: linear-gradient(135deg, #fff4ee 0%, #ffe9df 100%);
-}
-
-.count-value {
-  font-size: 48rpx;
-  font-weight: 700;
-  color: var(--text);
-  line-height: 1.1;
-}
-
-.count-unit {
-  font-size: 22rpx;
-  color: var(--text-muted);
-  margin-top: 2rpx;
-}
-
-.count-label {
-  font-size: 24rpx;
-  color: var(--text);
-  margin-top: 8rpx;
-}
-
-/* 控制按钮行 */
-.controls-row {
+/* 分数区域 */
+.score-section {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 24rpx 32rpx;
-  gap: 16rpx;
+  gap: 32rpx;
+  margin-bottom: 12rpx;
 }
 
-.ctrl-mini {
+.score-main {
   display: flex;
-  flex-direction: column;
-  align-items: center;
+  align-items: baseline;
   gap: 8rpx;
-  flex: 0 0 auto;
-  width: 140rpx;
 }
 
-.ctrl-mini-icon {
-  width: 80rpx;
-  height: 80rpx;
-  border-radius: 50%;
-  background: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32rpx;
-  box-shadow: var(--shadow-card);
-}
-
-.ctrl-mini-text {
-  font-size: 22rpx;
-  color: var(--text-secondary);
-}
-
-.ctrl-main {
-  width: 140rpx;
-  height: 140rpx;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #4f8cff 0%, #2f6fe0 100%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4rpx;
-  color: #fff;
-  box-shadow: 0 8rpx 24rpx rgba(79, 140, 255, 0.4);
-}
-
-.ctrl-main-start {
-  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
-  box-shadow: 0 8rpx 24rpx rgba(52, 211, 153, 0.4);
-}
-
-.ctrl-main-icon {
-  font-size: 44rpx;
+.score-value {
+  font-size: 64rpx;
+  font-weight: 700;
   line-height: 1;
 }
 
-.ctrl-main-text {
-  font-size: 22rpx;
-  font-weight: 600;
+.score-label {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.5);
 }
 
-/* 动作切换 tab */
-.action-tabs {
+.stats-row {
   display: flex;
-  gap: 16rpx;
-  padding: 8rpx 24rpx 0;
-  overflow-x: auto;
+  gap: 32rpx;
+  flex: 1;
+  justify-content: flex-end;
 }
 
-.action-tab {
-  flex: 1;
-  min-width: 130rpx;
-  background: #fff;
-  border-radius: var(--radius-lg);
-  padding: 20rpx 12rpx;
+.stat-item {
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+.stat-value {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #fff;
+}
+
+.stat-label {
+  font-size: 20rpx;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* 阶段指示 */
+.phase-indicator {
+  margin-bottom: 12rpx;
+}
+
+.phase-text {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(59, 130, 246, 0.3);
+  padding: 6rpx 16rpx;
+  border-radius: var(--radius-full);
+}
+
+/* 反馈区域 */
+.feedback-area {
+  margin-bottom: 12rpx;
+  max-height: 120rpx;
+  overflow-y: auto;
+}
+
+.feedback-item {
+  display: flex;
+  align-items: center;
   gap: 8rpx;
-  box-shadow: var(--shadow-card);
-  transition: all 0.2s;
+  padding: 6rpx 0;
 }
 
-.action-tab-active {
-  background: linear-gradient(135deg, #4f8cff 0%, #2f6fe0 100%);
-}
-
-.action-tab-active .action-tab-text {
-  color: #fff;
-}
-
-.action-tab-icon {
-  font-size: 40rpx;
-}
-
-.action-tab-text {
+.feedback-icon {
   font-size: 22rpx;
-  color: var(--text);
-  font-weight: 500;
 }
 
-.action-tab-active .action-tab-text {
-  color: #fff;
+.feedback-text {
+  font-size: 24rpx;
+  color: #fbbf24;
+}
+
+/* 控制按钮 */
+.controls {
+  display: flex;
+  gap: 16rpx;
+}
+
+.controls .btn {
+  flex: 1;
 }
 
 /* 调试面板 */
 .debug-panel {
-  margin: 16rpx 24rpx 0;
+  position: absolute;
+  top: 120rpx;
+  left: 16rpx;
+  right: 16rpx;
   background: rgba(0, 0, 0, 0.8);
   border-radius: 12rpx;
   padding: 16rpx 20rpx;
-  border: 1rpx solid rgba(255, 255, 255, 0.15);
+  z-index: 50;
+  border: 1rpx solid rgba(255,255,255,0.15);
 }
 
 .debug-title {
@@ -396,7 +233,7 @@
   display: flex;
   gap: 20rpx;
   font-size: 18rpx;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255,255,255,0.7);
   line-height: 1.8;
 }
 
@@ -405,18 +242,37 @@
   word-break: break-all;
 }
 
-/* 调试按钮 */
-.debug-buttons {
-  padding: 16rpx 24rpx 0;
+/* 强制退出 */
+.force-exit-area {
+  margin-top: 16rpx;
+  text-align: center;
 }
 
-.debug-btn {
-  background: #fff;
-  color: var(--text-secondary);
+.force-exit-link {
+  font-size: 22rpx;
+  color: rgba(255,255,255,0.35);
+  text-decoration: underline;
+}
+
+.btn-sm {
+  padding: 10rpx 24rpx;
   font-size: 24rpx;
-  border: 1rpx solid var(--border);
-  border-radius: var(--radius-full);
-  height: 64rpx;
-  line-height: 64rpx;
+  flex: 0 0 auto;
+}
+
+.btn-ghost {
+  background: transparent;
+  border: 1rpx solid rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.6);
+}
+
+/* 调试按钮 */
+.debug-buttons {
   padding: 0 24rpx;
+  margin-top: 12rpx;
+}
+
+.debug-btn-row {
+  display: flex;
+  gap: 16rpx;
 }

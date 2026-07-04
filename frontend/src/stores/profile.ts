@@ -1,7 +1,9 @@
-import { defineStore } from "pinia";
+import { defineStore, storeToRefs } from "pinia";
 import { reactive, watch } from "vue";
+import { useAuthStore } from "./auth";
 
-const STORAGE_KEY = "pose-evaluation-profile";
+const STORAGE_KEY_PREFIX = "pose-evaluation-profile";
+const AUTH_TOKEN_KEY = "pose_auth_token";
 
 export const TRAINING_PREFERENCE_OPTIONS = [
   "增肌塑形",
@@ -48,12 +50,12 @@ export interface UserProfile {
 const defaultProfile: UserProfile = {
   avatarMode: "default",
   avatarImage: "",
-  name: "林同学",
+  name: "",
   occupation: "健身爱好者",
-  height: "172",
-  weight: "62",
-  trainingGoal: "提升下肢稳定性与动作标准度",
-  trainingPreferences: ["提高动作标准", "增强核心稳定", "改善体态"]
+  height: "0",
+  weight: "0",
+  trainingGoal: "",
+  trainingPreferences: ["增肌塑形"]
 };
 
 export function getDefaultAvatarText(name: string) {
@@ -64,62 +66,91 @@ export function shouldShowCustomAvatar(profile: UserProfile) {
   return profile.avatarMode === "custom" && Boolean(profile.avatarImage);
 }
 
-const LEGACY_OCCUPATION_MAP: Record<string, string> = {
-  教练: "健身教练"
-};
-
-function normalizeProfile(
-  raw: Partial<UserProfile> & {
-    avatar?: string;
-    studentId?: string;
-    role?: string;
-    stageGoals?: string[];
-  }
-): UserProfile {
-  const legacyPreferences = Array.isArray(raw.trainingPreferences)
-    ? raw.trainingPreferences
-    : Array.isArray(raw.stageGoals)
-      ? raw.stageGoals.filter((item) =>
-          TRAINING_PREFERENCE_OPTIONS.includes(item as (typeof TRAINING_PREFERENCE_OPTIONS)[number])
-        )
-      : [...defaultProfile.trainingPreferences];
-  const trainingPreferences =
-    legacyPreferences.length > 0 ? legacyPreferences : [...defaultProfile.trainingPreferences];
-
-  const avatarMode: AvatarMode =
-    raw.avatarMode === "custom" || raw.avatarImage ? "custom" : "default";
-  const rawOccupation = raw.occupation ?? raw.role ?? defaultProfile.occupation;
-  const mappedOccupation = LEGACY_OCCUPATION_MAP[rawOccupation] ?? rawOccupation;
-
-  return {
-    avatarMode: raw.avatarMode ?? avatarMode,
-    avatarImage: raw.avatarImage ?? "",
-    name: raw.name ?? defaultProfile.name,
-    occupation: OCCUPATION_OPTIONS.includes(mappedOccupation as (typeof OCCUPATION_OPTIONS)[number])
-      ? mappedOccupation
-      : defaultProfile.occupation,
-    height: raw.height ?? defaultProfile.height,
-    weight: raw.weight ?? defaultProfile.weight,
-    trainingGoal: raw.trainingGoal ?? defaultProfile.trainingGoal,
-    trainingPreferences
-  };
+function storageKey(): string {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return STORAGE_KEY_PREFIX;
+  return STORAGE_KEY_PREFIX + "-" + token.slice(0, 8);
 }
 
-function loadProfile(): UserProfile {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    return { ...defaultProfile, trainingPreferences: [...defaultProfile.trainingPreferences] };
-  }
-
+function loadFromLocalStorage(): UserProfile | null {
   try {
-    return normalizeProfile(JSON.parse(raw));
+    const raw = localStorage.getItem(storageKey());
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") return parsed as UserProfile;
+  } catch { /* ignore */ }
+  return null;
+}
+
+function saveToLocalStorage(profile: UserProfile) {
+  try {
+    localStorage.setItem(storageKey(), JSON.stringify(profile));
+  } catch { /* ignore */ }
+}
+
+function clearLocalStorage() {
+  localStorage.removeItem(storageKey());
+}
+
+async function fetchProfile(): Promise<UserProfile | null> {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return null;
+  try {
+    const res = await fetch("/api/auth/profile", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return {
+      avatarMode: data.avatar_mode || "default",
+      avatarImage: data.avatar_image || "",
+      name: data.nickname || data.username || "",
+      occupation: data.occupation || defaultProfile.occupation,
+      height: data.height || "",
+      weight: data.weight || "",
+      trainingGoal: data.training_goal || "",
+      trainingPreferences: data.training_preferences
+        ? JSON.parse(data.training_preferences)
+        : [...defaultProfile.trainingPreferences],
+    };
   } catch {
-    return { ...defaultProfile, trainingPreferences: [...defaultProfile.trainingPreferences] };
+    return null;
   }
+}
+
+async function saveProfileToServer(profile: UserProfile) {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (!token) return;
+  try {
+    await fetch("/api/auth/profile", {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        nickname: profile.name || null,
+        avatar_mode: profile.avatarMode,
+        avatar_image: profile.avatarImage || null,
+        occupation: profile.occupation || null,
+        height: profile.height || null,
+        weight: profile.weight || null,
+        training_goal: profile.trainingGoal || null,
+        training_preferences: JSON.stringify(profile.trainingPreferences),
+      }),
+    });
+  } catch { /* ignore */ }
+}
+
+let _saveTimer: ReturnType<typeof setTimeout> | null = null;
+function debouncedSave(profile: UserProfile) {
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => saveProfileToServer(profile), 800);
 }
 
 export function setDefaultAvatar(profile: UserProfile) {
   profile.avatarMode = "default";
+  profile.avatarImage = "";
 }
 
 export function setCustomAvatar(profile: UserProfile, imageData: string) {
@@ -128,16 +159,49 @@ export function setCustomAvatar(profile: UserProfile, imageData: string) {
 }
 
 export const useProfileStore = defineStore("profile", () => {
-  const profile = reactive<UserProfile>(loadProfile());
+  // 优先从 localStorage 加载（带 token 前缀，不同用户不串数据）
+  const cached = loadFromLocalStorage();
+  const profile = reactive<UserProfile>(
+    cached || { ...defaultProfile, trainingPreferences: [...defaultProfile.trainingPreferences] }
+  );
 
+  // 异步从后端加载
+  let _initialized = false;
+  async function initFromServer() {
+    if (_initialized) return;
+    _initialized = true;
+    const serverProfile = await fetchProfile();
+    if (serverProfile) {
+      Object.assign(profile, serverProfile);
+      saveToLocalStorage(profile);
+    }
+  }
+  initFromServer();
+
+  // 监听 auth store 的 token 变化：切换账号时重新加载，退出时重置
+  const authStore = useAuthStore();
+  const { token: authToken } = storeToRefs(authStore);
+  watch(authToken, (newToken, oldToken) => {
+    if (newToken && newToken !== oldToken) {
+      // 换了账号或首次登录，重新从后端拉取
+      _initialized = false;
+      initFromServer();
+    } else if (!newToken && oldToken) {
+      // 退出登录，重置为默认值
+      Object.assign(profile, {
+        ...defaultProfile,
+        trainingPreferences: [...defaultProfile.trainingPreferences]
+      });
+      _initialized = false;
+    }
+  });
+
+  // 监听变更：写 localStorage + debounce 写后端
   watch(
     profile,
     (value) => {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
-      } catch {
-        // localStorage 容量不足时由页面操作提示用户
-      }
+      saveToLocalStorage(value);
+      debouncedSave(value);
     },
     { deep: true }
   );
@@ -155,6 +219,7 @@ export const useProfileStore = defineStore("profile", () => {
       ...defaultProfile,
       trainingPreferences: [...defaultProfile.trainingPreferences]
     });
+    clearLocalStorage();
   }
 
   return { profile, useDefaultAvatar, useCustomAvatar, resetProfile };

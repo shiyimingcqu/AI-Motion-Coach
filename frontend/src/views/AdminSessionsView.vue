@@ -8,6 +8,17 @@
       </div>
     </header>
 
+    <!-- 用户筛选 -->
+    <section class="panel filter-bar">
+      <label class="filter-label">
+        <span>筛选用户</span>
+        <select v-model="selectedUserId" class="filter-select" @change="loadSessions">
+          <option :value="null">全部用户</option>
+          <option v-for="u in userList" :key="u.id" :value="u.id">{{ u.username }}</option>
+        </select>
+      </label>
+    </section>
+
     <section class="metrics-grid">
       <MetricTile label="记录总数" :value="sessions.length" hint="来自后端训练记录" />
       <MetricTile label="低分记录" :value="lowScoreCount" hint="低于 70 分" />
@@ -30,7 +41,7 @@
       <template v-else>
         <div v-if="sessions.length === 0" class="loading-text">暂无训练记录。</div>
         <div v-for="session in sessions" :key="session.session_id" class="admin-table-row admin-sessions-grid">
-          <strong>系统记录</strong>
+          <strong>{{ session.username || '匿名用户' }}</strong>
           <span>{{ getExerciseName(session.exercise) }}</span>
           <span>{{ formatDate(session.created_at) }}</span>
           <span>{{ session.total_count }} 次</span>
@@ -50,6 +61,10 @@
           </button>
         </div>
         <dl class="info-list info-list-readonly">
+          <div>
+            <dt>用户</dt>
+            <dd>{{ selectedSession.username || '匿名用户' }}</dd>
+          </div>
           <div>
             <dt>记录 ID</dt>
             <dd>{{ selectedSession.session_id }}</dd>
@@ -74,6 +89,10 @@
             <dt>错误次数</dt>
             <dd>{{ selectedSession.error_count }}</dd>
           </div>
+          <div>
+            <dt>平均评分</dt>
+            <dd>{{ selectedSession.average_score }}</dd>
+          </div>
         </dl>
       </div>
     </div>
@@ -97,12 +116,20 @@ interface AdminSession {
   error_count: number;
   average_score: number;
   created_at: string;
+  username?: string;
+}
+
+interface UserItem {
+  id: number;
+  username: string;
 }
 
 const sessions = ref<AdminSession[]>([]);
 const loading = ref(true);
 const loadError = ref("");
 const selectedSession = ref<AdminSession | null>(null);
+const selectedUserId = ref<number | null>(null);
+const userList = ref<UserItem[]>([]);
 
 const lowScoreCount = computed(() => sessions.value.filter((session) => session.average_score < 70).length);
 
@@ -124,7 +151,8 @@ function getExerciseName(exercise: string) {
 }
 
 function formatDate(value: string) {
-  return value ? value.slice(0, 10) : "-";
+  if (!value) return "-";
+  return new Date(value).toLocaleDateString("zh-CN");
 }
 
 function formatDuration(seconds: number) {
@@ -134,12 +162,21 @@ function formatDuration(seconds: number) {
   return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
 }
 
+async function loadUsers() {
+  try {
+    const data = await apiGet<{ items: UserItem[] }>("/admin/users");
+    userList.value = data.items ?? [];
+  } catch {
+    // ignore
+  }
+}
+
 async function loadSessions() {
   loading.value = true;
   loadError.value = "";
-
   try {
-    const data = await apiGet<{ items: AdminSession[] }>("/admin/sessions");
+    const query = selectedUserId.value !== null ? `?user_id=${selectedUserId.value}` : "";
+    const data = await apiGet<{ items: AdminSession[] }>(`/admin/sessions${query}`);
     sessions.value = data.items ?? [];
   } catch (error) {
     loadError.value = error instanceof Error ? error.message : "加载训练记录失败";
@@ -148,5 +185,41 @@ async function loadSessions() {
   }
 }
 
-onMounted(loadSessions);
+onMounted(async () => {
+  await loadUsers();
+  await loadSessions();
+});
 </script>
+
+<style scoped>
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  margin-bottom: 0.5rem;
+}
+.filter-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #ffffff !important;
+}
+.filter-select {
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  border: 2px solid #3b82f6;
+  background: #fff;
+  color: #16211b !important;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-width: 140px;
+}
+.filter-select option {
+  color: #16211b;
+  background: #fff;
+}
+</style>

@@ -29,6 +29,7 @@ export interface LiveAnalysisResult {
   valid_count: number;
   score: number;
   errors: string[];
+  feedback: string[];
 }
 
 export const exercises: Exercise[] = [
@@ -68,8 +69,98 @@ export const exercises: Exercise[] = [
     category: "核心稳定",
     level: "高级",
     duration: "6 分钟",
-    modes: ["视频上传分析"],
+    modes: ["摄像头实时检测", "视频上传分析"],
     errors: ["髋部下沉", "肩肘未对齐"],
+    accent: "#14b8a6"
+  },
+  {
+    key: "lunge",
+    name: "弓步蹲",
+    category: "下肢力量",
+    level: "中级",
+    duration: "10 分钟",
+    modes: ["摄像头实时检测", "视频上传分析"],
+    errors: ["膝盖超过脚尖", "身体前倾"],
+    accent: "#8b5cf6"
+  },
+  {
+    key: "burpee",
+    name: "波比跳",
+    category: "全身",
+    level: "高级",
+    duration: "8 分钟",
+    modes: ["摄像头实时检测", "视频上传分析"],
+    errors: ["动作不连贯", "核心松散"],
+    accent: "#ef4444"
+  },
+  {
+    key: "mountain_climber",
+    name: "登山跑",
+    category: "核心稳定",
+    level: "中级",
+    duration: "8 分钟",
+    modes: ["摄像头实时检测", "视频上传分析"],
+    errors: ["臀部抬高", "节奏不稳"],
+    accent: "#f97316"
+  },
+  {
+    key: "pull_up",
+    name: "引体向上",
+    category: "上肢力量",
+    level: "高级",
+    duration: "10 分钟",
+    modes: ["摄像头实时检测", "视频上传分析"],
+    errors: ["摆动借力", "下降过快"],
+    accent: "#06b6d4"
+  },
+  {
+    key: "dumbbell_curl",
+    name: "哑铃弯举",
+    category: "上肢力量",
+    level: "初级",
+    duration: "8 分钟",
+    modes: ["视频上传分析"],
+    errors: ["身体晃动", "肘部前移"],
+    accent: "#ec4899"
+  },
+  {
+    key: "dumbbell_press",
+    name: "哑铃推举",
+    category: "上肢力量",
+    level: "中级",
+    duration: "10 分钟",
+    modes: ["视频上传分析"],
+    errors: ["腰部反弓", "手臂未完全伸直"],
+    accent: "#a855f7"
+  },
+  {
+    key: "high_knees",
+    name: "高抬腿",
+    category: "心肺训练",
+    level: "初级",
+    duration: "6 分钟",
+    modes: ["摄像头实时检测", "视频上传分析"],
+    errors: ["节奏不稳", "膝盖抬起高度不足"],
+    accent: "#eab308"
+  },
+  {
+    key: "russian_twist",
+    name: "俄罗斯转体",
+    category: "核心稳定",
+    level: "中级",
+    duration: "8 分钟",
+    modes: ["视频上传分析"],
+    errors: ["身体晃动", "背部未挺直"],
+    accent: "#f97316"
+  },
+  {
+    key: "glute_bridge",
+    name: "臀桥",
+    category: "下肢力量",
+    level: "初级",
+    duration: "8 分钟",
+    modes: ["视频上传分析"],
+    errors: ["腰部代偿", "抬臀高度不足"],
     accent: "#14b8a6"
   }
 ];
@@ -125,6 +216,7 @@ export const useTrainingStore = defineStore("training", {
     validCount: 10,
     score: 86,
     errors: ["下蹲深度不足", "膝盖内扣"],
+    feedbacks: ["动作整体标准，保持当前节奏与稳定性"],
     taskStatus: "running",
     trend: [78, 82, 80, 86, 88, 84, 91],
     errorStats: [
@@ -154,6 +246,7 @@ export const useTrainingStore = defineStore("training", {
       this.validCount = result.valid_count;
       this.score = result.score;
       this.errors = result.errors;
+      this.feedbacks = result.feedback;
     },
     resetLiveMetrics() {
       this.stage = "ready";
@@ -161,6 +254,7 @@ export const useTrainingStore = defineStore("training", {
       this.validCount = 0;
       this.score = 0;
       this.errors = [];
+      this.feedbacks = [];
     }
   }
 });
