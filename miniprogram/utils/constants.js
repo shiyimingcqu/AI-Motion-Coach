@@ -1,5 +1,5 @@
 // 常量定义
-const API_BASE_URL = 'http://192.168.43.113:8001';
+const API_BASE_URL = 'http://192.168.43.113:8000';
 
 // 8种动作配置
 const EXERCISE_CONFIG = {

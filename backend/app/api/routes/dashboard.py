@@ -52,7 +52,7 @@ if router:
                 trend_map.setdefault(day, []).append(s.average_score)
             trend = sorted(
                 ({"date": day, "score": round(sum(v) / len(v), 1)}
-                for day, v in trend_map.items()),
+                 for day, v in trend_map.items()),
                 key=lambda x: x["date"],
             )[-7:]
 

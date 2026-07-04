@@ -33,6 +33,7 @@
             <th>{{ $t("sessions.tableHead_duration") }}</th>
             <th>{{ $t("sessions.tableHead_reps") }}</th>
             <th>{{ $t("sessions.tableHead_score") }}</th>
+            <th>REPLAY</th>
             <th>{{ $t("sessions.tableHead_actions") }}</th>
           </tr>
         </thead>
@@ -48,9 +49,12 @@
               </span>
             </td>
             <td>
-              <button class="icon-btn" @click="$emit('noop')">
-                <Trash2 :size="16" />
-              </button>
+              <span v-if="session.has_pose_replay" title="有 3D 回放">🎬</span>
+              <span v-else>—</span>
+            </td>
+            <td>
+              <button @click="viewSession(session.session_id)">查看</button>
+              <button v-if="session.has_pose_replay" @click="viewReplay(session.session_id)">3D 回放</button>
             </td>
           </tr>
         </tbody>
@@ -80,11 +84,13 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { Filter, Flame, Trash2 } from "lucide-vue-next";
 import StateDisplay from "../components/StateDisplay.vue";
 import { getSessions } from "../api/sessions";
 
+const router = useRouter();
 const { t } = useI18n();
 
 interface SessionItem {
@@ -116,6 +122,10 @@ const exerciseLabels: Record<string, string> = {
   glute_bridge: t("exercises.glute_bridge"),
 };
 
+function onRetry() {
+  loadSessions();
+}
+
 const filteredSessions = computed(() => {
   let list = [...sessions.value];
   if (exerciseFilter.value) list = list.filter(s => s.exercise === exerciseFilter.value);
@@ -130,6 +140,14 @@ const filteredSessions = computed(() => {
     return sortOrder.value === "desc" ? -diff : diff;
   });
 });
+
+function viewSession(session_id: string) {
+  router.push("/reports?session=" + session_id);
+}
+
+function viewReplay(session_id: string) {
+  router.push("/?replay=" + session_id);
+}
 
 const summaryCards = computed(() => {
   const total = sessions.value.length;
@@ -181,6 +199,19 @@ onMounted(async () => {
     error.value = e?.message || t("common.networkError");
   } finally {
     loading.value = false;
+  };
+}
+
+onMounted(loadSessions);
+
+async function loadSessions() {
+  try {
+    const data = await getSessions();
+    sessions.value = data.items || [];
+  } catch (e: any) {
+    error.value = e?.message || t("common.networkError");
+  } finally {
+    loading.value = false;
   }
-});
+}
 </script>

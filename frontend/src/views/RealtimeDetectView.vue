@@ -237,6 +237,7 @@ import {
   drawPoseFromKeypoints,
   type BackendKeypoints,
   toBackendKeypoints,
+  toReplayLandmarks,
 } from "../services/poseLandmarker";
 import { useTrainingStore } from "../stores/training";
 
@@ -244,6 +245,11 @@ type TrainingState = "idle" | "connecting" | "running" | "paused" | "finished" |
 type PoseLandmarkerInstance = Awaited<ReturnType<typeof createPoseLandmarker>>;
 
 type MetricValues = Record<string, number>;
+
+type PoseReplayFramePayload = {
+  timestamp_ms: number;
+  landmarks: Array<{ x: number; y: number; z: number; visibility?: number }>;
+};
 
 type ExerciseOption = ExerciseLibItem & {
   core_angles: string[];
@@ -342,6 +348,7 @@ let finishTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let videoTestUrl = "";
 let lastSentAt = 0;
 let motionFrames: MetricValues[] = [];
+let poseReplayFrames: PoseReplayFramePayload[] = [];
 let finishRecoveryInFlight = false;
 
 const DEFAULT_EXERCISE_OPTIONS: ExerciseOption[] = [
@@ -637,6 +644,7 @@ async function startTraining() {
   cameraError.value = "";
   store.resetLiveMetrics();
   resetDynamicTemplateState(true);
+  poseReplayFrames = [];
   resetFinishState();
   trainingStartedAt.value = null;
   clearPoseCanvas(overlayRef.value);
@@ -680,6 +688,7 @@ function resetTraining() {
   cameraError.value = "";
   store.resetLiveMetrics();
   resetDynamicTemplateState(true);
+  poseReplayFrames = [];
   resetFinishState();
   trainingStartedAt.value = null;
   clearPoseCanvas(overlayRef.value);
@@ -837,11 +846,22 @@ function runPoseFrame(timestamp: number) {
     poseStatus.value = "";
     if (timestamp - lastSentAt >= SEND_INTERVAL_MS) {
       lastSentAt = timestamp;
+      const replayLandmarks = toReplayLandmarks(landmarks);
+      const replayFrame = {
+        timestamp_ms: trainingStartedAt.value ? Date.now() - trainingStartedAt.value : poseReplayFrames.length * SEND_INTERVAL_MS,
+        landmarks: replayLandmarks,
+      };
+      poseReplayFrames.push(replayFrame);
+      if (poseReplayFrames.length > 1800) {
+        poseReplayFrames = poseReplayFrames.slice(-1800);
+      }
       socket.send(JSON.stringify({
         type: "frame",
         exercise: store.currentExercise,
         timestamp: Date.now(),
+        timestamp_ms: replayFrame.timestamp_ms,
         keypoints: toBackendKeypoints(landmarks),
+        replay_keypoints: replayLandmarks,
       }));
     }
   }
@@ -870,6 +890,7 @@ async function handleVideoTestFile(event: Event) {
   clearPoseCanvas(overlayRef.value);
   store.resetLiveMetrics();
   resetDynamicTemplateState(true);
+  poseReplayFrames = [];
   savedMessage.value = "";
   lastSessionId.value = "";
   cameraError.value = "";
@@ -948,6 +969,13 @@ function buildFallbackSessionPayload() {
     valid_count: validCount,
     error_count: Math.max(0, totalCount - validCount),
     average_score: averageScore,
+    pose_replay: poseReplayFrames,
+    pose_replay_meta: {
+      schema_version: 1,
+      source: "web_realtime",
+      sample_interval_ms: SEND_INTERVAL_MS,
+      frame_count: poseReplayFrames.length,
+    },
   };
 }
 
@@ -978,9 +1006,14 @@ async function recoverAndRouteAfterFinish(successMessage: string) {
 
   try {
     const payload = buildFallbackSessionPayload();
-    const existingSession = payload.total_count > 0
-      ? await recoverLatestSession(payload)
-      : null;
+    if (payload.total_count <= 0 && payload.pose_replay.length === 0) {
+      resetFinishState();
+      trainingState.value = "finished";
+      savedMessage.value = "本次没有完成动作，未生成训练记录。";
+      return;
+    }
+
+    const existingSession = await recoverLatestSession(payload);
     if (existingSession?.session_id) {
       lastSessionId.value = existingSession.session_id;
       resetFinishState();
@@ -999,7 +1032,7 @@ async function recoverAndRouteAfterFinish(successMessage: string) {
 async function saveSessionFallback(successMessage: string, allowZeroCount = false) {
   const payload = buildFallbackSessionPayload();
 
-  if (payload.total_count <= 0 && !allowZeroCount) {
+  if (payload.total_count <= 0 && payload.pose_replay.length === 0 && !allowZeroCount) {
     resetFinishState();
     trainingState.value = "finished";
     savedMessage.value = "本次没有完成动作，未生成训练记录。";

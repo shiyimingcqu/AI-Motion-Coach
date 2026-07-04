@@ -1,5 +1,0 @@
-{
-  "tests/test_analysis.py::AnalysisTests::test_squat_analyzer_flags_insufficient_depth_on_rep_summary": true,
-  "tests/test_analysis.py::AnalysisTests::test_squat_analyzer_uses_deepest_frame_for_rep_issues": true,
-  "tests/test_feedback_display.py": true
-}

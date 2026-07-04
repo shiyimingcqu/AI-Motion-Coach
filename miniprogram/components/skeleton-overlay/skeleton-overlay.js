@@ -17,12 +17,14 @@ Component({
     // Canvas 宽度（rpx → px）
     canvasWidth: {
       type: Number,
-      value: 360
+      value: 360,
+      observer: 'onCanvasSizeChange'
     },
     // Canvas 高度
     canvasHeight: {
       type: Number,
-      value: 640
+      value: 640,
+      observer: 'onCanvasSizeChange'
     }
   },
 
@@ -53,13 +55,9 @@ Component({
           const canvas = res[0].node;
           const ctx = canvas.getContext('2d');
 
-          const dpr = wx.getSystemInfoSync().pixelRatio;
-          canvas.width = this.properties.canvasWidth * dpr;
-          canvas.height = this.properties.canvasHeight * dpr;
-          ctx.scale(dpr, dpr);
-
           this._canvas = canvas;
           this._ctx = ctx;
+          this.resizeCanvas();
           this.setData({ initialized: true });
 
           // 如果已有关键点数据，立即绘制
@@ -67,6 +65,26 @@ Component({
             this.drawSkeleton();
           }
         });
+    },
+
+    onCanvasSizeChange() {
+      if (this._canvas && this._ctx) {
+        this.resizeCanvas();
+        if (this.properties.keypoints) {
+          this.drawSkeleton();
+        }
+      }
+    },
+
+    resizeCanvas() {
+      const canvas = this._canvas;
+      const ctx = this._ctx;
+      if (!canvas || !ctx) return;
+
+      const dpr = wx.getSystemInfoSync().pixelRatio || 1;
+      canvas.width = this.properties.canvasWidth * dpr;
+      canvas.height = this.properties.canvasHeight * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     },
 
     onKeypointsChange(newVal) {

@@ -40,6 +40,24 @@ Page({
     wx.switchTab({ url: '/pages/reports/reports' });
   },
 
+  handleLogout() {
+    wx.showModal({
+      title: '退出登录',
+      content: '确定要退出当前账号吗？',
+      success: (res) => {
+        if (res.confirm) {
+          const AuthManager = require('../../utils/auth');
+          AuthManager.logout();
+          wx.reLaunch({ url: '/pages/login/login' });
+        }
+      },
+    });
+  },
+
+  onTapSession(e) {
+    // 暂不处理
+  },
+
   goToSettings() {
     wx.showToast({ title: '设置功能开发中', icon: 'none' });
   },

@@ -5,8 +5,10 @@ from app.core.security import get_password_hash
 from app.models.entities import Base, UserORM, ExerciseORM, ReferenceVideoORM
 
 try:
+    from sqlalchemy import inspect, text
     from sqlalchemy.orm import Session
 except ModuleNotFoundError:
+    inspect = text = None
     Session = None
 
 
@@ -201,6 +203,8 @@ def _migrate_legacy_schema():
 
         if "sessions" in tables:
             _add_column_if_missing(connection, "sessions", "user_id", "user_id INTEGER")
+            _add_column_if_missing(connection, "sessions", "pose_replay_json", "pose_replay_json TEXT")
+            _add_column_if_missing(connection, "sessions", "pose_replay_meta_json", "pose_replay_meta_json TEXT")
             _add_column_if_missing(connection, "sessions", "calories_burned", "calories_burned FLOAT DEFAULT 0")
             _add_column_if_missing(connection, "sessions", "evaluation_json", "evaluation_json TEXT")
             _add_column_if_missing(connection, "sessions", "feedback_summary", "feedback_summary TEXT")

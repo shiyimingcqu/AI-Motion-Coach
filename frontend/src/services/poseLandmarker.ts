@@ -12,6 +12,13 @@ export type BackendKeypoint = {
 
 export type BackendKeypoints = Record<string, BackendKeypoint>;
 
+export type PoseReplayLandmark = {
+  x: number;
+  y: number;
+  z: number;
+  visibility: number;
+};
+
 const NAME_TO_INDEX: Record<string, number> = {
   nose: 0,
   left_eye_inner: 1,
@@ -164,6 +171,15 @@ export function toBackendKeypoints(landmarks: NormalizedLandmark[]): BackendKeyp
   }
 
   return keypoints;
+}
+
+export function toReplayLandmarks(landmarks: NormalizedLandmark[]): PoseReplayLandmark[] {
+  return landmarks.slice(0, 33).map((landmark) => ({
+    x: roundPoint(landmark.x),
+    y: roundPoint(landmark.y),
+    z: roundPoint(landmark.z ?? 0),
+    visibility: roundPoint(landmark.visibility ?? 1),
+  }));
 }
 
 export function drawPose(
