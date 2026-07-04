@@ -80,7 +80,6 @@ class SessionService:
                 total_count=total_count,
                 valid_count=valid_count,
                 error_count=error_count,
-<<<<<<< HEAD
                 average_score=float(average_score),
                 pose_replay_json=self._dump_replay_frames(pose_replay_frames),
                 pose_replay_meta_json=self._dump_replay_meta(

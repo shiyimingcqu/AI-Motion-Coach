@@ -4,12 +4,12 @@ import json
 
 try:
     from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Text, ForeignKey
+    from sqlalchemy.dialects.mysql import MEDIUMTEXT
     from sqlalchemy.orm import declarative_base
-    from sqlalchemy.dialects.mysql import MEDIUMTEXT as MySQLMediumText
 except ModuleNotFoundError:
-    Column = Integer = String = Boolean = DateTime = Float = None
+    Column = Integer = String = Boolean = DateTime = Float = Text = None
     declarative_base = None
-    MySQLMediumText = None
+    MEDIUMTEXT = None
 
 
 @dataclass
@@ -162,6 +162,33 @@ class ActiveTemplateORM(Base if Base is not None else object):
         return {"id": self.id, "action": self.action, "template_id": self.template_id, "created_at": _isoformat_utc(self.created_at), "updated_at": _isoformat_utc(self.updated_at)}
 
 
+class ReferenceVideoORM(Base if Base is not None else object):
+    if Base is not None:
+        __tablename__ = "reference_videos"
+        id = Column(Integer, primary_key=True, index=True)
+        title = Column(String(128), nullable=False)
+        exercise = Column(String(32), nullable=False, default="squat")
+        camera_view = Column(String(16), nullable=False, default="front")
+        description = Column(Text, nullable=True)
+        file_uri = Column(String(512), nullable=False)
+        uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+        is_active = Column(Boolean, default=True, nullable=False)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "exercise": self.exercise,
+            "camera_view": self.camera_view,
+            "description": self.description,
+            "file_uri": self.file_uri,
+            "uploaded_by": self.uploaded_by,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() + "Z" if self.created_at else None,
+        }
+
+
 class SessionORM(Base if Base is not None else object):
     if Base is not None:
         __tablename__ = "sessions"
@@ -174,8 +201,8 @@ class SessionORM(Base if Base is not None else object):
         valid_count = Column(Integer, default=0, nullable=False)
         error_count = Column(Integer, default=0, nullable=False)
         average_score = Column(Float, default=0.0, nullable=False)
-        pose_replay_json = Column(MySQLMediumText if MySQLMediumText else Text, nullable=True)
-        pose_replay_meta_json = Column(MySQLMediumText if MySQLMediumText else Text, nullable=True)
+        pose_replay_json = Column(MEDIUMTEXT if MEDIUMTEXT else Text, nullable=True)
+        pose_replay_meta_json = Column(MEDIUMTEXT if MEDIUMTEXT else Text, nullable=True)
         calories_burned = Column(Float, default=0.0, nullable=False)
         evaluation_json = Column(Text, nullable=True)  # JSON 综合评估
         feedback_summary = Column(Text, nullable=True)  # 反馈摘要（issues / suggestions / ai_advice）
