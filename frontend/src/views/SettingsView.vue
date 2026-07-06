@@ -5,6 +5,9 @@
         <h1>{{ $t("settings.title") }}</h1>
         <p>{{ $t("settings.description") }}</p>
       </div>
+      <button class="back-home-btn" type="button" @click="router.push('/')">
+        返回首页
+      </button>
     </header>
 
     <section class="settings-layout">
@@ -121,6 +124,14 @@
           <label><input type="checkbox" /> {{ $t("common.shareProgress") }}</label>
         </article>
 
+        <article class="settings-side-card theme-side-card">
+          <span class="side-icon theme-solid"><Sun :size="26" /></span>
+          <h2>主题</h2>
+          <select v-model="currentTheme" @change="switchTheme">
+            <option v-for="opt in THEME_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+          </select>
+        </article>
+
         <article class="settings-side-card">
           <h2>{{ $t("common.systemInfo") }}</h2>
           <dl class="system-info-list">
@@ -136,23 +147,32 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { Bell, Database, Globe2, Lock, Shield, User } from "lucide-vue-next";
+import { Bell, Database, Globe2, Lock, Shield, Sun, User } from "lucide-vue-next";
 import StateDisplay from "@/components/StateDisplay.vue";
 import { useAuthStore } from "@/stores/auth";
+import { useSettingsStore, THEME_OPTIONS, type ThemeMode } from "@/stores/settings";
 import { getPersonalReport } from "@/api/reports";
 import { updateProfile, changePassword as apiChangePassword } from "@/api/users";
 
 const { t, locale } = useI18n();
+const router = useRouter();
 const authStore = useAuthStore();
+const settingsStore = useSettingsStore();
 
 const notificationKeys = ["trainingReminders", "achievementAlerts", "errorNotifications", "weeklyReports"];
 
 const currentLocale = ref(locale.value);
+const currentTheme = ref<ThemeMode>(settingsStore.settings.theme);
 
 function switchLanguage() {
   locale.value = currentLocale.value;
   localStorage.setItem("locale", currentLocale.value);
+}
+
+function switchTheme() {
+  settingsStore.settings.theme = currentTheme.value;
 }
 
 // Profile
@@ -233,21 +253,44 @@ onMounted(async () => {
 
 <style scoped>
 .settings-page { display: grid; gap: 24px; }
+
+.section-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.back-home-btn {
+  padding: 8px 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.back-home-btn:hover {
+  border-color: var(--green, #25b87b);
+  color: var(--green, #25b87b);
+  background: rgba(37,184,123,0.05);
+}
 .settings-layout { display: grid; grid-template-columns: 1.6fr 1fr; gap: 24px; align-items: start; }
 .settings-main { display: grid; gap: 20px; }
-.settings-card { padding: 24px; border-radius: 14px; background: #ffffff; border: 1px solid #e2e8f0; display: grid; gap: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+.settings-card { padding: 24px; border-radius: 14px; background: var(--paper); border: 1px solid var(--line); display: grid; gap: 14px; box-shadow: var(--shadow); }
 .settings-card header { display: flex; align-items: center; gap: 12px; }
-.settings-card h2 { color: #0f172a; font-size: 16px; margin: 0; }
+.settings-card h2 { color: var(--ink); font-size: 16px; margin: 0; }
 .settings-icon { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; flex-shrink: 0; }
 .tone-blue { background: rgba(91,140,255,0.1); color: #5b8cff; }
 .tone-purple { background: rgba(139,92,246,0.1); color: #8b5cf6; }
 .tone-orange { background: rgba(249,115,22,0.1); color: #f97316; }
 .tone-green { background: rgba(37,184,123,0.1); color: #25b87b; }
 
-.settings-card label { display: grid; gap: 6px; color: #64748b; font-size: 13px; font-weight: 600; }
-.settings-card input[type="text"], .settings-card input[type="password"], .settings-card select { padding: 10px 14px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fbff; color: #0f172a; font-size: 14px; }
+.settings-card label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; font-weight: 600; }
+.settings-card input[type="text"], .settings-card input[type="password"], .settings-card select { padding: 10px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font-size: 14px; }
 .readonly-input { opacity: 0.7; cursor: not-allowed; }
-.outline-wide-button { min-height: 42px; border: 1px solid #e2e8f0; border-radius: 9px; background: #f8fbff; color: #475569; font-size: 14px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0 24px; }
+.outline-wide-button { min-height: 42px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); color: var(--muted); font-size: 14px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; padding: 0 24px; }
 .outline-wide-button:hover { background: rgba(91,140,255,0.06); border-color: #5b8cff; }
 .outline-wide-button:disabled { opacity: 0.5; cursor: not-allowed; }
 .settings-message { font-size: 13px; padding: 8px 12px; border-radius: 6px; margin: 0; }
@@ -255,27 +298,28 @@ onMounted(async () => {
 .settings-message.error { color: #ef4444; background: rgba(239,68,68,0.06); }
 
 .settings-toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; }
-.settings-toggle-row span { color: #64748b; font-size: 13px; }
+.settings-toggle-row span { color: var(--muted); font-size: 13px; }
 .settings-toggle-row input[type="checkbox"] { accent-color: #5b8cff; width: 18px; height: 18px; }
-.settings-check { display: flex; align-items: center; gap: 10px; color: #64748b; font-size: 13px; }
+.settings-check { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
 .settings-check input[type="checkbox"] { accent-color: #5b8cff; width: 16px; height: 16px; }
-.storage-row { display: flex; justify-content: space-between; color: #64748b; font-size: 13px; padding: 8px 0; }
-.storage-row strong { color: #0f172a; }
+.storage-row { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; padding: 8px 0; }
+.storage-row strong { color: var(--ink); }
 
 /* side */
 .settings-side { display: grid; gap: 16px; align-content: start; }
-.settings-side-card { padding: 20px; border-radius: 14px; background: #ffffff; border: 1px solid #e2e8f0; display: grid; gap: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
-.settings-side-card h2 { color: #0f172a; font-size: 15px; margin: 0; }
+.settings-side-card { padding: 20px; border-radius: 14px; background: var(--paper); border: 1px solid var(--line); display: grid; gap: 12px; box-shadow: var(--shadow); }
+.settings-side-card h2 { color: var(--ink); font-size: 15px; margin: 0; }
 .side-icon { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 12px; }
 .blue-solid { background: linear-gradient(135deg, #5b8cff, #60a5fa); color: #fff; }
 .purple-solid { background: linear-gradient(135deg, #8b5cf6, #a78bfa); color: #fff; }
-.settings-side-card select { padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fbff; color: #0f172a; font-size: 14px; }
-.settings-side-card label { display: flex; align-items: center; gap: 8px; color: #64748b; font-size: 13px; }
+.theme-solid { background: linear-gradient(135deg, #f59e0b, #fbbf24); color: #fff; }
+.settings-side-card select { padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--ink); font-size: 14px; }
+.settings-side-card label { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
 .settings-side-card input[type="checkbox"] { accent-color: #5b8cff; }
 .system-info-list { display: grid; gap: 8px; }
 .system-info-list div { display: flex; justify-content: space-between; }
-.system-info-list dt { color: #94a3b8; font-size: 12px; }
-.system-info-list dd { color: #0f172a; font-size: 13px; margin: 0; }
+.system-info-list dt { color: var(--muted); font-size: 12px; }
+.system-info-list dd { color: var(--ink); font-size: 13px; margin: 0; }
 
 @media (max-width: 1000px) { .settings-layout { grid-template-columns: 1fr; } }
 </style>

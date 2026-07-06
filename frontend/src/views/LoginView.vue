@@ -7,6 +7,9 @@
       :speed="0.7"
     />
 
+    <!-- Logo -->
+    <img class="login-logo" src="@/assets/logo-poseprism.png" alt="logo" />
+
     <!-- 项目名称 + 标题 -->
     <div class="login-header">
       <SplitText
@@ -224,6 +227,12 @@ async function submit() {
   position: relative; min-height: 100vh; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: 2rem;
   background: #0a0a0f; padding: 24px; overflow: hidden;
+}
+
+/* ─── Logo ─── */
+.login-logo {
+  width: 72px; height: 72px; border-radius: 14px;
+  position: relative; z-index: 2;
 }
 
 /* ─── 首页头部 ─── */

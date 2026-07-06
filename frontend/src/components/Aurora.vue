@@ -97,7 +97,7 @@ void main() {
 
   vec3 auroraColor = intensity * rampColor;
 
-  fragColor = vec4(auroraColor * auroraAlpha, auroraAlpha);
+  fragColor = vec4(auroraColor, auroraAlpha);
 }
 `;
 
@@ -126,14 +126,14 @@ onMounted(() => {
 
   const renderer = new Renderer({
     alpha: true,
-    premultipliedAlpha: true,
+    premultipliedAlpha: false,
     antialias: true,
   });
 
   const gl = renderer.gl;
   gl.clearColor(0, 0, 0, 0);
   gl.enable(gl.BLEND);
-  gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   gl.canvas.style.backgroundColor = "transparent";
 
   let program: Program | null = null;
@@ -141,9 +141,14 @@ onMounted(() => {
 
   function resize() {
     if (!ctn) return;
-    renderer.setSize(ctn.offsetWidth, ctn.offsetHeight);
+    const dpr = Math.min(window.devicePixelRatio, 2);
+    const w = ctn.offsetWidth * dpr;
+    const h = ctn.offsetHeight * dpr;
+    renderer.setSize(w, h);
+    gl.canvas.style.width = ctn.offsetWidth + "px";
+    gl.canvas.style.height = ctn.offsetHeight + "px";
     if (program) {
-      program.uniforms.uResolution.value = [ctn.offsetWidth, ctn.offsetHeight];
+      program.uniforms.uResolution.value = [w, h];
     }
   }
 

@@ -203,8 +203,8 @@ def _migrate_legacy_schema():
 
         if "sessions" in tables:
             _add_column_if_missing(connection, "sessions", "user_id", "user_id INTEGER")
-            _add_column_if_missing(connection, "sessions", "pose_replay_json", "pose_replay_json TEXT")
-            _add_column_if_missing(connection, "sessions", "pose_replay_meta_json", "pose_replay_meta_json TEXT")
+            _add_column_if_missing(connection, "sessions", "pose_replay_json", "pose_replay_json MEDIUMTEXT")
+            _add_column_if_missing(connection, "sessions", "pose_replay_meta_json", "pose_replay_meta_json MEDIUMTEXT")
             _add_column_if_missing(connection, "sessions", "calories_burned", "calories_burned FLOAT DEFAULT 0")
             _add_column_if_missing(connection, "sessions", "evaluation_json", "evaluation_json TEXT")
             _add_column_if_missing(connection, "sessions", "feedback_summary", "feedback_summary TEXT")

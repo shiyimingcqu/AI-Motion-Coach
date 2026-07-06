@@ -358,11 +358,16 @@ if router:
 
                 if message_type == "finish":
                     running = False
-                    session = save_session_once()
+                    try:
+                        session = save_session_once()
+                        summary_data = session.to_dict() if session else analyzer.get_session_summary()
+                    except Exception as exc:
+                        logger.error("save_session at finish failed: %s", exc)
+                        summary_data = analyzer.get_session_summary()
                     await websocket.send_json({
                         "type": "summary",
                         "state": "finished",
-                        "session": session.to_dict() if session else analyzer.get_session_summary(),
+                        "session": summary_data,
                     })
                     continue
 
@@ -382,7 +387,11 @@ if router:
                         replay_frames = replay_frames[-60000:]
 
                 keypoints = _parse_keypoints(payload.get("keypoints", {}))
-                result = analyzer.analyze_frame(keypoints, state)
+                try:
+                    result = analyzer.analyze_frame(keypoints, state)
+                except Exception as exc:
+                    logger.warning("analyzer crashed on frame, skipping: %s", exc)
+                    continue
                 result["metrics"] = result.get("features", {})
                 result["stage"] = result.get("stage") or result.get("phase", "")
                 result["errors"] = result.get("errors") or result.get("issues", [])
@@ -390,5 +399,15 @@ if router:
                 await websocket.send_json(result)
 
         except WebSocketDisconnect:
-            save_session_once()
+            try:
+                save_session_once()
+            except Exception as exc:
+                logger.error("save_session on disconnect failed: %s", exc)
+            return
+        except Exception as exc:
+            logger.error("unexpected error in realtime ws: %s", exc, exc_info=True)
+            try:
+                save_session_once()
+            except Exception:
+                pass
             return

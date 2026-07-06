@@ -13,20 +13,54 @@
       <div v-else key="shell" class="shell">
         <aside class="sidebar">
           <div class="brand">
-            <span class="brand-mark">P</span>
+            <img class="brand-mark" src="@/assets/logo-poseprism.png" alt="姿态棱镜" />
             <div>
-              <strong>PoseOps</strong>
+              <strong>姿态棱镜</strong>
               <small>运动姿态评估与纠错系统</small>
             </div>
           </div>
 
-          <nav class="side-nav" aria-label="主导航">
+          <div class="sidebar-divider"></div>
+
+          <!-- 导航项：超长时可滚动 -->
+          <nav class="side-nav side-nav-scroll" aria-label="主导航">
             <RouterLink v-for="item in navItems" :key="item.path" :to="item.path">
               <component :is="item.icon" :size="18" />
               <span>{{ item.label }}</span>
             </RouterLink>
           </nav>
 
+          <!-- 工具按钮：固定在侧边栏最下方 -->
+          <div class="sidebar-utils">
+<button
+              v-if="!authStore.isAdmin"
+              class="side-util-btn"
+              type="button"
+              @click="goToSettings"
+            >
+              <span class="side-icon-wrap"><Settings :size="14" /></span>
+              <span>设置</span>
+            </button>
+
+            <button
+              v-if="!authStore.isAdmin"
+              class="side-util-btn"
+              type="button"
+              @click="goToProfile"
+            >
+              <UserAvatar size="sm" />
+              <span>个人资料</span>
+            </button>
+
+            <div v-if="authStore.isAdmin" class="sidebar-user-info">
+              <span class="avatar">{{ userInitial }}</span>
+              <div class="sidebar-user-meta">
+                <span class="username">{{ authStore.username }}</span>
+                <span class="role">{{ roleText }}</span>
+              </div>
+              <button class="sidebar-logout-btn" type="button" @click="handleLogout">退出</button>
+            </div>
+          </div>
         </aside>
 
         <div class="workspace">
@@ -34,52 +68,6 @@
             <div>
               <strong>{{ pageTitle }}</strong>
               <span>今天 {{ todaySessions }} 次训练 · 平均分 {{ todayAvgScore }}</span>
-            </div>
-            <label class="search-box">
-              <Search :size="16" />
-              <input type="search" :placeholder="searchPlaceholder" />
-            </label>
-            <div class="topbar-actions">
-              <div v-if="settings.notificationsEnabled" class="action-menu">
-                <button class="icon-button" type="button" aria-label="通知" @click="toggleNotifications">
-                  <Bell :size="18" />
-                  <span class="notification-dot" aria-hidden="true"></span>
-                </button>
-                <div v-if="showNotifications" class="dropdown-panel notification-panel">
-                  <strong>消息通知</strong>
-                  <p>今日训练报告已生成，可前往个人报告查看。</p>
-                  <p>深蹲动作规则已更新，建议训练前先阅读。</p>
-                  <p>本周平均分较上周提升 6 分，继续保持。</p>
-                </div>
-              </div>
-              <button
-                v-if="!authStore.isAdmin"
-                class="icon-button"
-                type="button"
-                aria-label="系统设置"
-                @click="goToSettings"
-              >
-                <Settings :size="18" />
-              </button>
-              <button
-                v-if="!authStore.isAdmin"
-                class="avatar avatar-button"
-                type="button"
-                aria-label="个人资料"
-                @click="goToProfile"
-              >
-                <UserAvatar size="sm" />
-              </button>
-              <div v-if="authStore.isAdmin" class="user-info">
-                <span class="avatar">{{ userInitial }}</span>
-                <div class="user-meta">
-                  <span class="username">{{ authStore.username }}</span>
-                  <span class="role">{{ roleText }}</span>
-                </div>
-                <button class="logout-button" type="button" @click="handleLogout">
-                  退出
-                </button>
-              </div>
             </div>
           </header>
 
@@ -93,13 +81,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useRoute, useRouter } from "vue-router";
 import {
   Activity,
   BarChart3,
-  Bell,
   ClipboardList,
   Dumbbell,
   FileDown,
@@ -108,7 +95,6 @@ import {
   Layers,
   LineChart,
   Shield,
-  Search,
   Settings,
   ShieldCheck,
   SlidersHorizontal,
@@ -120,14 +106,12 @@ import {
 
 import UserAvatar from "./components/UserAvatar.vue";
 import { useAuthStore } from "./stores/auth";
-import { useSettingsStore } from "./stores/settings";
 import { getDashboardStats } from "./api/dashboard";
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
-const { settings } = storeToRefs(useSettingsStore());
-const standalonePaths = ["/profile", "/settings"];
+const standalonePaths: string[] = [];
 const isStandalonePage = computed(() => standalonePaths.includes(route.path));
 const layoutTransitionName = computed(() => route.meta.layoutTransition ?? "layout-instant");
 
@@ -199,11 +183,6 @@ const navItems = computed(() =>
   authStore.isAdmin ? adminNavItems : baseNavItems
 );
 
-const searchPlaceholder = computed(() =>
-  authStore.isAdmin ? "搜索用户、报告或规则" : "搜索动作、训练记录或报告"
-);
-
-const showNotifications = ref(false);
 
 // 从后端获取今日训练数据
 const todaySessions = ref(0);
@@ -231,69 +210,17 @@ watch(
   { immediate: true }
 );
 
-function toggleNotifications() {
-  showNotifications.value = !showNotifications.value;
-}
-
-function closeMenus() {
-  showNotifications.value = false;
-}
 
 function goToProfile() {
-  closeMenus();
   router.push("/profile");
 }
 
 function goToSettings() {
-  closeMenus();
   router.push("/settings");
 }
 
 function handleLogout() {
-  closeMenus();
   authStore.logout();
   router.push("/login");
 }
 </script>
-
-<style scoped>
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-left: 8px;
-}
-
-.user-meta {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.2;
-}
-
-.user-meta .username {
-  font-size: 13px;
-  font-weight: 500;
-  color: #0f172a;
-}
-
-.user-meta .role {
-  font-size: 11px;
-  color: #64748b;
-}
-
-.logout-button {
-  padding: 6px 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #fff;
-  color: #64748b;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.logout-button:hover {
-  border-color: #ef4444;
-  color: #ef4444;
-}
-</style>

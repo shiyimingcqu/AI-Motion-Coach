@@ -27,7 +27,7 @@ import AdminReportsView from "../views/AdminReportsView.vue";
 import AdminTemplatesView from "../views/AdminTemplatesView.vue";
 import AdminSettingsView from "../views/AdminSettingsView.vue";
 
-const STANDALONE_PATHS = ["/profile", "/settings"];
+const STANDALONE_PATHS: string[] = [];
 
 export const router = createRouter({
   history: createWebHistory(),
