@@ -5,10 +5,7 @@ import DashboardView from "../views/DashboardView.vue";
 import RealtimeDetectView from "../views/RealtimeDetectView.vue";
 import VideoUploadView from "../views/VideoUploadView.vue";
 import SessionsView from "../views/SessionsView.vue";
-import ReportsView from "../views/ReportsView.vue";
-import PersonalProgressView from "../views/PersonalProgressView.vue";
 import ScoreTrendsView from "../views/ScoreTrendsView.vue";
-import MotionQualityView from "../views/MotionQualityView.vue";
 import ExerciseRulesView from "../views/ExerciseRulesView.vue";
 import ProfileView from "../views/ProfileView.vue";
 import SettingsView from "../views/SettingsView.vue";
@@ -39,10 +36,10 @@ export const router = createRouter({
     { path: "/feedback", component: ErrorFeedbackView, meta: { userOnly: true } },
     { path: "/sessions", component: SessionsView, meta: { userOnly: true } },
     { path: "/exercises", component: ExerciseLibraryView, meta: { userOnly: true } },
-    { path: "/progress", component: PersonalProgressView, meta: { userOnly: true } },
-    { path: "/reports", component: ReportsView, meta: { userOnly: true } },
+    { path: "/progress", redirect: "/export" },
+    { path: "/reports", redirect: "/export" },
+    { path: "/motion-quality", redirect: "/export" },
     { path: "/score-trends", component: ScoreTrendsView, meta: { userOnly: true } },
-    { path: "/motion-quality", component: MotionQualityView, meta: { userOnly: true } },
     { path: "/export", component: ExportReportsView, meta: { userOnly: true } },
     { path: "/rules", redirect: "/admin/rules" },
     { path: "/users", component: UserManagementView, meta: { adminOnly: true } },

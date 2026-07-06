@@ -503,7 +503,7 @@
       <button class="ba-btn">重新评估</button>
       <button class="ba-btn">生成纠正计划</button>
       <button class="ba-btn" @click="router.push('/export')">导出 PDF</button>
-      <button class="ba-btn primary" @click="router.push('/reports')">查看完整报告</button>
+      <button class="ba-btn primary" @click="router.push('/export')">查看完整报告</button>
     </section>
   </div>
 </template>

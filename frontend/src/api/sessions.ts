@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost } from "./client";
+import { apiDelete, apiGet, apiPost, apiPut } from "./client";
 
 export interface FeedbackSummaryItem {
   issue: string;
@@ -97,6 +97,16 @@ export function getSessionReplay(session_id: string) {
 
 export function createSession(data: CreateSessionPayload) {
   return apiPost<SessionRecord>("/sessions", data);
+}
+
+export function updateSessionReplay(
+  session_id: string,
+  data: { pose_replay: PoseReplayFrame[]; pose_replay_meta?: Record<string, unknown> },
+) {
+  return apiPut<{ message: string; session_id: string; frame_count: number }>(
+    `/sessions/${session_id}/replay`,
+    data,
+  );
 }
 
 export function deleteSession(session_id: string) {

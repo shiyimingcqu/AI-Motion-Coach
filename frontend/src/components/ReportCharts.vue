@@ -8,8 +8,8 @@
       <div ref="trendRef" class="chart-box" />
     </article>
 
-    <div class="chart-row">
-      <article class="chart-card">
+    <div v-if="showCalorie || showDistribution" class="chart-row">
+      <article v-if="showCalorie" class="chart-card">
         <header>
           <h3>卡路里消耗 / Calories</h3>
           <span>按动作类型统计</span>
@@ -17,17 +17,17 @@
         <div ref="calorieRef" class="chart-box" />
       </article>
 
-      <article class="chart-card">
+      <article v-if="showDistribution" class="chart-card">
         <header>
           <h3>训练分布 / Distribution</h3>
-          <span>各动作训练次数占比</span>
+          <span>全部已做动作次数占比</span>
         </header>
         <div ref="pieRef" class="chart-box" />
       </article>
     </div>
 
-    <div class="chart-row">
-      <article class="chart-card">
+    <div v-if="showRadar || showErrors" class="chart-row">
+      <article v-if="showRadar" class="chart-card">
         <header>
           <h3>动作质量雷达 / Quality Radar</h3>
           <span>{{ radarSubtitle }}</span>
@@ -35,7 +35,7 @@
         <div ref="radarRef" class="chart-box radar-box" />
       </article>
 
-      <article class="chart-card">
+      <article v-if="showErrors" class="chart-card">
         <header>
           <h3>错误统计 / Errors</h3>
           <span>各动作需改进次数</span>
@@ -47,7 +47,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as echarts from "echarts";
 import type { ChartData } from "@/api/reports";
 
@@ -60,12 +60,21 @@ const props = withDefaults(
   defineProps<{
     charts: ChartData;
     showTrend?: boolean;
+    showCalorie?: boolean;
+    showRadar?: boolean;
+    showErrors?: boolean;
+    showDistribution?: boolean;
+    distributionData?: { name: string; value: number }[];
     trendSeries?: TrendSeriesItem[];
     radarSubtitle?: string;
     trendSubtitle?: string;
   }>(),
   {
     showTrend: true,
+    showCalorie: true,
+    showRadar: true,
+    showErrors: true,
+    showDistribution: true,
     trendSeries: () => [],
     radarSubtitle: "综合各维度动作质量评估",
     trendSubtitle: "近 7 日训练平均分变化（可按动作区分）",
@@ -169,6 +178,10 @@ function buildOptions(data: ChartData) {
     }],
   };
 
+  const pieData = props.distributionData?.length
+    ? props.distributionData
+    : data.exercise_distribution;
+
   const pieOption: echarts.EChartsOption = {
     ...chartTheme,
     tooltip: { trigger: "item", formatter: "{b}<br/>{c} 次 · {d}%" },
@@ -177,7 +190,7 @@ function buildOptions(data: ChartData) {
       type: "pie",
       radius: ["46%", "72%"],
       center: ["50%", "44%"],
-      data: data.exercise_distribution,
+      data: pieData,
       label: { color: "#e2e8f0", fontSize: 11 },
       color: ["#3b82f6", "#8b5cf6", "#14b8a6", "#f59e0b"],
     }],
@@ -228,31 +241,42 @@ function buildOptions(data: ChartData) {
 function renderCharts() {
   instances.splice(0).forEach((chart) => chart.dispose());
 
-  const hasData =
-    props.charts.score_trend.length > 0
+  const data = props.charts;
+  const hasTrendData = props.showTrend && (
+    data.score_trend.length > 0
     || props.trendSeries.some((s) => s.trend.length > 0)
-    || props.charts.calorie_by_exercise.length > 0;
+  );
+  const hasCalorieData = props.showCalorie;
+  const hasRadarData = props.showRadar && (data.quality_radar?.dimensions?.length ?? 0) > 0;
+  const hasDistributionData = props.showDistribution && (props.distributionData?.length ?? 0) > 0;
+  const hasErrorData = props.showErrors && (data.error_by_exercise?.length ?? 0) > 0;
 
-  if (!hasData) return;
+  if (!hasTrendData && !hasCalorieData && !hasRadarData && !hasDistributionData && !hasErrorData) {
+    return;
+  }
 
-  if (props.showTrend) {
+  if (hasTrendData) {
     initChart(trendRef.value, buildTrendOption());
   }
-  const options = buildOptions(props.charts);
-  initChart(calorieRef.value, options.calorieOption);
-  initChart(pieRef.value, options.pieOption);
-  initChart(radarRef.value, options.radarOption);
-  initChart(errorRef.value, options.errorOption);
+  const options = buildOptions(data);
+  if (hasCalorieData) initChart(calorieRef.value, options.calorieOption);
+  if (hasDistributionData) initChart(pieRef.value, options.pieOption);
+  if (hasRadarData) initChart(radarRef.value, options.radarOption);
+  if (hasErrorData) initChart(errorRef.value, options.errorOption);
 }
 
 function handleResize() {
   instances.forEach((chart) => chart.resize());
 }
 
-watch(() => [props.charts, props.trendSeries, props.showTrend], renderCharts, { deep: true });
+watch(
+  () => [props.charts, props.trendSeries, props.showTrend, props.showCalorie, props.showRadar, props.showErrors, props.showDistribution, props.distributionData],
+  () => nextTick(() => renderCharts()),
+  { deep: true },
+);
 
 onMounted(() => {
-  renderCharts();
+  nextTick(() => renderCharts());
   window.addEventListener("resize", handleResize);
 });
 
@@ -275,7 +299,7 @@ onBeforeUnmount(() => {
 .chart-card header { display: grid; gap: 4px; margin-bottom: 12px; }
 .chart-card h3 { margin: 0; color: #f8fafc; font-size: 15px; }
 .chart-card span { color: #64748b; font-size: 12px; }
-.chart-box { width: 100%; height: 260px; }
-.radar-box { height: 280px; }
+.chart-box { width: 100%; height: 360px; }
+.radar-box { height: 400px; }
 @media (max-width: 900px) { .chart-row { grid-template-columns: 1fr; } }
 </style>
