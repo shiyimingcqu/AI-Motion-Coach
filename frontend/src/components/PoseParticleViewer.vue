@@ -440,21 +440,26 @@ function updatePose(frame: PoseReplayFrame | null) {
 
   if (!_replayPrevPoints) { _replayPrevPoints = points.map(p => p.clone()); }
   else {
-    const minCutoff = 0.3;
-    const baseCutoff = 1.2;
-    const beta = 0.2;
     for (let i = 0; i < points.length; i++) {
       if (points[i] && _replayPrevPoints[i]) {
         const dx = points[i].x - _replayPrevPoints[i].x;
         const dy = points[i].y - _replayPrevPoints[i].y;
         const dz = points[i].z - _replayPrevPoints[i].z;
         const speed = Math.sqrt(dx * dx + dy * dy + dz * dz) / (dt || 0.016);
-        const cutoff = Math.max(minCutoff, baseCutoff + beta * speed);
-        const tau = 1 / (2 * Math.PI * cutoff);
-        const alpha = 1 / (1 + tau / (dt || 0.016));
+
+        // XY — 常规平滑
+        let cutoff = Math.max(0.8, 2.0 + 0.3 * speed);
+        let tau = 1 / (2 * Math.PI * cutoff);
+        let alpha = 1 / (1 + tau / (dt || 0.016));
         _replayPrevPoints[i].x += alpha * (points[i].x - _replayPrevPoints[i].x);
         _replayPrevPoints[i].y += alpha * (points[i].y - _replayPrevPoints[i].y);
+
+        // Z — 加强平滑（mediapipe 猜的深度抖动大）
+        cutoff = Math.max(0.1, 0.5 + 0.08 * speed);
+        tau = 1 / (2 * Math.PI * cutoff);
+        alpha = 1 / (1 + tau / (dt || 0.016));
         _replayPrevPoints[i].z += alpha * (points[i].z - _replayPrevPoints[i].z);
+
         points[i].copy(_replayPrevPoints[i]);
       }
     }

@@ -156,12 +156,15 @@ class SessionService:
                 normalized, ensure_ascii=False, separators=(",", ":")
             )
 
-            meta_payload = {
+            meta_payload = self._load_json(session.pose_replay_meta_json, {})
+            if not isinstance(meta_payload, dict):
+                meta_payload = {}
+            meta_payload.update({
                 "schema_version": 1,
                 "source": "miniprogram_realtime",
                 "sample_interval_ms": 100,
                 "frame_count": len(normalized),
-            }
+            })
             if pose_replay_meta:
                 meta_payload.update(pose_replay_meta)
             session.pose_replay_meta_json = json.dumps(

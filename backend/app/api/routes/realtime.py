@@ -284,6 +284,41 @@ if router:
                 return None
 
             # 即使未计次也保存 session，便于跳转反馈页展示分析建议
+            # 生成 rep_segments（按单次动作筛选回放）
+            rep_segments_payload: list[dict] = []
+            if hasattr(analyzer, "rep_segments"):
+                for seg in analyzer.rep_segments:
+                    si = seg.get("start_frame_index", 0)
+                    ei = seg.get("end_frame_index", 0)
+                    st = replay_frames[si]["timestamp_ms"] if si < len(replay_frames) else 0
+                    et = replay_frames[ei]["timestamp_ms"] if ei < len(replay_frames) else 0
+                    rep_segments_payload.append({
+                        "rep_index": seg["rep_index"],
+                        "start_frame_index": si,
+                        "end_frame_index": ei,
+                        "start_timestamp_ms": st,
+                        "end_timestamp_ms": et,
+                        "score": seg.get("score", 0),
+                        "issues": seg.get("issues", []),
+                    })
+            rep_nodes_payload: list[dict] = []
+            if hasattr(analyzer, "rep_nodes"):
+                for node in analyzer.rep_nodes:
+                    frame_index = int(node.get("frame_index", 0))
+                    timestamp_ms = (
+                        replay_frames[frame_index]["timestamp_ms"]
+                        if 0 <= frame_index < len(replay_frames)
+                        else 0
+                    )
+                    rep_nodes_payload.append({
+                        "rep_index": node.get("rep_index"),
+                        "frame_index": frame_index,
+                        "timestamp_ms": timestamp_ms,
+                        "start_frame_index": int(node.get("start_frame_index", frame_index)),
+                        "score": node.get("score", 0),
+                        "issues": node.get("issues", []),
+                    })
+
             saved_session = session_service.create_session(
                 exercise=summary["exercise"],
                 duration_seconds=summary["duration_seconds"],
@@ -297,6 +332,8 @@ if router:
                     "source": "web_realtime",
                     "sample_interval_ms": 100,
                     "frame_count": len(replay_frames),
+                    "rep_segments": rep_segments_payload,
+                    "rep_nodes": rep_nodes_payload,
                 },
             )
 
@@ -333,6 +370,7 @@ if router:
                 if message_type == "start":
                     new_exercise = payload.get("exercise_type", exercise_type)
                     analyzer = get_analyzer(new_exercise)
+                    analyzer.reset()
                     state = {}
                     saved_session = None
                     replay_frames = []
@@ -382,7 +420,10 @@ if router:
                         replay_frames = replay_frames[-60000:]
 
                 keypoints = _parse_keypoints(payload.get("keypoints", {}))
-                result = analyzer.analyze_frame(keypoints, state)
+                result = analyzer.analyze_frame(
+                    keypoints, state,
+                    frame_index=len(replay_frames) - 1 if replay_frames else 0,
+                )
                 result["metrics"] = result.get("features", {})
                 result["stage"] = result.get("stage") or result.get("phase", "")
                 result["errors"] = result.get("errors") or result.get("issues", [])

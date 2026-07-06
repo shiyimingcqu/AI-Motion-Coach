@@ -34,17 +34,48 @@ export interface PoseReplayFrame {
   landmarks: PoseReplayLandmark[];
 }
 
+export interface PoseReplaySegmentIssue {
+  issue: string;
+  suggestion: string;
+  severity: string;
+  metric: string;
+  value: number;
+}
+
+export interface PoseReplaySegment {
+  rep_index: number;
+  start_frame_index: number;
+  end_frame_index: number;
+  start_timestamp_ms: number;
+  end_timestamp_ms: number;
+  score: number;
+  issues: PoseReplaySegmentIssue[];
+}
+
+export interface PoseReplayNode {
+  rep_index: number;
+  frame_index: number;
+  timestamp_ms?: number;
+  start_frame_index?: number;
+  score?: number;
+  issues?: PoseReplaySegmentIssue[];
+}
+
+export interface PoseReplayMeta {
+  schema_version?: number;
+  source?: string;
+  sample_interval_ms?: number;
+  frame_count?: number;
+  rep_segments?: PoseReplaySegment[];
+  rep_nodes?: PoseReplayNode[];
+}
+
 export interface PoseReplayResponse {
   session_id: string;
   exercise: string;
   created_at: string | null;
   has_replay: boolean;
-  meta: {
-    schema_version?: number;
-    source?: string;
-    sample_interval_ms?: number;
-    frame_count?: number;
-  } | null;
+  meta: PoseReplayMeta | null;
   frames: PoseReplayFrame[];
 }
 

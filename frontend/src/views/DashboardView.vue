@@ -281,6 +281,24 @@
             </div>
           </div>
 
+          <!-- Rep filter segmented control (按单次动作筛选) -->
+          <div v-if="repFilters.length > 0" class="rep-filter-bar">
+            <button
+              :class="['rep-filter-btn', { active: selectedRepFilter === null }]"
+              @click="switchToRep(null)"
+            >
+              全部
+            </button>
+            <button
+              v-for="seg in repFilters"
+              :key="seg.rep_index"
+              :class="['rep-filter-btn', { active: selectedRepFilter === seg.rep_index }]"
+              @click="switchToRep(seg.rep_index)"
+            >
+              第{{ seg.rep_index }}次
+            </button>
+          </div>
+
           <p v-if="!hasLatestAnalysis && selectedReplayFrames.length === 0" class="phase-no-data">暂无分析数据，上传视频完成分析后此处将显示动作阶段</p>
           <div v-else class="phase-flow">
             <div
@@ -338,25 +356,7 @@
       </div>
 
       <aside class="right-col">
-        <div class="tab-bar">
-          <button :class="['tab-btn', { active: activeTab === 'problems' }]" @click="activeTab = 'problems'">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="12" y1="8" x2="12" y2="12" />
-              <line x1="12" y1="16" x2="12.01" y2="16" />
-            </svg>
-            问题识别 <span class="tab-count">{{ feedbackItems.length || 0 }}</span>
-          </button>
-          <button :class="['tab-btn', { active: activeTab === 'advice' }]" @click="activeTab = 'advice'">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-              <polyline points="22 4 12 14.01 9 11.01" />
-            </svg>
-            纠正建议 <span class="tab-count">{{ adviceGroups.length || 0 }}</span>
-          </button>
-        </div>
-
-        <div v-show="activeTab === 'problems'" class="section-card">
+        <div class="section-card">
           <header class="sc-header">
             <div class="sc-header-icon danger">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -367,7 +367,7 @@
             </div>
             <div>
               <h3>问题识别</h3>
-              <p>发现 <strong>{{ problems.length }}</strong> 个动作问题，共扣 <strong class="score-deduct">-{{ totalDeduction }}</strong> 分</p>
+              <p>发现 <strong>{{ problems.length }}</strong> 个动作问题</p>
             </div>
           </header>
 
@@ -389,34 +389,11 @@
                   <p>{{ item.desc }}</p>
                 </div>
               </div>
-              <div class="pi-meta">
-                <span class="pi-time">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
-                  </svg>
-                  {{ item.time }}
-                </span>
-                <span class="pi-deduct">扣分：<strong>-{{ item.deduct }}</strong></span>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="selectedProblem !== null" class="quick-advice">
-            <div class="qa-icon">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                <polyline points="22 4 12 14.01 9 11.01" />
-              </svg>
-            </div>
-            <div>
-              <strong>当前建议</strong>
-              <p>{{ currentProblem?.recommend }}</p>
             </div>
           </div>
         </div>
 
-        <div v-show="activeTab === 'advice'" class="section-card">
+        <div class="section-card">
           <header class="sc-header">
             <div class="sc-header-icon success">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -426,45 +403,13 @@
             </div>
             <div>
               <h3>纠正建议</h3>
-              <p>针对 <strong>{{ problems.length }}</strong> 个问题，共 <strong>{{ adviceGroups.length }}</strong> 项训练</p>
+              <p v-if="selectedProblem !== null && currentProblem">针对「{{ currentProblem.title }}」</p>
+              <p v-else>请先选择一个动作问题</p>
             </div>
           </header>
-
-          <div class="advice-accordion">
-            <div v-for="(group, groupIndex) in adviceGroups" :key="group.label" class="accordion-item">
-              <button class="accordion-header" :class="{ open: openAccordion === groupIndex }" @click="toggleAccordion(groupIndex)">
-                <span class="accordion-dot" :style="{ background: group.color }"></span>
-                <span class="accordion-title">{{ group.label }}</span>
-                <span class="accordion-count">{{ group.items.length }} 项</span>
-                <svg
-                  :class="['accordion-chevron', { open: openAccordion === groupIndex }]"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-              <div v-if="openAccordion === groupIndex" class="accordion-body">
-                <div v-for="(item, itemIndex) in group.items" :key="item.title" class="advice-item">
-                  <div class="ai-num">{{ itemIndex + 1 }}</div>
-                  <div class="ai-body">
-                    <strong>{{ item.title }}</strong>
-                    <p>{{ item.desc }}</p>
-                    <div class="ai-prescription">
-                      <span>{{ item.sets }}</span>
-                      <span>{{ item.freq }}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div v-if="selectedProblem !== null && currentProblem" style="padding: 0 16px 16px; font-size: 13px; line-height: 1.6; color: #475569;">
+            {{ currentProblem.recommend }}
           </div>
-
-          <button class="btn-full-plan">查看完整纠正方案</button>
         </div>
       </aside>
     </section>
@@ -509,8 +454,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRouter, useRoute } from "vue-router";
 import * as echarts from "echarts/core";
 import { BarChart, LineChart, RadarChart } from "echarts/charts";
 import { GridComponent, LegendComponent, RadarComponent, TooltipComponent } from "echarts/components";
@@ -519,7 +464,7 @@ import { Maximize2, Minimize2, Settings } from "lucide-vue-next";
 import { useAuthStore } from "@/stores/auth";
 import { getDashboardStats } from "../api/dashboard";
 import { getFeedbacks, type FeedbackItem } from "../api/feedback";
-import { getSessionReplay, getSessions, getSession, type PoseReplayFrame, type SessionRecord } from "../api/sessions";
+import { getSessionReplay, getSessions, getSession, type PoseReplayFrame, type PoseReplayNode, type SessionRecord, type PoseReplaySegment, type PoseReplaySegmentIssue } from "../api/sessions";
 import PoseParticleViewer from "../components/PoseParticleViewer.vue";
 import { apiGet } from "../api/client";
 import {
@@ -554,6 +499,7 @@ type ProblemItem = {
   recommend: string;
   metric: string | null;
   bodyPart: BodyPartMapping | null;
+  repIndex?: number | null;
 };
 
 type AdviceGroup = {
@@ -574,6 +520,7 @@ type ReplayBackgroundOption = {
 };
 
 const router = useRouter();
+const route = useRoute();
 const authStore = useAuthStore();
 
 const statsData = ref<any>(null);
@@ -583,12 +530,25 @@ const replaySessions = ref<SessionRecord[]>([]);
 const replaySessionsLoading = ref(true);
 const selectedReplaySessionId = ref("");
 const selectedReplay = ref<SessionRecord | null>(null);
-const selectedReplayFrames = ref<PoseReplayFrame[]>([]);
+const selectedReplayFrames = computed<PoseReplayFrame[]>(() => {
+  if (allReplayFrames.value.length === 0) return [];
+  if (selectedRepFilter.value === null) return allReplayFrames.value;
+  const range = resolveRepFrameRange(selectedRepFilter.value);
+  if (!range) return allReplayFrames.value;
+  return normalizeReplayFrames(allReplayFrames.value.slice(range.start, range.end + 1));
+});
 const replayPlaying = ref(false);
 const replaySpeed = ref(1);
 const replayProgress = ref(0);
 const replayFrame = ref<PoseReplayFrame | null>(null);
 const replayLoadError = ref("");
+
+// Rep-level filtering (按单次动作筛选回放)
+const allReplayFrames = ref<PoseReplayFrame[]>([]);
+const repSegments = ref<PoseReplaySegment[]>([]);
+const repNodes = ref<PoseReplayNode[]>([]);
+const selectedRepFilter = ref<number | null>(null); // null = 全部, number = 第N次
+
 const replayFullscreenRef = ref<HTMLDivElement | null>(null);
 const isReplayFullscreen = ref(false);
 const showReplaySettings = ref(false);
@@ -619,7 +579,7 @@ const radarChartRef = ref<HTMLDivElement | null>(null);
 const symmetryChartRef = ref<HTMLDivElement | null>(null);
 const chartInstances: echarts.ECharts[] = [];
 
-const activeTab = ref<"problems" | "advice">("problems");
+const activeTab = ref<"problems">("problems");
 const selectedProblem = ref<number | null>(0);
 const openAccordion = ref<number | null>(0);
 const phases = ["准备阶段", "下蹲阶段", "底部停顿", "起身阶段", "结束阶段"];
@@ -741,6 +701,71 @@ const sideMetrics = computed(() => {
 });
 
 const problems = computed<ProblemItem[]>(() => {
+  // Use rep nodes/segments for per-rep filtering when available.
+  if (repFeedbackSources.value.length > 0) {
+    if (selectedRepFilter.value !== null) {
+      // Show only issues from the selected rep
+      const seg = repFeedbackSources.value.find((s) => s.rep_index === selectedRepFilter.value);
+      if (!seg || !seg.issues || seg.issues.length === 0) {
+        return [{
+          title: `第${selectedRepFilter.value}次动作无问题`,
+          desc: "该次动作表现良好，没有检测到明显问题。",
+          level: "low", badge: "信息", time: "-", deduct: 0,
+          recommend: "继续保持当前动作质量。", metric: null, bodyPart: null,
+        }];
+      }
+      return seg.issues.map((item: PoseReplaySegmentIssue, idx: number) => {
+        const level = (item.severity === "error" ? "high" : item.severity === "warning" ? "medium" : "low") as Severity;
+        const metric = item.metric || inferMetricFromIssue(item.issue);
+        const bodyPart = metric ? METRIC_BODY_PART_MAP[metric] ?? null : null;
+        return {
+          title: item.issue,
+          desc: item.suggestion || `检测到动作问题：${item.issue}`,
+          level,
+          badge: level === "high" ? "高风险" : level === "medium" ? "中风险" : "低风险",
+          time: `第${selectedRepFilter.value}次`,
+          deduct: level === "high" ? 8 : level === "medium" ? 6 : 4,
+          recommend: item.suggestion || "建议安排专项控制训练并结合视频回放逐步修正。",
+          metric,
+          bodyPart,
+          repIndex: selectedRepFilter.value,
+        };
+      });
+    }
+
+    // Show all rep issues with "第N次" prefix
+    const allProblems: ProblemItem[] = [];
+    for (const seg of repFeedbackSources.value) {
+      for (const item of seg.issues) {
+        const level = (item.severity === "error" ? "high" : item.severity === "warning" ? "medium" : "low") as Severity;
+        const metric = item.metric || inferMetricFromIssue(item.issue);
+        const bodyPart = metric ? METRIC_BODY_PART_MAP[metric] ?? null : null;
+        allProblems.push({
+          title: `第${seg.rep_index}次：${item.issue}`,
+          desc: item.suggestion || `检测到动作问题：${item.issue}`,
+          level,
+          badge: level === "high" ? "高风险" : level === "medium" ? "中风险" : "低风险",
+          time: `第${seg.rep_index}次`,
+          deduct: level === "high" ? 8 : level === "medium" ? 6 : 4,
+          recommend: item.suggestion || "建议安排专项控制训练并结合视频回放逐步修正。",
+          metric,
+          bodyPart,
+          repIndex: seg.rep_index,
+        });
+      }
+    }
+    if (allProblems.length === 0) {
+      return [{
+        title: "动作表现良好",
+        desc: "全部动作均未检测到明显问题。",
+        level: "low", badge: "信息", time: "-", deduct: 0,
+        recommend: "继续保持当前动作质量。", metric: null, bodyPart: null,
+      }];
+    }
+    return allProblems;
+  }
+
+  // Fallback: use feedbackItems from session feedback_summary
   if (feedbackItems.value.length === 0) {
     return [
       {
@@ -783,28 +808,7 @@ const issueSummary = computed(() => {
   return problems.value.slice(0, 2).map((item) => item.title).join(" · ") || "暂无";
 });
 
-const adviceGroups = computed<AdviceGroup[]>(() => {
-  return problems.value.map((problem, index) => ({
-    label: problem.title,
-    color: problem.level === "high" ? "#ef4444" : problem.level === "medium" ? "#f97316" : "#5b8cff",
-    items: [
-      {
-        title: `专项纠正 ${index + 1}`,
-        desc: problem.recommend,
-        sets: problem.level === "high" ? "4 组 x 10 次" : "3 组 x 10 次",
-        freq: problem.level === "high" ? "每周 4 次" : "每周 3 次",
-      },
-      {
-        title: "动作控制练习",
-        desc: `围绕“${problem.title}”进行慢速控制训练，先稳住动作路径，再逐步增加节奏。`,
-        sets: "2 组 x 45 秒",
-        freq: "训练前热身",
-      },
-    ],
-  }));
-});
-
-const totalDeduction = computed(() => problems.value.reduce((sum, item) => sum + item.deduct, 0));
+// const totalDeduction = computed(() => problems.value.reduce((sum, item) => sum + item.deduct, 0));
 
 const exerciseNameMap: Record<string, string> = {
   squat: "深蹲",
@@ -825,6 +829,107 @@ const selectedReplayExerciseName = computed(() => {
 const selectedReplayScore = computed(() => {
   return selectedReplay.value ? Math.round(selectedReplay.value.average_score || 0) : scoreValueForRing.value;
 });
+
+const repFilters = computed<Array<{ rep_index: number }>>(() => {
+  if (repNodes.value.length > 0) {
+    return repNodes.value
+      .filter((node) => Number.isFinite(node.rep_index))
+      .sort((a, b) => a.rep_index - b.rep_index);
+  }
+  return repSegments.value;
+});
+
+const repFeedbackSources = computed<Array<{ rep_index: number; issues: PoseReplaySegmentIssue[] }>>(() => {
+  if (repSegments.value.length > 0) {
+    return repSegments.value.map((seg) => ({
+      rep_index: seg.rep_index,
+      issues: seg.issues || [],
+    }));
+  }
+  return repNodes.value.map((node) => ({
+    rep_index: node.rep_index,
+    issues: node.issues || [],
+  }));
+});
+
+function clampFrameIndex(value: number, fallback: number) {
+  const max = Math.max(0, allReplayFrames.value.length - 1);
+  if (!Number.isFinite(value)) return Math.min(max, Math.max(0, fallback));
+  return Math.min(max, Math.max(0, Math.round(value)));
+}
+
+function estimateReplayFrameIntervalMs(frames: PoseReplayFrame[]) {
+  const intervals: number[] = [];
+  for (let index = 1; index < frames.length; index += 1) {
+    const diff = frames[index].timestamp_ms - frames[index - 1].timestamp_ms;
+    if (diff > 0 && diff < 1000) intervals.push(diff);
+  }
+  if (intervals.length === 0) return 100;
+  intervals.sort((a, b) => a - b);
+  return intervals[Math.floor(intervals.length / 2)] || 100;
+}
+
+function normalizeReplayFrames(frames: PoseReplayFrame[]) {
+  if (frames.length === 0) return [];
+  const baseTimestamp = frames[0].timestamp_ms || 0;
+  const interval = estimateReplayFrameIntervalMs(frames);
+  let previous = -interval;
+  return frames.map((frame, index) => {
+    const raw = Math.max(0, (frame.timestamp_ms || 0) - baseTimestamp);
+    const timestamp_ms = raw > previous ? raw : previous + interval;
+    previous = timestamp_ms;
+    return {
+      ...frame,
+      timestamp_ms,
+      landmarks: frame.landmarks,
+    };
+  });
+}
+
+function resolveRepFrameRange(repIndex: number) {
+  const frameCount = allReplayFrames.value.length;
+  if (frameCount === 0) return null;
+
+  const nodes = [...repNodes.value]
+    .filter((node) => Number.isFinite(node.rep_index) && Number.isFinite(node.frame_index))
+    .sort((a, b) => a.rep_index - b.rep_index);
+  const nodePosition = nodes.findIndex((node) => node.rep_index === repIndex);
+  const segment = repSegments.value.find((seg) => seg.rep_index === repIndex);
+  const intervalMs = estimateReplayFrameIntervalMs(allReplayFrames.value);
+  const preRollFrames = Math.max(3, Math.round(450 / intervalMs));
+  const postRollFrames = Math.max(4, Math.round(650 / intervalMs));
+
+  if (nodePosition >= 0) {
+    const node = nodes[nodePosition];
+    const completion = clampFrameIndex(node.frame_index, 0);
+    const previousCompletion = nodePosition > 0
+      ? clampFrameIndex(nodes[nodePosition - 1].frame_index, 0)
+      : -1;
+    const nextCompletion = nodePosition < nodes.length - 1
+      ? clampFrameIndex(nodes[nodePosition + 1].frame_index, frameCount - 1)
+      : frameCount;
+
+    const nodeStart = Number.isFinite(node.start_frame_index)
+      ? clampFrameIndex(node.start_frame_index as number, completion)
+      : null;
+    const segmentStart = segment ? clampFrameIndex(segment.start_frame_index, completion) : null;
+    const lowerBound = previousCompletion >= 0 ? previousCompletion + 1 : 0;
+    const upperBound = nextCompletion < frameCount ? nextCompletion - 1 : frameCount - 1;
+    const inferredStart = nodeStart ?? segmentStart ?? Math.max(lowerBound, completion - Math.round((completion - lowerBound) * 0.75));
+
+    const start = Math.max(lowerBound, clampFrameIndex(inferredStart - preRollFrames, completion));
+    const end = Math.max(start, Math.min(upperBound, completion + postRollFrames));
+    return { start, end };
+  }
+
+  if (segment) {
+    const start = clampFrameIndex(segment.start_frame_index, 0);
+    const end = Math.max(start, clampFrameIndex(segment.end_frame_index, start));
+    return { start, end };
+  }
+
+  return null;
+}
 
 const replayDurationMs = computed(() => {
   return Math.max(0, selectedReplayFrames.value[selectedReplayFrames.value.length - 1]?.timestamp_ms || 0);
@@ -898,6 +1003,22 @@ function onReplayFrameChange(frame: PoseReplayFrame | null) {
   replayFrame.value = frame;
 }
 
+// Rep filter switching
+function switchToRep(repIndex: number | null) {
+  if (selectedRepFilter.value === repIndex) return;
+  selectedRepFilter.value = repIndex;
+  replayProgress.value = 0;
+  replayPlaying.value = true;
+  selectedProblem.value = 0;
+  currentHighlights.value = [];
+}
+
+// Watch rep filter changes to reset highlights
+watch(selectedRepFilter, () => {
+  selectedProblem.value = 0;
+  currentHighlights.value = [];
+});
+
 // Load feedback from the selected session's feedback_summary
 async function loadSessionFeedback(sessionId: string) {
   try {
@@ -937,6 +1058,12 @@ async function loadSessionFeedback(sessionId: string) {
 function onProblemClick(index: number) {
   selectedProblem.value = index;
   const problem = problems.value[index];
+  const canHighlightCurrentRep = selectedRepFilter.value !== null
+    && problem?.repIndex === selectedRepFilter.value;
+  if (!canHighlightCurrentRep) {
+    currentHighlights.value = [];
+    return;
+  }
   if (!problem || !problem.metric) {
     currentHighlights.value = [];
     return;
@@ -1014,7 +1141,9 @@ async function tryLoadReplayForSession(session: SessionRecord) {
     if (!replay.has_replay || replay.frames.length === 0) return false;
     selectedReplaySessionId.value = session.session_id;
     selectedReplay.value = session;
-    selectedReplayFrames.value = replay.frames;
+    allReplayFrames.value = replay.frames;
+    repSegments.value = replay.meta?.rep_segments || [];
+    repNodes.value = replay.meta?.rep_nodes || [];
     replayPlaying.value = true;
     replayProgress.value = 0;
     replayLoadError.value = "";
@@ -1030,7 +1159,10 @@ async function loadSelectedReplay() {
   replayLoadError.value = "";
   replayPlaying.value = false;
   replayProgress.value = 0;
-  selectedReplayFrames.value = [];
+  allReplayFrames.value = [];
+  repSegments.value = [];
+  repNodes.value = [];
+  selectedRepFilter.value = null;
   selectedReplay.value = (replaySessions.value.find((session) => session && session.session_id === selectedReplaySessionId.value)) || null;
 
   if (!selectedReplaySessionId.value) return;
@@ -1041,11 +1173,14 @@ async function loadSelectedReplay() {
       replayLoadError.value = "未找到回放数据";
       return;
     }
-    selectedReplayFrames.value = replay.has_replay ? replay.frames : [];
-    replayPlaying.value = selectedReplayFrames.value.length > 0;
+    allReplayFrames.value = replay.has_replay ? replay.frames : [];
+    replayPlaying.value = allReplayFrames.value.length > 0;
     if (replay.has_replay && replay.frames.length === 0) {
       replayLoadError.value = "该记录已标记有回放但数据为空";
     }
+    // Capture rep nodes/segments from meta.
+    repSegments.value = replay.meta?.rep_segments || [];
+    repNodes.value = replay.meta?.rep_nodes || [];
     // Load session feedback for the selected replay
     await loadSessionFeedback(selectedReplaySessionId.value);
   } catch (error) {
@@ -1320,6 +1455,12 @@ onMounted(async () => {
 
     if (feedbackResult.status === "fulfilled") {
       feedbackItems.value = feedbackResult.value.items || [];
+    }
+
+    // Handle ?replay=sessionId from SessionsView
+    const replayParam = route.query.replay as string | undefined;
+    if (replayParam) {
+      selectedReplaySessionId.value = replayParam;
     }
 
     await loadReplaySessions();
@@ -1696,7 +1837,8 @@ onBeforeUnmount(() => {
 }
 
 .replay-fullscreen-shell:fullscreen .replay-toolbar,
-.replay-fullscreen-shell:fullscreen .phase-flow {
+.replay-fullscreen-shell:fullscreen .phase-flow,
+.replay-fullscreen-shell:fullscreen .rep-filter-bar {
   display: none;
 }
 
@@ -2267,6 +2409,35 @@ onBeforeUnmount(() => {
   color: #5b8cff;
 }
 
+/* Rep filter bar (按单次动作筛选) */
+.rep-filter-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 0;
+}
+
+.rep-filter-btn {
+  padding: 4px 12px;
+  border: 1px solid rgba(91, 140, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.56);
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.rep-filter-btn:hover {
+  border-color: rgba(96, 165, 250, 0.38);
+  color: #cbd5e1;
+}
+.rep-filter-btn.active {
+  background: rgba(91, 140, 255, 0.15);
+  border-color: rgba(96, 165, 250, 0.48);
+  color: #5b8cff;
+}
+
 .right-col {
   display: grid;
   gap: 14px;
@@ -2383,7 +2554,6 @@ onBeforeUnmount(() => {
 }
 
 .pi-top,
-.quick-advice,
 .advice-item {
   display: flex;
   gap: 10px;
@@ -2423,93 +2593,34 @@ onBeforeUnmount(() => {
   font-size: 9px;
 }
 
-.pi-meta {
-  justify-content: space-between;
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid #e8effd;
-  font-size: 10px;
-}
-
-.quick-advice {
+.advice-card {
   margin-top: 14px;
   padding: 12px;
   border-radius: 9px;
   border: 1px solid rgba(37, 184, 123, 0.1);
   background: rgba(37, 184, 123, 0.04);
+  display: flex;
+  gap: 10px;
 }
-
-.qa-icon {
+.advice-card-icon {
   width: 28px;
   height: 28px;
   border-radius: 7px;
+  background: rgba(37, 184, 123, 0.1);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: #25b87b;
 }
-
-.quick-advice strong {
+.advice-card-body strong {
   display: block;
   margin-bottom: 3px;
-}
-
-.accordion-header {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid #e8effd;
-  border-radius: 9px;
-  background: #f8fafc;
-  color: #0f172a;
   font-size: 13px;
-  font-weight: 600;
-  text-align: left;
 }
-
-.accordion-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.accordion-title {
-  flex: 1;
-}
-
-.accordion-chevron {
-  color: #94a3b8;
-  transition: transform 0.2s ease;
-}
-
-.accordion-chevron.open {
-  transform: rotate(180deg);
-}
-
-.accordion-body {
-  padding: 8px 0 0 14px;
-}
-
-.advice-item {
-  background: #f8fafc;
-}
-
-.ai-num {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.ai-body {
-  display: grid;
-  gap: 2px;
-}
-
-.btn-full-plan {
-  width: 100%;
-  margin-top: 12px;
-  padding: 10px;
-  border-radius: 9px;
+.advice-card-body p {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #475569;
 }
 
 .charts-row {
