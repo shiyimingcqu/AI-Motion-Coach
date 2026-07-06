@@ -1,0 +1,56 @@
+<!-- 登录页 -->
+<view class="login-page">
+  <view class="login-content">
+    <!-- Logo 区域 -->
+    <view class="logo-section">
+      <view class="logo-icon">🏋️</view>
+      <text class="app-name">运动姿态评估</text>
+      <text class="app-desc">智能运动姿态分析与纠错系统</text>
+    </view>
+
+    <!-- 微信一键登录 -->
+    <view class="login-buttons">
+      <button class="btn btn-primary btn-lg wechat-login-btn" bindtap="handleWechatLogin">
+        微信一键登录
+      </button>
+
+      <view class="other-login-divider">
+        <text class="divider-text">其他登录方式</text>
+      </view>
+
+      <!-- 账号密码登录（折叠） -->
+      <view class="account-login" wx:if="{{showAccountLogin}}">
+        <view class="form-group">
+          <input
+            class="input"
+            type="text"
+            placeholder="用户名"
+            value="{{username}}"
+            bindinput="onUsernameInput"
+          />
+        </view>
+        <view class="form-group">
+          <input
+            class="input"
+            type="password"
+            placeholder="密码"
+            value="{{password}}"
+            bindinput="onPasswordInput"
+          />
+        </view>
+        <button class="btn btn-outline btn-lg" bindtap="handleAccountLogin" loading="{{loading}}">
+          登录
+        </button>
+      </view>
+
+      <view class="toggle-account" bindtap="toggleAccountLogin">
+        <text>{{showAccountLogin ? '收起' : '账号密码登录'}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 底部提示 -->
+  <view class="footer-tip">
+    <text>登录即表示同意《用户协议》和《隐私政策》</text>
+  </view>
+</view>

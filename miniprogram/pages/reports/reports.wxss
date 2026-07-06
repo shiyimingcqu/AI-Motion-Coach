@@ -1,0 +1,210 @@
+/* 报告页 - 设计稿风格 */
+.reports-page {
+  min-height: 100vh;
+  background: var(--bg);
+  padding: 0 24rpx 24rpx;
+}
+
+/* 顶部 */
+.top-bar {
+  background: var(--bg);
+}
+
+.top-bar-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 88rpx;
+}
+
+.top-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* 时间 Tab */
+.time-tabs {
+  display: flex;
+  gap: 12rpx;
+  margin: 0 0 24rpx;
+}
+
+.time-tab {
+  padding: 12rpx 28rpx;
+  border-radius: var(--radius-full);
+  font-size: 26rpx;
+  color: var(--text-secondary);
+  background: #fff;
+  box-shadow: var(--shadow-card);
+}
+
+.time-tab-active {
+  background: linear-gradient(135deg, #4f8cff 0%, #2f6fe0 100%);
+  color: #fff;
+}
+
+/* section */
+.section-card {
+  padding: 24rpx 24rpx 28rpx;
+  background: #fff;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  margin-bottom: 20rpx;
+}
+
+.section-title-text {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 20rpx;
+}
+
+/* 概览 */
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8rpx;
+}
+
+.overview-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12rpx 0;
+}
+
+.ov-value {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.ov-label {
+  font-size: 22rpx;
+  color: var(--text-muted);
+  margin-top: 8rpx;
+  text-align: center;
+}
+
+/* 柱状图 */
+.bar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.bar-label-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8rpx;
+}
+
+.bar-name {
+  font-size: 26rpx;
+  color: var(--text);
+}
+
+.bar-score {
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.bar-track {
+  height: 14rpx;
+  background: #f0f3f8;
+  border-radius: 8rpx;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 8rpx;
+  transition: width 0.5s ease;
+}
+
+/* 训练历史 */
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 16rpx;
+  background: #fafbfd;
+  border-radius: var(--radius);
+}
+
+.session-thumb {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, #e9f0ff 0%, #f6e9ff 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.session-thumb-icon {
+  font-size: 40rpx;
+}
+
+.session-mid {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-name {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8rpx;
+  display: block;
+}
+
+.session-meta {
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  font-size: 22rpx;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.session-time-icon,
+.session-duration-icon {
+  font-size: 20rpx;
+  margin-right: 2rpx;
+}
+
+.session-dot {
+  margin: 0 6rpx;
+  color: var(--text-placeholder);
+}
+
+.session-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6rpx;
+  flex-shrink: 0;
+}
+
+.session-score {
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.session-status {
+  font-size: 20rpx;
+  color: #0e9b6d;
+  background: var(--success-soft);
+  padding: 2rpx 12rpx;
+  border-radius: var(--radius-full);
+}

@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+vite.config.ts.timestamp-*.mjs
+
+# IDE
+.vscode/
+.idea/
+.workbuddy/
+
+# Mini Program local/private files
+miniprogram/project.private.config.json
+miniprogram/assets/fitness/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Runtime storage
+storage/uploads/*
+storage/outputs/*
+storage/reports/*
+backend/storage/outputs/*
+!storage/uploads/.gitkeep
+!storage/outputs/.gitkeep
+!storage/reports/.gitkeep
+!backend/storage/outputs/.gitkeep
+
+# Generated exercise templates not committed by default
+storage/templates/jumping_jack_template_side_v1.json
+storage/templates/plank_template_side_v1.json
+storage/templates/push_up_template_side_v1.json
+
+# Models / large files
+*.pt
+*.pth
+*.onnx
+*.mp4
+*.avi
+*.mov
+
+# Logs
+*.log
+logs/
+
+# WorkBuddy workspace data
+.workbuddy/
+
+# Trae IDE
+.trae/
+
+# OS
+.DS_Store
+Thumbs.db
+
+db_stdout.txt
+.npm-cache/

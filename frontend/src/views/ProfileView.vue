@@ -1,0 +1,385 @@
+<template>
+  <div class="page">
+    <button class="back-link" type="button" @click="goHome">
+      <ArrowLeft :size="24" />
+      返回首页
+    </button>
+
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Profile</p>
+        <h1>个人资料</h1>
+        <p class="subtle">修改后自动同步到云端，多设备共享。</p>
+      </div>
+      <span class="status-pill" :class="saveStatusClass">{{ saveStatusText }}</span>
+    </header>
+
+    <section class="profile-hero panel">
+      <div class="profile-avatar-picker">
+        <button class="profile-avatar-button" type="button" aria-label="修改头像" @click="openAvatarModal">
+          <UserAvatar size="lg" />
+        </button>
+        <small>点击头像修改</small>
+        <div v-if="avatarSuccessVisible" class="avatar-success-badge" role="status">
+          <Check :size="16" />
+          头像修改成功
+        </div>
+      </div>
+      <div class="profile-hero-form">
+        <label class="profile-field">
+          <span>姓名</span>
+          <input v-model="profile.name" type="text" placeholder="请输入姓名" />
+        </label>
+        <label class="profile-field">
+          <span>训练目标</span>
+          <input v-model="profile.trainingGoal" type="text" placeholder="请输入训练目标" />
+        </label>
+      </div>
+    </section>
+
+    <section class="profile-grid">
+      <article class="panel">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">Basic Info</p>
+            <h2>基础信息</h2>
+          </div>
+        </div>
+        <div class="profile-form-list">
+          <label class="profile-field">
+            <span>职业</span>
+            <select v-model="profile.occupation">
+              <option v-for="occupation in occupationOptions" :key="occupation" :value="occupation">
+                {{ occupation }}
+              </option>
+            </select>
+          </label>
+          <label class="profile-field">
+            <span>身高 (cm)</span>
+            <input v-model="profile.height" type="number" min="0" placeholder="172" />
+          </label>
+          <label class="profile-field">
+            <span>体重 (kg)</span>
+            <input v-model="profile.weight" type="number" min="0" placeholder="62" />
+          </label>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="section-title">
+          <div>
+            <p class="eyebrow">Training</p>
+            <h2>训练概况</h2>
+          </div>
+        </div>
+        <dl class="info-list info-list-readonly">
+          <div>
+            <dt>累计训练</dt>
+            <dd>{{ trainingStats.totalSessions }} 次</dd>
+          </div>
+          <div>
+            <dt>平均评分</dt>
+            <dd>{{ trainingStats.avgScore }} 分</dd>
+          </div>
+          <div>
+            <dt>最常训练</dt>
+            <dd>{{ trainingStats.topExercise }}</dd>
+          </div>
+          <div>
+            <dt>累计时长</dt>
+            <dd>{{ trainingStats.totalDuration }}</dd>
+          </div>
+        </dl>
+      </article>
+    </section>
+
+    <section class="panel">
+      <div class="section-title">
+        <div>
+          <p class="eyebrow">Preference</p>
+          <h2>训练偏好</h2>
+        </div>
+        <span class="goal-count">{{ profile.trainingPreferences.length }}/5</span>
+      </div>
+      <p class="goal-hint">请选择 1 至 5 项训练偏好，系统将据此优化训练建议与提醒重点。</p>
+      <div class="goal-picker">
+        <button
+          v-for="option in trainingPreferenceOptions"
+          :key="option"
+          class="goal-option"
+          :class="{
+            active: profile.trainingPreferences.includes(option),
+            disabled: isPreferenceDisabled(option)
+          }"
+          type="button"
+          @click="toggleTrainingPreference(option)"
+        >
+          {{ option }}
+        </button>
+      </div>
+      <p v-if="preferenceMessage" class="goal-message">{{ preferenceMessage }}</p>
+    </section>
+
+    <section class="panel profile-logout-panel">
+      <button class="logout-link" type="button" @click="logout">
+        <LogOut :size="18" />
+        退出登录
+      </button>
+    </section>
+
+    <Teleport to="body">
+      <div v-if="showAvatarModal" class="avatar-modal-overlay" @click.self="closeAvatarModal">
+        <div
+          class="avatar-modal"
+          :class="{ 'avatar-modal-crop': cropStep }"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="avatar-modal-title"
+        >
+          <button class="avatar-modal-close" type="button" aria-label="取消" @click="closeAvatarModal">
+            <X :size="20" />
+          </button>
+
+          <template v-if="!cropStep">
+            <h2 id="avatar-modal-title">更换头像</h2>
+            <div class="avatar-modal-preview">
+              <UserAvatar size="lg" />
+            </div>
+            <div class="avatar-modal-actions">
+              <button class="avatar-action-btn avatar-action-btn-secondary" type="button" @click="selectDefaultAvatar">
+                使用默认头像（姓氏）
+              </button>
+              <label class="avatar-action-btn avatar-action-btn-primary avatar-upload-label">
+                上传图片
+                <input
+                  class="avatar-file-input"
+                  type="file"
+                  accept="image/*"
+                  @change="handleAvatarSelect"
+                />
+              </label>
+            </div>
+            <p class="avatar-modal-hint">支持 png、jpg、webp、gif，最大 2MB。上传后可拖动方框裁剪正方形区域。</p>
+          </template>
+
+          <template v-else>
+            <h2 id="avatar-modal-title">裁剪头像</h2>
+            <AvatarCropper ref="cropperRef" :image-url="cropImageUrl" />
+            <p class="avatar-modal-hint">拖动方框选择区域，右下角可缩放，比例固定为正方形。</p>
+            <div class="avatar-modal-actions">
+              <button class="avatar-action-btn avatar-action-btn-secondary" type="button" @click="backToAvatarOptions">
+                重新选择
+              </button>
+              <button class="avatar-action-btn avatar-action-btn-primary" type="button" @click="confirmCrop">
+                确认使用
+              </button>
+            </div>
+          </template>
+
+          <p v-if="avatarMessage" class="avatar-message">{{ avatarMessage }}</p>
+        </div>
+      </div>
+    </Teleport>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { storeToRefs } from "pinia";
+import { ArrowLeft, Check, LogOut, X } from "lucide-vue-next";
+import { useRouter } from "vue-router";
+
+import AvatarCropper from "../components/AvatarCropper.vue";
+import UserAvatar from "../components/UserAvatar.vue";
+import { useAuthStore } from "../stores/auth";
+import { TRAINING_PREFERENCE_OPTIONS, OCCUPATION_OPTIONS, setCustomAvatar, setDefaultAvatar, useProfileStore } from "../stores/profile";
+
+const EXERCISE_MAP: Record<string, string> = {
+  squat: "深蹲", push_up: "俯卧撑", jumping_jack: "开合跳", plank: "平板支撑",
+};
+
+const router = useRouter();
+const authStore = useAuthStore();
+const { profile } = storeToRefs(useProfileStore());
+const trainingPreferenceOptions = TRAINING_PREFERENCE_OPTIONS;
+const occupationOptions = OCCUPATION_OPTIONS;
+const preferenceMessage = ref("");
+const avatarMessage = ref("");
+const showAvatarModal = ref(false);
+const cropStep = ref(false);
+const cropImageUrl = ref("");
+const cropperRef = ref<InstanceType<typeof AvatarCropper> | null>(null);
+const avatarSuccessVisible = ref(false);
+const saveStatus = ref<"saved" | "saving">("saved");
+
+const saveStatusText = computed(() => (saveStatus.value === "saving" ? "保存中..." : "已同步"));
+const saveStatusClass = computed(() => (saveStatus.value === "saving" ? "saving" : "good"));
+
+// 训练统计数据
+const trainingStats = ref({ totalSessions: 0, avgScore: 0, topExercise: "--", totalDuration: "--" });
+
+async function loadTrainingStats() {
+  const token = localStorage.getItem("pose_auth_token");
+  if (!token) return;
+  try {
+    const res = await fetch("/api/dashboard/stats", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    trainingStats.value.totalSessions = data.total_sessions || 0;
+    trainingStats.value.avgScore = data.average_score ? Math.round(data.average_score) : 0;
+    const top = data.top_exercise;
+    trainingStats.value.topExercise = top ? (EXERCISE_MAP[top] || top) : "--";
+    const secs = data.total_duration_seconds || 0;
+    const mins = Math.round(secs / 60);
+    trainingStats.value.totalDuration = mins >= 60
+      ? `${Math.floor(mins / 60)} 小时 ${mins % 60} 分`
+      : `${mins} 分钟`;
+  } catch { /* ignore */ }
+}
+
+onMounted(loadTrainingStats);
+
+let avatarSuccessTimer: ReturnType<typeof setTimeout> | null = null;
+
+// 监听 profile 变化，显示保存状态
+let _saveWatchTimer: ReturnType<typeof setTimeout> | null = null;
+watch(profile, () => {
+  saveStatus.value = "saving";
+  if (_saveWatchTimer) clearTimeout(_saveWatchTimer);
+  _saveWatchTimer = setTimeout(() => { saveStatus.value = "saved"; }, 1200);
+}, { deep: true });
+
+const MAX_AVATAR_SIZE = 2 * 1024 * 1024;
+
+function showAvatarSuccess() {
+  avatarSuccessVisible.value = true;
+  if (avatarSuccessTimer) {
+    clearTimeout(avatarSuccessTimer);
+  }
+  avatarSuccessTimer = setTimeout(() => {
+    avatarSuccessVisible.value = false;
+    avatarSuccessTimer = null;
+  }, 2400);
+}
+
+onUnmounted(() => {
+  if (avatarSuccessTimer) {
+    clearTimeout(avatarSuccessTimer);
+  }
+});
+
+function goHome() {
+  router.push("/");
+}
+
+function logout() {
+  authStore.logout();
+  router.push("/login");
+}
+
+function resetCropState() {
+  if (cropImageUrl.value) {
+    URL.revokeObjectURL(cropImageUrl.value);
+  }
+  cropImageUrl.value = "";
+  cropStep.value = false;
+}
+
+function openAvatarModal() {
+  avatarMessage.value = "";
+  resetCropState();
+  showAvatarModal.value = true;
+}
+
+function closeAvatarModal() {
+  resetCropState();
+  showAvatarModal.value = false;
+  avatarMessage.value = "";
+}
+
+function selectDefaultAvatar() {
+  setDefaultAvatar(profile.value);
+  closeAvatarModal();
+  showAvatarSuccess();
+}
+
+function backToAvatarOptions() {
+  resetCropState();
+  avatarMessage.value = "";
+}
+
+function isImageFile(file: File) {
+  if (file.type.startsWith("image/")) {
+    return true;
+  }
+  return /\.(png|jpe?g|webp|gif)$/i.test(file.name);
+}
+
+function handleAvatarSelect(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+
+  if (!file) {
+    return;
+  }
+
+  if (!isImageFile(file)) {
+    avatarMessage.value = "请上传 png、jpg、webp 或 gif 图片。";
+    return;
+  }
+
+  if (file.size > MAX_AVATAR_SIZE) {
+    avatarMessage.value = "图片大小不能超过 2MB。";
+    return;
+  }
+
+  avatarMessage.value = "";
+  resetCropState();
+  cropImageUrl.value = URL.createObjectURL(file);
+  cropStep.value = true;
+}
+
+async function confirmCrop() {
+  if (!cropperRef.value) {
+    avatarMessage.value = "裁剪组件未就绪，请稍后再试。";
+    return;
+  }
+
+  try {
+    const imageData = await cropperRef.value.getCroppedImage();
+    setCustomAvatar(profile.value, imageData);
+    closeAvatarModal();
+    showAvatarSuccess();
+  } catch (error) {
+    avatarMessage.value = error instanceof Error ? error.message : "裁剪失败，请重新选择图片。";
+  }
+}
+
+function isPreferenceDisabled(option: string) {
+  return profile.value.trainingPreferences.length >= 5 && !profile.value.trainingPreferences.includes(option);
+}
+
+function toggleTrainingPreference(option: string) {
+  preferenceMessage.value = "";
+  const selected = profile.value.trainingPreferences.includes(option);
+
+  if (selected) {
+    if (profile.value.trainingPreferences.length <= 1) {
+      preferenceMessage.value = "至少保留 1 项训练偏好。";
+      return;
+    }
+    profile.value.trainingPreferences = profile.value.trainingPreferences.filter((item) => item !== option);
+    return;
+  }
+
+  if (profile.value.trainingPreferences.length >= 5) {
+    preferenceMessage.value = "最多只能选择 5 项训练偏好。";
+    return;
+  }
+
+  profile.value.trainingPreferences = [...profile.value.trainingPreferences, option];
+}
+</script>

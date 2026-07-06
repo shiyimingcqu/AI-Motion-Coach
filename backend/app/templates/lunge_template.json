@@ -1,0 +1,23 @@
+{
+  "action": "lunge",
+  "version": "1.0",
+  "description": "标准弓步蹲动作模板，用于对比评分",
+  "weights": {
+    "knee_angle": 0.40,
+    "hip_angle": 0.30,
+    "trunk_angle": 0.20,
+    "knee_symmetry_diff": 0.10
+  },
+  "template_sequence": {
+    "knee_angle": [170, 155, 140, 125, 110, 95, 85, 95, 110, 125, 140, 155, 170],
+    "hip_angle": [175, 165, 150, 135, 120, 100, 90, 100, 120, 135, 150, 165, 175],
+    "trunk_angle": [5, 7, 9, 11, 13, 14, 15, 14, 13, 11, 9, 7, 5],
+    "knee_symmetry_diff": [2, 3, 3, 4, 4, 5, 5, 5, 4, 4, 3, 3, 2]
+  },
+  "thresholds": {
+    "excellent": 90,
+    "good": 75,
+    "fair": 60,
+    "poor": 0
+  }
+}
