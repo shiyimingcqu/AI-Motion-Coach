@@ -158,7 +158,6 @@ const baseNavItems = [
   { path: "/", label: "首页总览", icon: Gauge },
   { path: "/realtime", label: "实时检测", icon: Activity },
   { path: "/upload", label: "视频分析", icon: UploadCloud },
-  { path: "/feedback", label: "动作反馈", icon: Target },
   { path: "/sessions", label: "训练记录", icon: ClipboardList },
   { path: "/exercises", label: "动作库", icon: Dumbbell },
   { path: "/progress", label: "个人进步", icon: TrendingUp },

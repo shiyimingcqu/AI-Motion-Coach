@@ -2953,8 +2953,8 @@ body {
 }
 
 .score-good {
-  background: #d9f8e7;
   color: #0c8d4c;
+  font-weight: 700;
 }
 
 .score-blue {
@@ -2963,8 +2963,8 @@ body {
 }
 
 .score-warn {
-  background: #fff1b8;
   color: #a56b00;
+  font-weight: 700;
 }
 
 .time-cell {
@@ -4490,6 +4490,40 @@ body {
   border-bottom: 1px solid #e7ebf2;
 }
 
+.report-table th:last-child,
+.report-table td:last-child {
+  text-align: center;
+}
+
+.actions-cell {
+  text-align: center;
+  padding: 10px 12px !important;
+}
+
+.actions-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.actions-row button {
+  padding: 5px 10px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.na-text {
+  display: inline-block;
+  width: 72px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1;
+  vertical-align: middle;
+}
+
 .report-table th {
   color: #536179;
   font-size: 12px;
@@ -5305,8 +5339,8 @@ input::placeholder {
 
 .status-badge,
 .score-good {
-  background: rgba(34, 197, 94, 0.18);
   color: #86efac;
+  font-weight: 700;
 }
 
 .status-badge.inactive {
@@ -5319,7 +5353,11 @@ input::placeholder {
   color: #93c5fd;
 }
 
-.score-warn,
+.score-warn {
+  color: #fde68a;
+  font-weight: 700;
+}
+
 .processing-pill {
   background: rgba(250, 204, 21, 0.16);
   color: #fde68a;

@@ -26,6 +26,14 @@
       <StateDisplay v-else-if="error" type="error" :title="$t('common.loadFailed')" :text="error" />
       <StateDisplay v-else-if="filteredSessions.length === 0" type="empty" :title="$t('sessions.noSessions')" :text="$t('sessions.noSessionsText')" />
       <table v-else class="report-table">
+        <colgroup>
+          <col style="width:18%">
+          <col style="width:18%">
+          <col style="width:12%">
+          <col style="width:10%">
+          <col style="width:12%">
+          <col style="width:30%">
+        </colgroup>
         <thead>
           <tr>
             <th>{{ $t("sessions.tableHead_datetime") }}</th>
@@ -33,7 +41,6 @@
             <th>{{ $t("sessions.tableHead_duration") }}</th>
             <th>{{ $t("sessions.tableHead_reps") }}</th>
             <th>{{ $t("sessions.tableHead_score") }}</th>
-            <th>REPLAY</th>
             <th>{{ $t("sessions.tableHead_actions") }}</th>
           </tr>
         </thead>
@@ -48,13 +55,13 @@
                 {{ session.average_score }}
               </span>
             </td>
-            <td>
-              <span v-if="session.has_pose_replay" title="有 3D 回放">🎬</span>
-              <span v-else>—</span>
-            </td>
-            <td>
-              <button @click="viewSession(session.session_id)">查看</button>
-              <button v-if="session.has_pose_replay" @click="viewReplay(session.session_id)">3D 回放</button>
+            <td class="actions-cell">
+              <div class="actions-row">
+                <button @click="viewSession(session.session_id)">查看报告</button>
+                <button v-if="session.has_pose_replay" @click="viewReplay(session.session_id)">3D 回放</button>
+                <span v-else class="na-text">--</span>
+                <button @click="viewFeedback(session.session_id)">动作反馈</button>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -147,6 +154,10 @@ function viewSession(session_id: string) {
 
 function viewReplay(session_id: string) {
   router.push("/?replay=" + session_id);
+}
+
+function viewFeedback(session_id: string) {
+  router.push("/feedback?session=" + session_id);
 }
 
 const summaryCards = computed(() => {
