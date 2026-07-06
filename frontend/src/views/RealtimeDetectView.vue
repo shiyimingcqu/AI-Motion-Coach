@@ -59,8 +59,8 @@
           <h2>实时数据面板</h2>
         </div>
         <MetricTile label="当前动作" :value="activeExerciseDefinition.name" :hint="activeExerciseDefinition.key" />
-        <MetricTile label="阶段" :value="store.stage" hint="当前动作阶段" />
-        <MetricTile label="评分" :value="store.score" hint="实时评分" />
+        <MetricTile label="阶段" :value="displayStage" hint="当前动作阶段" />
+        <MetricTile label="评分" :value="displayScore" hint="实时评分" />
 
         <div class="live-data-panel">
           <div class="live-data-header">
@@ -123,14 +123,20 @@
         <div v-if="savedMessage" class="alert-line">{{ savedMessage }}</div>
         <div class="error-stack error-stack--errors">
           <strong>错误提示</strong>
-          <span v-if="store.errors.length === 0" class="stack-empty">暂无错误</span>
-          <span v-for="error in store.errors" :key="error">{{ error }}</span>
+          <span v-if="trainingState === 'idle'" class="stack-empty">--</span>
+          <template v-else>
+            <span v-if="store.errors.length === 0" class="stack-empty">暂无错误</span>
+            <span v-for="error in store.errors" :key="error">{{ error }}</span>
+          </template>
         </div>
 
         <div class="error-stack error-stack--advice">
           <strong>实时建议</strong>
-          <span v-if="store.feedbacks.length === 0" class="stack-empty">暂无建议</span>
-          <span v-for="advice in store.feedbacks" :key="advice">{{ advice }}</span>
+          <span v-if="trainingState === 'idle'" class="stack-empty">--</span>
+          <template v-else>
+            <span v-if="store.feedbacks.length === 0" class="stack-empty">暂无建议</span>
+            <span v-for="advice in store.feedbacks" :key="advice">{{ advice }}</span>
+          </template>
         </div>
 
         <div class="live-data-panel ai-advice-panel">
@@ -474,6 +480,16 @@ const connectionClass = computed(() => {
   if (trainingState.value === "running" || trainingState.value === "finished") return "good";
   if (trainingState.value === "error") return "danger";
   return "idle";
+});
+
+const displayStage = computed(() => {
+  if (trainingState.value === "idle") return "--";
+  return store.stage;
+});
+
+const displayScore = computed(() => {
+  if (trainingState.value === "idle") return "--";
+  return store.score;
 });
 
 const canPause = computed(() => trainingState.value === "running" || trainingState.value === "paused");
@@ -838,7 +854,7 @@ function runPoseFrame(timestamp: number) {
   }
 
   const landmarks = detectPose(poseLandmarker, video, timestamp);
-  drawPose(canvas, landmarks, video, "cover");
+  drawPose(canvas, landmarks, video, "contain");
 
   if (!landmarks) {
     poseStatus.value = "未检测到人体，请站入画面";

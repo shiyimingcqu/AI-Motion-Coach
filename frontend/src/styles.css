@@ -1798,6 +1798,31 @@ html:not(.theme-light) .metric-rail .error-stack--advice .stack-empty {
   text-align: right;
 }
 
+/* ── 实时检测页：撑满可视区域，不滚动 ── */
+.realtime-page {
+  height: 100%;
+  overflow: hidden;
+  grid-template-rows: auto 1fr auto;
+}
+
+.realtime-page .training-cockpit {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.realtime-page .camera-panel {
+  min-height: 0;
+}
+
+.realtime-page .camera-video {
+  min-height: 0;
+  object-fit: contain;
+}
+
+.realtime-page .metric-rail {
+  overflow-y: auto;
+}
+
 .control-bar {
   justify-content: center;
   flex-wrap: wrap;
@@ -3038,6 +3063,27 @@ body {
 .upload-page {
   display: grid;
   gap: 26px;
+  height: 100%;
+  overflow: hidden;
+  grid-template-rows: auto 1fr auto;
+}
+
+.upload-page .training-cockpit {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.upload-page .camera-panel {
+  min-height: 0;
+}
+
+.upload-page .camera-video {
+  min-height: 0;
+  object-fit: contain;
+}
+
+.upload-page .metric-rail {
+  overflow-y: auto;
 }
 
 .section-page-header {
@@ -3057,6 +3103,17 @@ body {
   margin-top: 5px;
   color: #536179;
   font-size: 15px;
+}
+
+.streak-tag {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(249, 115, 22, 0.12));
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 999px;
+  padding: 6px 18px;
+  font-size: 15px;
+  color: #f87171;
+  white-space: nowrap;
+  align-self: center;
 }
 
 .blue-action-button {
@@ -5337,23 +5394,23 @@ input::placeholder {
   color: #86efac;
 }
 
-.status-badge,
-.score-good {
+html:not(.theme-light) .status-badge,
+html:not(.theme-light) .score-good {
   color: #86efac;
   font-weight: 700;
 }
 
-.status-badge.inactive {
+html:not(.theme-light) .status-badge.inactive {
   background: rgba(148, 163, 184, 0.16);
   color: #cbd5e1;
 }
 
-.score-blue {
+html:not(.theme-light) .score-blue {
   background: rgba(96, 165, 250, 0.18);
   color: #93c5fd;
 }
 
-.score-warn {
+html:not(.theme-light) .score-warn {
   color: #fde68a;
   font-weight: 700;
 }
@@ -6070,6 +6127,69 @@ html.theme-light .side-util-btn:hover {
 
 html.theme-light .side-nav-scroll::-webkit-scrollbar-thumb {
   background: rgba(15, 23, 42, 0.18);
+}
+
+/* Light theme: global content text */
+html.theme-light .content,
+html.theme-light .app-workspace,
+html.theme-light .app-content {
+  color: #0f172a;
+}
+
+/* Light theme: training records table rows & action buttons */
+html.theme-light .na-text {
+  color: #94a3b8;
+}
+html.theme-light .actions-row button {
+  background: #f1f5f9;
+  border: 1px solid #d6e3ff;
+  color: #334155;
+}
+html.theme-light .actions-row button:hover {
+  background: rgba(91, 140, 255, 0.12);
+  border-color: #5b8cff;
+  color: #5b8cff;
+}
+html.theme-light .report-table tr td {
+  border-bottom-color: #e2e8f0;
+}
+
+/* Light theme: streak / blue-shadow-card section */
+html.theme-light .streak-card {
+  background: linear-gradient(135deg, #e8f0ff, #f8fbff);
+  border-color: #c7d8fb;
+}
+html.theme-light .streak-card strong {
+  color: #0f172a;
+}
+
+html.theme-light .streak-tag {
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.1), rgba(234, 88, 12, 0.08));
+  border-color: rgba(220, 38, 38, 0.25);
+  color: #dc2626;
+}
+
+/* Light theme: status-badge fallback */
+html.theme-light .status-badge {
+  color: #0c8d4c;
+}
+html.theme-light .status-badge.inactive {
+  background: #f1f5f9;
+  color: #64748b;
+}
+html.theme-light .score-blue {
+  background: #dbe8ff;
+  color: #315dff;
+}
+
+/* Light theme: processing-pill & role-pill */
+html.theme-light .processing-pill {
+  background: rgba(245, 158, 11, 0.12);
+  color: #92400e;
+}
+html.theme-light .level-pill {
+  background: rgba(34, 197, 94, 0.12);
+  color: #166534;
 }
 
 /* ========== Report Detail Modal ========== */

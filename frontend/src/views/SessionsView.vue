@@ -4,6 +4,9 @@
       <div>
         <h1>{{ $t("sessions.title") }}</h1>
       </div>
+      <div class="streak-tag" v-if="streakDays > 0">
+        <strong>{{ $t("sessions.streak", { count: streakDays }) }}</strong>
+      </div>
     </header>
 
     <section class="filter-card report-filter-card">
@@ -74,18 +77,6 @@
         <strong>{{ card.value }}</strong>
       </article>
     </section>
-
-    <!-- Streak -->
-    <section class="blue-shadow-card" style="margin-top:16px;padding:14px 20px;">
-      <span class="blue-solid"><Flame :size="28" /></span>
-      <div style="margin-left:10px">
-        <strong v-if="streakDays > 0">{{ $t("sessions.streak", { count: streakDays }) }}</strong>
-        <strong v-else>{{ $t("sessions.noStreakYet") }}</strong>
-        <p style="margin:4px 0 0;font-size:13px;color:#64748b">
-          {{ streakDays > 0 ? $t("sessions.keepGoing") : $t("sessions.startFirst") }}
-        </p>
-      </div>
-    </section>
   </div>
 </template>
 
@@ -93,7 +84,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { Filter, Flame, Trash2 } from "lucide-vue-next";
+import { Filter, Trash2 } from "lucide-vue-next";
 import StateDisplay from "../components/StateDisplay.vue";
 import { getSessions } from "../api/sessions";
 

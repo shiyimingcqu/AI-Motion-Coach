@@ -12,11 +12,6 @@
       <path d="M198 328 L226 382" />
       <circle v-for="point in points" :key="point" :cx="point.split(',')[0]" :cy="point.split(',')[1]" r="7" />
     </svg>
-    <div class="joint-warning left-knee">膝盖内扣</div>
-    <div class="feedback-strip">
-      <b>实时评分 86</b>
-      <span>检测到下蹲深度不足</span>
-    </div>
   </div>
 </template>
 

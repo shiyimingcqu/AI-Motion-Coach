@@ -110,26 +110,32 @@
 
         <aside class="metric-rail">
           <div>
-            <p class="eyebrow">Analysis Metrics</p>
-            <h2>分析数据面板</h2>
+            <p class="eyebrow">Live Metrics</p>
+            <h2>实时数据面板</h2>
           </div>
           <MetricTile label="当前动作" :value="exerciseMeta.name" :hint="selectedExercise" />
-          <MetricTile label="阶段" :value="store.stage" hint="当前动作阶段" />
-          <MetricTile label="评分" :value="store.score" hint="分析评分" />
+          <MetricTile label="阶段" :value="displayStage" hint="当前动作阶段" />
+          <MetricTile label="评分" :value="displayScore" hint="分析评分" />
 
           <div v-if="message" class="alert-line">{{ message }}</div>
           <div v-if="cameraError" class="alert-line danger">{{ cameraError }}</div>
 
           <div class="error-stack error-stack--errors">
             <strong>错误提示</strong>
-            <span v-if="store.errors.length === 0" class="stack-empty">暂无错误</span>
-            <span v-for="error in store.errors" :key="error">{{ error }}</span>
+            <span v-if="trainingState === 'idle'" class="stack-empty">--</span>
+            <template v-else>
+              <span v-if="store.errors.length === 0" class="stack-empty">暂无错误</span>
+              <span v-for="error in store.errors" :key="error">{{ error }}</span>
+            </template>
           </div>
 
           <div class="error-stack error-stack--advice">
             <strong>动作建议</strong>
-            <span v-if="store.feedbacks.length === 0" class="stack-empty">暂无建议</span>
-            <span v-for="advice in store.feedbacks" :key="advice">{{ advice }}</span>
+            <span v-if="trainingState === 'idle'" class="stack-empty">--</span>
+            <template v-else>
+              <span v-if="store.feedbacks.length === 0" class="stack-empty">暂无建议</span>
+              <span v-for="advice in store.feedbacks" :key="advice">{{ advice }}</span>
+            </template>
           </div>
 
           <p class="upload-analysis-hint">
@@ -196,6 +202,16 @@ const connectionClass = computed(() => {
   if (trainingState.value === "running" || trainingState.value === "finished") return "good";
   if (trainingState.value === "error") return "danger";
   return "idle";
+});
+
+const displayStage = computed(() => {
+  if (trainingState.value === "idle") return "--";
+  return store.stage;
+});
+
+const displayScore = computed(() => {
+  if (trainingState.value === "idle") return "--";
+  return store.score;
 });
 
 watch(selectedExercise, (exercise) => {
