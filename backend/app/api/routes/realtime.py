@@ -29,12 +29,12 @@ def _get_pose_engine():
 
 
 def _landmarks_dict_to_array(landmarks_dict: dict) -> list:
-    """Convert MediaPipe engine output {idx: {x,y,visibility}} to array of 33 elements."""
+    """Convert MediaPipe engine output {idx: {x,y,z,visibility}} to array of 33 elements."""
     arr = [None] * 33
     for idx_str, kp in landmarks_dict.items():
         idx = int(idx_str)
         if 0 <= idx < 33:
-            arr[idx] = {"x": kp["x"], "y": kp["y"], "visibility": kp.get("visibility", 1.0)}
+            arr[idx] = {"x": kp["x"], "y": kp["y"], "z": kp.get("z", 0.0), "visibility": kp.get("visibility", 1.0)}
     return arr
 
 

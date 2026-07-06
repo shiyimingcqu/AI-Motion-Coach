@@ -8,6 +8,8 @@ export interface FeedbackItem {
   severity: "high" | "medium" | "low";
   suggestion?: string;
   created_at: string;
+  metric?: string;
+  value?: number;
 }
 
 export function getFeedbacks(params?: { session_id?: string; limit?: number }) {
