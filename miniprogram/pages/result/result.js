@@ -163,14 +163,11 @@ Page({
       issues,
       suggestions,
       resultData: data,
-      recordSaved: !!data.session_id,
+      recordSaved: false,
       savedSessionId: data.session_id || '',
       replayKey: data.replay_key || '',
     });
 
-    if (data.session_id && data.replay_key) {
-      try { wx.removeStorageSync(data.replay_key); } catch (e) {}
-    }
   },
 
   buildRadarSVG(radar) {
@@ -267,6 +264,7 @@ Page({
       .filter((_, index) => index % step === 0)
       .slice(0, maxFrames)
       .map((frame, index) => ({
+        source_index: index * step,
         timestamp_ms: Number(frame.timestamp_ms != null ? frame.timestamp_ms : index * 140) || 0,
         landmarks: Array.isArray(frame.landmarks)
           ? frame.landmarks.slice(0, 33).map((point) => ({
@@ -278,6 +276,43 @@ Page({
           : [],
       }))
       .filter((frame) => frame.landmarks.length >= 33);
+  },
+
+  prepareReplayNodesForUpload(nodes, uploadFrames) {
+    if (!Array.isArray(nodes) || nodes.length === 0 || !Array.isArray(uploadFrames) || uploadFrames.length === 0) {
+      return [];
+    }
+
+    const nearestUploadIndex = (sourceIndex) => {
+      let bestIndex = 0;
+      let bestDistance = Infinity;
+      uploadFrames.forEach((frame, index) => {
+        const candidate = Number(frame.source_index != null ? frame.source_index : index);
+        const distance = Math.abs(candidate - sourceIndex);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestIndex = index;
+        }
+      });
+      return bestIndex;
+    };
+
+    return nodes
+      .filter((node) => node && node.rep_index && node.frame_index != null)
+      .map((node) => {
+        const frameIndex = nearestUploadIndex(Number(node.frame_index) || 0);
+        const startFrameIndex = node.start_frame_index != null
+          ? nearestUploadIndex(Number(node.start_frame_index) || 0)
+          : undefined;
+        return {
+          rep_index: Number(node.rep_index),
+          frame_index: frameIndex,
+          timestamp_ms: Number(uploadFrames[frameIndex] && uploadFrames[frameIndex].timestamp_ms) || 0,
+          start_frame_index: startFrameIndex,
+          score: Number(node.score || 0),
+          issues: Array.isArray(node.issues) ? node.issues : [],
+        };
+      });
   },
 
   async onSave() {
@@ -301,6 +336,7 @@ Page({
       }
 
       const uploadReplayFrames = this.prepareReplayFramesForUpload(replayFrames);
+      const uploadReplayNodes = this.prepareReplayNodesForUpload(data.replay_nodes || [], uploadReplayFrames);
 
       // 第二步：保存基本记录（不带骨架）
       const payload = {
@@ -312,8 +348,15 @@ Page({
         average_score: Math.round(Number(data.average_score || 0)),
       };
 
-      let session = await ApiClient.post('/api/sessions', payload);
-      const sessionId = (session && session.session_id) || '';
+      let sessionId = data.session_id || this.data.savedSessionId || '';
+      if (!sessionId) {
+        const session = await ApiClient.post('/api/sessions', payload);
+        sessionId = (session && session.session_id) || '';
+      }
+
+      if (!sessionId) {
+        throw new Error('训练记录保存失败：未返回记录ID');
+      }
 
       // 第三步：单独补充骨架回放数据
       if (sessionId && uploadReplayFrames.length > 0) {
@@ -326,6 +369,7 @@ Page({
               sample_interval_ms: 140,
               frame_count: uploadReplayFrames.length,
               original_frame_count: replayFrames.length,
+              rep_nodes: uploadReplayNodes,
             },
           });
           console.log('[Replay] 骨架回放数据保存成功，共', uploadReplayFrames.length, '帧');

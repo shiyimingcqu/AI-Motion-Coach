@@ -42,6 +42,14 @@ class BaseExerciseAnalyzer:
         self.session_issue_counts: Counter[str] = Counter()
         self.session_feedback_counts: Counter[str] = Counter()
 
+        # Frame-level tracking for rep_segments (按单次动作筛选回放)
+        self._frame_index: int = 0
+        self._last_rep_completed_count: int = -1
+        self._rep_start_frame_index: int = 0
+        self._rep_standing_frame: int = 0
+        self.rep_segments: list[dict] = []
+        self.rep_nodes: list[dict] = []
+
     def reset(self):
         """Reset all internal state for a new training session."""
         self.feature_history.clear()
@@ -53,6 +61,17 @@ class BaseExerciseAnalyzer:
         self.scores_history.clear()
         self.previous_stage = "ready"
         self.stage_stability_counter = 0
+        self._frame_index = 0
+        self._last_rep_completed_count = -1
+        self._rep_start_frame_index = 0
+        self._rep_standing_frame = 0
+        self._rep_samples = []
+        self.rep_summaries = []
+        self.rep_results = []
+        self.rep_segments = []
+        self.rep_nodes = []
+        self.session_issue_counts = Counter()
+        self.session_feedback_counts = Counter()
 
     # ─── abstract methods ────────────────────────────────────
 
@@ -96,9 +115,37 @@ class BaseExerciseAnalyzer:
     def get_session_feedback_counts(self) -> Counter[str]:
         return self.session_feedback_counts
 
+    # ─── metric inference for rep_segment issues ─────────────
+
+    @staticmethod
+    def _infer_metric_from_issue(issue: str) -> str | None:
+        """Try to infer a metric name from Chinese issue text."""
+        if not issue:
+            return None
+        if "膝" in issue or "蹲" in issue:
+            return "knee_angle"
+        if "躯干" in issue or "前倾" in issue or "塌腰" in issue:
+            return "trunk_angle"
+        if "肘" in issue:
+            return "elbow_angle"
+        if "臀" in issue or "髋" in issue:
+            return "hip_angle"
+        if "肩" in issue:
+            return "shoulder_abduction_angle"
+        if "对称" in issue:
+            return "knee_symmetry_diff"
+        if "身体" in issue or "直线" in issue:
+            return "body_line_angle"
+        if "踝" in issue or "脚" in issue:
+            return "ankle_distance"
+        return None
+
     # ─── public entry point ──────────────────────────────────
 
-    def analyze_frame(self, landmarks: Keypoints, state: dict) -> dict:
+    def analyze_frame(self, landmarks: Keypoints, state: dict, frame_index: int | None = None) -> dict:
+        if frame_index is not None:
+            self._frame_index = frame_index
+
         features = self.extract_features(landmarks)
         phase = self.detect_phase(features, state)
         current_stage = self.stage
@@ -111,15 +158,31 @@ class BaseExerciseAnalyzer:
 
         lowering_phases, rising_phases = self.rep_completion_from_phases()
         rep_completed = current_stage in lowering_phases and phase in rising_phases
-
-        if phase in self.rep_sample_phases():
-            self._rep_samples.append(dict(smoothed))
+        if rep_completed and self._last_rep_completed_count == self.count + 1:
+            rep_completed = False
 
         frame_issues: list[str] = []
         frame_feedback: list[str] = []
         frame_score = score_result["score"]
 
+        # Rep segment tracking
+        if phase == "standing":
+            # Capture the last standing frame before next rep starts
+            self._rep_standing_frame = self._frame_index
+
+        if phase in self.rep_sample_phases():
+            if not self._rep_samples:
+                # First down/bottom frame — start from the last standing frame
+                self._rep_start_frame_index = getattr(self, "_rep_standing_frame", self._frame_index)
+            self._rep_samples.append(dict(smoothed))
+
         if rep_completed:
+            # End frame: extend to standing (captured on next standing visit)
+            # but for rep filtering, include at least the down→up range
+            end_frame = self._frame_index
+            standing = getattr(self, "_rep_standing_frame", -1)
+            if standing > self._rep_start_frame_index:
+                end_frame = standing
             rep_summary = self.summarize_rep(self._rep_samples)
             rep_result = self.score_rep(rep_summary) if rep_summary else {
                 "score": 0,
@@ -136,6 +199,37 @@ class BaseExerciseAnalyzer:
                 self.session_feedback_counts[suggestion] += 1
             self.rep_summaries.append(rep_summary)
             self.rep_results.append(rep_result)
+
+            # Record rep segment before clearing samples
+            rep_issues: list[dict] = []
+            rep_issue_texts = rep_result.get("issues", [])
+            rep_feedback_texts = rep_result.get("feedback", [])
+            for i, issue_text in enumerate(rep_issue_texts):
+                suggestion = rep_feedback_texts[i] if i < len(rep_feedback_texts) else ""
+                metric = self._infer_metric_from_issue(issue_text)
+                rep_issues.append({
+                    "issue": issue_text,
+                    "suggestion": suggestion,
+                    "severity": "warning",
+                    "metric": metric or "",
+                    "value": rep_summary.get(metric, 0) if metric else 0,
+                })
+
+            self.rep_segments.append({
+                "rep_index": self.count + 1,
+                "start_frame_index": self._rep_start_frame_index,
+                "end_frame_index": max(end_frame, self._frame_index),
+                "score": rep_result.get("score", 0),
+                "issues": rep_issues,
+            })
+            self.rep_nodes.append({
+                "rep_index": self.count + 1,
+                "frame_index": self._frame_index,
+                "start_frame_index": self._rep_start_frame_index,
+                "score": rep_result.get("score", 0),
+                "issues": rep_issues,
+            })
+
             self._rep_samples = []
 
         # Count a rep only when we cross once from the lowering/bottom phase
@@ -143,6 +237,7 @@ class BaseExerciseAnalyzer:
         # avoids double-counting on sequences like bottom -> up -> standing.
         if rep_completed:
             self.count += 1
+            self._last_rep_completed_count = self.count
             if self._last_down_was_valid:
                 self.valid_count += 1
             self.scores_history.append(frame_score)

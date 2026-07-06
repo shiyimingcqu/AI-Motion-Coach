@@ -55,6 +55,7 @@
             <td>
               <button @click="viewSession(session.session_id)">查看</button>
               <button v-if="session.has_pose_replay" @click="viewReplay(session.session_id)">3D 回放</button>
+              <button class="btn-delete" @click="handleDelete(session)">删除</button>
             </td>
           </tr>
         </tbody>
@@ -86,9 +87,9 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { Filter, Flame, Trash2 } from "lucide-vue-next";
+import { Filter, Flame } from "lucide-vue-next";
 import StateDisplay from "../components/StateDisplay.vue";
-import { getSessions } from "../api/sessions";
+import { getSessions, deleteSession as apiDeleteSession } from "../api/sessions";
 
 const router = useRouter();
 const { t } = useI18n();
@@ -102,6 +103,7 @@ interface SessionItem {
   valid_count: number;
   error_count: number;
   average_score: number;
+  has_pose_replay?: boolean;
 }
 
 const sessions = ref<SessionItem[]>([]);
@@ -210,6 +212,16 @@ async function loadSessions() {
     error.value = e?.message || t("common.networkError");
   } finally {
     loading.value = false;
+  }
+}
+
+async function handleDelete(session: SessionItem) {
+  if (!confirm(`确定删除 ${exerciseLabels[session.exercise] || session.exercise} 训练记录？`)) return;
+  try {
+    await apiDeleteSession(session.session_id);
+    sessions.value = sessions.value.filter(s => s.session_id !== session.session_id);
+  } catch (e: any) {
+    alert(e?.message || "删除失败");
   }
 }
 </script>

@@ -94,6 +94,7 @@ Page({
 
     // 内部
     startTime: 0,
+    _trainingFinishedCalled: false,
     scoresHistory: [],
     cameraReady: false,
     isDemoMode: false,
@@ -120,7 +121,9 @@ Page({
   _poseDetectResetPending: false,
   _serverMetricConfig: {},
   _poseReplayFrames: [],
+  _poseReplayNodes: [],
   _poseReplayStartedAt: 0,
+  _lastReplayNodeCount: 0,
   _prevSmoothedLandmarks: null,
   _smoothDt: 0,
   _smoothHistory: [],
@@ -292,6 +295,7 @@ Page({
           this._feedbackHistory.push(...feedback);
         }
 
+        const previousTotalCount = this.data.totalCount;
         let totalCount = this.data.totalCount;
         let validCount = this.data.validCount;
         let errorCount = this.data.errorCount;
@@ -306,6 +310,9 @@ Page({
 
         if (data.count != null) {
           totalCount = data.count;
+        }
+        if (data.count != null && data.count > previousTotalCount) {
+          this._recordReplayNode(data.count, issues, feedback, incomingScore);
         }
         validCount = data.valid_count != null ? data.valid_count : validCount;
         errorCount = data.error_count != null ? data.error_count : Math.max(0, totalCount - validCount);
@@ -328,7 +335,7 @@ Page({
           this.data.scoresHistory.push(incomingScore);
         }
 
-        this.setData({
+        const setDataObj = {
           currentScore: displayScore,
           scoreColor,
           totalCount,
@@ -337,11 +344,17 @@ Page({
           calories,
           currentPhase: phase,
           phaseLabel,
-          issues,
-          feedback,
           metrics: newMetrics,
           metricCards: this._buildMetricCards(this.data.exerciseKey, newMetrics),
-        });
+        };
+        // 只在有纠错文案时才更新，避免空帧覆盖上一次的建议（"闪一下"问题）
+        if (issues.length > 0) {
+          setDataObj.issues = issues;
+        }
+        if (feedback.length > 0) {
+          setDataObj.feedback = feedback;
+        }
+        this.setData(setDataObj);
         break;
 
       case 'summary':
@@ -652,6 +665,27 @@ Page({
     }
 
     return frame;
+  },
+
+  _recordReplayNode(repIndex, issues, feedback, score) {
+    const frameIndex = Math.max(0, this._poseReplayFrames.length - 1);
+    const frame = this._poseReplayFrames[frameIndex] || null;
+    if (!repIndex || repIndex <= this._lastReplayNodeCount || !frame) return;
+
+    this._lastReplayNodeCount = repIndex;
+    this._poseReplayNodes.push({
+      rep_index: repIndex,
+      frame_index: frameIndex,
+      timestamp_ms: Number(frame.timestamp_ms || 0),
+      score: Number(score || 0),
+      issues: (issues || []).map((issue, index) => ({
+        issue,
+        suggestion: feedback && feedback[index] ? feedback[index] : '',
+        severity: 'warning',
+        metric: '',
+        value: 0,
+      })),
+    });
   },
 
   _normalizeReplayKeypoints(keypointsArray) {
@@ -972,6 +1006,7 @@ Page({
   // ========== 训练控制 ==========
   async startTraining() {
     if (this.data.state !== 'ready') return;
+    this._trainingFinishedCalled = false;
     this.setData({ debugFrames: 0, debugOkFrames: 0, debugErrors: 0, _errorCountTotal: 0 });
 
     // 初始化摄像头
@@ -999,7 +1034,9 @@ Page({
         const startedAt = Date.now();
         const metrics = this._emptyMetricsForExercise(this.data.exerciseKey);
         this._poseReplayFrames = [];
+        this._poseReplayNodes = [];
         this._poseReplayStartedAt = startedAt;
+        this._lastReplayNodeCount = 0;
         this.setData({
           state: 'running',
           startTime: startedAt,
@@ -1055,12 +1092,13 @@ Page({
     this.setData({ state: 'finished' });
     this.sendWS({ type: 'finish' });
 
-    // 2 秒后自动跳转结果页
+    // The WS will respond with 'summary' → onTrainingFinished(session).
+    // Timeout as safety net — only fires if WS never responds.
     setTimeout(() => {
-      if (this.data.state === 'finished') {
+      if (!this._trainingFinishedCalled && this.data.state === 'finished') {
         this.onTrainingFinished(null);
       }
-    }, 2000);
+    }, 3000);
   },
 
   // ========== 调试功能 ==========
@@ -1431,6 +1469,10 @@ Page({
   },
 
   onTrainingFinished(session) {
+    // Guard against double invocation — WS summary + _doFinish timeout
+    if (this._trainingFinishedCalled) return;
+    this._trainingFinishedCalled = true;
+
     const duration = Math.round((Date.now() - (this.data.startTime || Date.now())) / 1000);
     const avgScore = this.data.scoresHistory.length > 0
       ? Math.round(this.data.scoresHistory.reduce((a, b) => a + b, 0) / this.data.scoresHistory.length)
@@ -1459,6 +1501,7 @@ Page({
         wx.setStorageSync(replayKey, this._poseReplayFrames);
         resultData.replay_key = replayKey;
         resultData.has_replay = true;
+        resultData.replay_nodes = this._poseReplayNodes || [];
       } catch (e) {
         console.warn('[Replay] 临时保存回放帧失败:', e);
       }
