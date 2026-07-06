@@ -48,6 +48,7 @@ class MediaPipePoseEngine(PoseEngine):
             str(index): {
                 "x": landmark.x,
                 "y": landmark.y,
+                "z": landmark.z,
                 "visibility": landmark.visibility,
             }
             for index, landmark in enumerate(landmarks)

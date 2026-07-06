@@ -1,5 +1,13 @@
 import { apiDelete, apiGet, apiPost } from "./client";
 
+export interface FeedbackSummaryItem {
+  issue: string;
+  suggestion: string;
+  severity: string;
+  metric: string;
+  value: number;
+}
+
 export interface SessionRecord {
   session_id: string;
   user_id: number | null;

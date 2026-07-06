@@ -108,7 +108,9 @@
             :playing="replayPlaying"
             :speed="replaySpeed"
             :background-image="selectedReplayBackgroundImage"
+            :highlight-instructions="currentHighlights"
             @frame-change="onReplayFrameChange"
+            @body-part-clicked="on3DBodyPartClicked"
           />
           <div class="skel-stage-label">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -374,13 +376,14 @@
               v-for="(item, index) in problems"
               :key="`${item.title}-${index}`"
               :class="['problem-item', item.level, { selected: selectedProblem === index }]"
-              @click="selectedProblem = index"
+              @click="onProblemClick(index)"
             >
               <div class="pi-top">
                 <div class="pi-num" :class="item.level">{{ index + 1 }}</div>
                 <div class="pi-info">
                   <div class="pi-title-row">
                     <strong>{{ item.title }}</strong>
+                    <span v-if="item.bodyPart" class="pi-body-part">{{ item.bodyPart.label_zh }}</span>
                     <span class="pi-badge" :class="item.level">{{ item.badge }}</span>
                   </div>
                   <p>{{ item.desc }}</p>
@@ -516,9 +519,17 @@ import { Maximize2, Minimize2, Settings } from "lucide-vue-next";
 import { useAuthStore } from "@/stores/auth";
 import { getDashboardStats } from "../api/dashboard";
 import { getFeedbacks, type FeedbackItem } from "../api/feedback";
-import { getSessionReplay, getSessions, type PoseReplayFrame, type SessionRecord } from "../api/sessions";
+import { getSessionReplay, getSessions, getSession, type PoseReplayFrame, type SessionRecord } from "../api/sessions";
 import PoseParticleViewer from "../components/PoseParticleViewer.vue";
 import { apiGet } from "../api/client";
+import {
+  METRIC_BODY_PART_MAP,
+  inferMetricFromIssue,
+  severityToHighlightColor,
+  severityToPulseSpeed,
+  type HighlightInstruction,
+  type BodyPartMapping,
+} from "../types/feedback";
 
 echarts.use([
   BarChart,
@@ -541,6 +552,8 @@ type ProblemItem = {
   time: string;
   deduct: number;
   recommend: string;
+  metric: string | null;
+  bodyPart: BodyPartMapping | null;
 };
 
 type AdviceGroup = {
@@ -580,6 +593,7 @@ const replayFullscreenRef = ref<HTMLDivElement | null>(null);
 const isReplayFullscreen = ref(false);
 const showReplaySettings = ref(false);
 const selectedReplayBackground = ref("none");
+const currentHighlights = ref<HighlightInstruction[]>([]);
 
 const replayBackgroundOptions: ReplayBackgroundOption[] = [
   { label: "默认", value: "none" },
@@ -737,12 +751,16 @@ const problems = computed<ProblemItem[]>(() => {
         time: "-",
         deduct: 0,
         recommend: "先开始一次训练，我们会基于结果给出更准确的纠正建议。",
+        metric: null,
+        bodyPart: null,
       },
     ];
   }
 
   return feedbackItems.value.slice(0, 5).map((feedback) => {
     const level = (feedback.severity || "low") as Severity;
+    const metric = (feedback as any).metric || inferMetricFromIssue(feedback.issue);
+    const bodyPart = metric ? METRIC_BODY_PART_MAP[metric] ?? null : null;
     return {
       title: feedback.issue,
       desc: feedbackDescriptions[feedback.issue] || `检测到动作问题：${feedback.issue}`,
@@ -751,6 +769,8 @@ const problems = computed<ProblemItem[]>(() => {
       time: feedback.created_at?.slice(0, 10) || "最近",
       deduct: level === "high" ? 8 : level === "medium" ? 6 : 4,
       recommend: feedbackSuggestionMap[feedback.issue] || "建议安排专项控制训练并结合视频回放逐步修正。",
+      metric,
+      bodyPart,
     };
   });
 });
@@ -878,6 +898,80 @@ function onReplayFrameChange(frame: PoseReplayFrame | null) {
   replayFrame.value = frame;
 }
 
+// Load feedback from the selected session's feedback_summary
+async function loadSessionFeedback(sessionId: string) {
+  try {
+    const session = await getSession(sessionId);
+    if (session && (session as any).feedback_summary) {
+      let summary = (session as any).feedback_summary;
+      if (typeof summary === "string") summary = JSON.parse(summary);
+      if (summary && Array.isArray(summary.items)) {
+        // Map feedback_summary items to FeedbackItem-like shape for the problems computed
+        feedbackItems.value = summary.items.map((item: any) => ({
+          id: item.id || sessionId,
+          session_id: sessionId,
+          exercise: session.exercise || "",
+          issue: item.issue || "",
+          severity: item.severity === "error" ? "high" : item.severity === "warning" ? "medium" : "low",
+          suggestion: item.suggestion || "",
+          metric: item.metric || "",
+          value: item.value || 0,
+          created_at: item.created_at || session.created_at || "",
+        }));
+      } else {
+        feedbackItems.value = [];
+      }
+    } else {
+      feedbackItems.value = [];
+    }
+  } catch (error) {
+    console.warn("Session feedback load failed:", error);
+    feedbackItems.value = [];
+  }
+  // Reset highlight and selection
+  selectedProblem.value = 0;
+  currentHighlights.value = [];
+}
+
+// Click on right panel problem → highlight 3D body part
+function onProblemClick(index: number) {
+  selectedProblem.value = index;
+  const problem = problems.value[index];
+  if (!problem || !problem.metric) {
+    currentHighlights.value = [];
+    return;
+  }
+  const mapping = METRIC_BODY_PART_MAP[problem.metric];
+  if (mapping) {
+    currentHighlights.value = [
+      {
+        bonePairs: mapping.bones,
+        color: severityToHighlightColor(problem.level),
+        pulseSpeed: severityToPulseSpeed(problem.level),
+      },
+    ];
+  } else {
+    currentHighlights.value = [];
+  }
+}
+
+// Click on 3D body part → select corresponding problem in right panel
+function on3DBodyPartClicked(bonePair: [number, number]) {
+  const idx = problems.value.findIndex((p) => {
+    if (!p.bodyPart) return false;
+    return p.bodyPart.bones.some(
+      (b) => (b[0] === bonePair[0] && b[1] === bonePair[1]) || (b[0] === bonePair[1] && b[1] === bonePair[0]),
+    );
+  });
+  if (idx >= 0) {
+    onProblemClick(idx);
+    activeTab.value = "problems";
+    nextTick(() => {
+      document.querySelector(`.problem-item:nth-child(${idx + 1})`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
+}
+
 async function loadReplaySessions() {
   replaySessionsLoading.value = true;
   try {
@@ -924,6 +1018,7 @@ async function tryLoadReplayForSession(session: SessionRecord) {
     replayPlaying.value = true;
     replayProgress.value = 0;
     replayLoadError.value = "";
+    await loadSessionFeedback(session.session_id);
     return true;
   } catch (error) {
     console.warn("Replay probe failed:", error);
@@ -951,6 +1046,8 @@ async function loadSelectedReplay() {
     if (replay.has_replay && replay.frames.length === 0) {
       replayLoadError.value = "该记录已标记有回放但数据为空";
     }
+    // Load session feedback for the selected replay
+    await loadSessionFeedback(selectedReplaySessionId.value);
   } catch (error) {
     console.warn("Replay load failed:", error);
     replayLoadError.value = "回放数据加载失败";
@@ -2272,6 +2369,17 @@ onBeforeUnmount(() => {
 
 .problem-item.selected {
   outline: 1px solid rgba(91, 140, 255, 0.3);
+  box-shadow: 0 0 12px rgba(91, 140, 255, 0.15);
+}
+
+.pi-body-part {
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  background: rgba(59, 130, 246, 0.1);
+  color: #93c5fd;
+  margin-left: 6px;
 }
 
 .pi-top,

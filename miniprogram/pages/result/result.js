@@ -132,11 +132,21 @@ Page({
     // 5 维度雷达数据：基于分数与基础维度
     const radar = this.buildRadarData(score, data);
 
-    // 关键问题
+    // 关键问题：优先使用训练页传来的实时纠错数据
+    const realIssues = data.issues || [];
+    const realSuggestions = data.suggestions || [];
     const issueTpl = ISSUE_LIBRARY[exerciseKey] || ISSUE_LIBRARY.squat;
-
-    // 改进建议
     const suggestTpl = SUGGESTION_LIBRARY[exerciseKey] || SUGGESTION_LIBRARY.squat;
+
+    // 有实时数据则转换为 issueTpl 格式，否则用模板
+    const issues = realIssues.length > 0
+      ? realIssues.map(item => ({ level: 'minor', title: item, desc: '' }))
+      : issueTpl;
+
+    // 有实时建议则转换为 suggestTpl 格式，否则用模板
+    const suggestions = realSuggestions.length > 0
+      ? realSuggestions.map(item => ({ icon: '💡', iconClass: 'suggest-icon-blue', title: item, desc: '' }))
+      : suggestTpl;
 
     this.setData({
       exerciseConfig,
@@ -150,8 +160,8 @@ Page({
       stars: this.getStarList(level.label),
       radar,
       radarSVG: this.buildRadarSVG(radar),
-      issues: issueTpl,
-      suggestions: suggestTpl,
+      issues,
+      suggestions,
       resultData: data,
       recordSaved: !!data.session_id,
       savedSessionId: data.session_id || '',

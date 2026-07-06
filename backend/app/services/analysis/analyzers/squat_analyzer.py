@@ -277,20 +277,34 @@ class SquatAnalyzer(BaseExerciseAnalyzer):
     def detect_phase(self, features: dict, state: dict) -> str:
         knee = features.get("knee_angle", 170)
         prev = state.get("prev_knee", knee)
+        prev_phase = state.get("prev_phase", "standing")
         delta = knee - prev
         state["prev_knee"] = knee
 
+        # Hysteresis — use wider thresholds based on current phase
+        # to prevent jitter near boundaries from causing double-counting
         if knee > 150:
-            return "standing"
-        if 65 <= knee <= 125:
-            return "bottom"
-        if delta < -1.5:
-            return "down"
-        if delta > 1.5:
-            return "up"
-        if knee < 145:
-            return "bottom"
-        return "down"
+            phase = "standing"
+        elif prev_phase == "bottom":
+            # Must clearly rise above 130 to leave "bottom"
+            if delta > 1.5 and knee > 130:
+                phase = "up"
+            elif 65 <= knee <= 125:
+                phase = "bottom"
+            else:
+                # knee between 125-130 while in bottom: stay bottom
+                phase = "bottom"
+        elif delta < -1.5:
+            phase = "down"
+        elif delta > 1.5:
+            phase = "up"
+        elif knee < 145:
+            phase = "bottom"
+        else:
+            phase = "down"
+
+        state["prev_phase"] = phase
+        return phase
 
     def score_frame(self, features: dict, phase: str) -> dict:
         if phase not in SQUAT_STAGE_RULES:

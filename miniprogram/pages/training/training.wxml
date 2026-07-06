@@ -62,9 +62,13 @@
       <view class="mute-icon" wx:if="{{state === 'running'}}">🔇</view>
 
       <!-- 实时反馈气泡 -->
-      <view class="feedback-bubbles" wx:if="{{state === 'running' && issues.length > 0}}">
-        <view class="bubble" wx:for="{{issues}}" wx:key="index">
+      <view class="feedback-bubbles" wx:if="{{state === 'running' && (issues.length > 0 || feedback.length > 0)}}">
+        <view class="bubble bubble-error" wx:for="{{issues}}" wx:key="index">
           <text class="bubble-icon">⚠</text>
+          <text class="bubble-text">{{item}}</text>
+        </view>
+        <view class="bubble bubble-advice" wx:for="{{feedback}}" wx:key="index">
+          <text class="bubble-icon">💡</text>
           <text class="bubble-text">{{item}}</text>
         </view>
       </view>

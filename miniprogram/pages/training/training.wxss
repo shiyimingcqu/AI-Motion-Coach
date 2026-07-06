@@ -170,12 +170,21 @@
   display: flex;
   align-items: center;
   gap: 8rpx;
-  background: rgba(255, 138, 91, 0.92);
   color: #fff;
   padding: 10rpx 20rpx;
   border-radius: var(--radius-full);
   font-size: 24rpx;
   box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.2);
+}
+
+/* 错误提示气泡：橙色 */
+.bubble-error {
+  background: rgba(255, 138, 91, 0.92);
+}
+
+/* 纠正建议气泡：蓝色 */
+.bubble-advice {
+  background: rgba(79, 140, 255, 0.92);
 }
 
 .bubble-icon {

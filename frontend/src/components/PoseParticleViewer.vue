@@ -12,6 +12,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { PoseReplayFrame, PoseReplayLandmark } from "../api/sessions";
+import type { HighlightInstruction } from "../types/feedback";
 
 type ParticleBinding = {
   boneIndex: number;
@@ -32,10 +33,12 @@ const props = defineProps<{
   speed: number;
   progress: number;
   backgroundImage?: string;
+  highlightInstructions?: HighlightInstruction[];
 }>();
 const emit = defineEmits<{
   "update:progress": [value: number];
   frameChange: [frame: PoseReplayFrame | null];
+  bodyPartClicked: [bonePair: [number, number]];
 }>();
 
 const HOLOGRAM_THEME = { background: "#01040a", body: "#77ddff", bodyCore: "#e9fbff", glow: "#38d5ff" };
@@ -51,6 +54,12 @@ const PARTICLE_HALO_TONES = {
 };
 const FRONT_DEPTH_TINT = new THREE.Color("#ffffff");
 const BACK_DEPTH_TINT = new THREE.Color("#22254f");
+
+const HIGHLIGHT_COLORS = {
+  warning: new THREE.Color("#ff3344"),
+  medium: new THREE.Color("#ff8833"),
+  low: new THREE.Color("#ffcc33"),
+};
 
 const BODY_BONES: BodyBone[] = [
   { start: -1, end: 0, radius: 0.07, particleCount: 260 },
@@ -124,6 +133,12 @@ let _replayPrevTime = 0;
 let bodyParticles: THREE.Points | null = null;
 let bodyParticleHalo: THREE.Points | null = null;
 let jointParticles: THREE.Points | null = null;
+let highlightLines: THREE.LineSegments | null = null;
+let highlightGlowLines: THREE.LineSegments | null = null;
+let highlightGeometry: THREE.BufferGeometry | null = null;
+let highlightGlowGeometry: THREE.BufferGeometry | null = null;
+let highlightPositions: Float32Array | null = null;
+let highlightGlowPositions: Float32Array | null = null;
 const sunglassLensMeshes: THREE.Mesh[] = [];
 const sunglassGlassMeshes: THREE.Mesh[] = [];
 let sunglassBridgeMesh: THREE.Mesh | null = null;
@@ -143,6 +158,11 @@ const tempReference = new THREE.Vector3();
 const tempNormalA = new THREE.Vector3();
 const tempNormalB = new THREE.Vector3();
 const tempCenter = new THREE.Vector3();
+const tempColor = new THREE.Color();
+let highlightPulseTime = 0;
+
+// Track which SKELETON_BONES indices are currently highlighted
+let highlightedSkeletonIndices: Set<number> = new Set();
 
 function initScene() {
   const container = containerRef.value;
@@ -182,6 +202,7 @@ function initScene() {
   resizeObserver = new ResizeObserver(resizeRenderer);
   resizeObserver.observe(container);
   animationId = window.requestAnimationFrame(animate);
+  setupClickDetection();
 }
 
 function addFloorGlow() {
@@ -311,6 +332,20 @@ function createParticleSystems() {
   skeletonLines = new THREE.LineSegments(lineGeometry, new THREE.LineBasicMaterial({ color: HOLOGRAM_THEME.bodyCore, transparent: true, opacity: 0.52, blending: THREE.AdditiveBlending }));
   skeletonGroup.add(skeletonLines);
 
+  // Highlight overlay lines — initially empty, populated per frame
+  highlightPositions = new Float32Array(SKELETON_BONES.length * 2 * 3);
+  highlightGlowPositions = new Float32Array(SKELETON_BONES.length * 2 * 3);
+  highlightGeometry = new THREE.BufferGeometry();
+  highlightGlowGeometry = new THREE.BufferGeometry();
+  highlightGeometry.setAttribute("position", new THREE.BufferAttribute(highlightPositions, 3));
+  highlightGlowGeometry.setAttribute("position", new THREE.BufferAttribute(highlightGlowPositions, 3));
+  highlightLines = new THREE.LineSegments(highlightGeometry, new THREE.LineBasicMaterial({ color: "#ff3344", transparent: true, opacity: 0, blending: THREE.AdditiveBlending }));
+  highlightLines.renderOrder = 10;
+  skeletonGroup.add(highlightLines);
+  highlightGlowLines = new THREE.LineSegments(highlightGlowGeometry, new THREE.LineBasicMaterial({ color: "#ff3344", transparent: true, opacity: 0, blending: THREE.AdditiveBlending }));
+  highlightGlowLines.renderOrder = 9;
+  skeletonGroup.add(highlightGlowLines);
+
   anatomyPositions = new Float32Array(ANATOMY_SEGMENT_COUNT * 2 * 3);
   anatomyGlowPositions = new Float32Array(ANATOMY_SEGMENT_COUNT * 2 * 3);
   anatomyGeometry = new THREE.BufferGeometry();
@@ -370,6 +405,7 @@ function getParticleTone(index: number): keyof typeof PARTICLE_TONES {
 function animate(now: number) {
   animationId = window.requestAnimationFrame(animate);
   updatePlayback(now);
+  updateHighlightPulse(now);
   controls?.update();
   if (floorGlow && !Array.isArray(floorGlow.material)) { floorGlow.material.opacity = 0.34 + Math.sin(now * 0.002) * 0.05; }
   if (renderer && scene && camera) { renderer.render(scene, camera); }
@@ -404,9 +440,9 @@ function updatePose(frame: PoseReplayFrame | null) {
 
   if (!_replayPrevPoints) { _replayPrevPoints = points.map(p => p.clone()); }
   else {
-    const minCutoff = 0.8;
-    const baseCutoff = 2.0;
-    const beta = 0.3;
+    const minCutoff = 0.3;
+    const baseCutoff = 1.2;
+    const beta = 0.2;
     for (let i = 0; i < points.length; i++) {
       if (points[i] && _replayPrevPoints[i]) {
         const dx = points[i].x - _replayPrevPoints[i].x;
@@ -492,12 +528,14 @@ function updatePose(frame: PoseReplayFrame | null) {
   });
 
   updateDepthParticleColors(bodyBuffer, points, frame.landmarks);
+  applyHighlightToParticles();
+  updateHighlightOverlay();
   markNeedsUpdate(particleGeometry); markNeedsUpdate(particleHaloGeometry); markNeedsUpdate(jointGeometry); markNeedsUpdate(lineGeometry); markNeedsUpdate(lineGlowGeometry);
 }
 
 function convertLandmark(point: PoseReplayLandmark): THREE.Vector3 {
   const scale = 3.2;
-  return new THREE.Vector3((point.x - 0.5) * scale, -(point.y - 0.5) * scale - 5, -(point.z || 0) * 0.5);
+  return new THREE.Vector3((point.x - 0.5) * scale, -(point.y - 0.5) * scale - 5, point.z || 0);
 }
 
 function getMidpoint(points: THREE.Vector3[], landmarks: PoseReplayLandmark[], idxA: number, idxB: number): THREE.Vector3 | null {
@@ -604,6 +642,127 @@ function hidePoint(buffer: Float32Array, offset: number) { buffer[offset] = 9999
 function markNeedsUpdate(geometry: THREE.BufferGeometry | null) { const a = geometry?.getAttribute("position") as THREE.BufferAttribute | undefined; if (a) a.needsUpdate = true; }
 function setVisible(visible: boolean) { if (skeletonGroup) skeletonGroup.visible = visible; }
 
+// Compute which SKELETON_BONES indices should be highlighted from props.highlightInstructions
+function computeHighlightedSkeletonIndices(): Set<number> {
+  const indices = new Set<number>();
+  const instructions = props.highlightInstructions;
+  if (!instructions || instructions.length === 0) return indices;
+  for (const instr of instructions) {
+    for (const [from, to] of instr.bonePairs) {
+      const idx = SKELETON_BONES.findIndex(b => (b[0] === from && b[1] === to) || (b[0] === to && b[1] === from));
+      if (idx >= 0) indices.add(idx);
+    }
+  }
+  return indices;
+}
+
+// Draw highlight overlay lines on top of the skeleton
+function updateHighlightOverlay() {
+  if (!highlightPositions || !highlightGlowPositions || !highlightLines || !highlightGlowLines) return;
+  const hlBuffer = highlightPositions;
+  const hlGlowBuffer = highlightGlowPositions;
+  const instructions = props.highlightInstructions;
+  highlightedSkeletonIndices = computeHighlightedSkeletonIndices();
+
+  if (!instructions || instructions.length === 0 || !hasFrames.value) {
+    highlightLines.material.opacity = 0;
+    highlightGlowLines.material.opacity = 0;
+    return;
+  }
+
+  // Pick the highest severity color
+  let color = "#ff3344";
+  let maxSpeed = 2;
+  if (instructions.length > 0) {
+    color = instructions[0].color;
+    maxSpeed = instructions[0].pulseSpeed;
+  }
+  highlightLines.material.color.set(color);
+  highlightGlowLines.material.color.set(color);
+  highlightPulseTime = maxSpeed;
+
+  // Copy skeleton line positions for highlighted bones into highlight buffer
+  // Others get hidden (9999)
+  let anyVisible = false;
+  for (let i = 0; i < SKELETON_BONES.length; i++) {
+    const offset = i * 6;
+    if (highlightedSkeletonIndices.has(i) && linePositions) {
+      hlBuffer[offset] = linePositions[offset];
+      hlBuffer[offset + 1] = linePositions[offset + 1];
+      hlBuffer[offset + 2] = linePositions[offset + 2];
+      hlBuffer[offset + 3] = linePositions[offset + 3];
+      hlBuffer[offset + 4] = linePositions[offset + 4];
+      hlBuffer[offset + 5] = linePositions[offset + 5];
+      hlGlowBuffer[offset] = lineGlowPositions![offset];
+      hlGlowBuffer[offset + 1] = lineGlowPositions![offset + 1];
+      hlGlowBuffer[offset + 2] = lineGlowPositions![offset + 2];
+      hlGlowBuffer[offset + 3] = lineGlowPositions![offset + 3];
+      hlGlowBuffer[offset + 4] = lineGlowPositions![offset + 4];
+      hlGlowBuffer[offset + 5] = lineGlowPositions![offset + 5];
+      anyVisible = true;
+    } else {
+      hlBuffer[offset] = 9999; hlBuffer[offset + 1] = 9999; hlBuffer[offset + 2] = 9999;
+      hlBuffer[offset + 3] = 9999; hlBuffer[offset + 4] = 9999; hlBuffer[offset + 5] = 9999;
+      hlGlowBuffer[offset] = 9999; hlGlowBuffer[offset + 1] = 9999; hlGlowBuffer[offset + 2] = 9999;
+      hlGlowBuffer[offset + 3] = 9999; hlGlowBuffer[offset + 4] = 9999; hlGlowBuffer[offset + 5] = 9999;
+    }
+  }
+  markNeedsUpdate(highlightGeometry);
+  markNeedsUpdate(highlightGlowGeometry);
+
+  if (!anyVisible) {
+    highlightLines.material.opacity = 0;
+    highlightGlowLines.material.opacity = 0;
+  }
+}
+
+// Pulse the highlight opacity using sin wave
+function updateHighlightPulse(now: number) {
+  if (!highlightLines || !highlightGlowLines) return;
+  if (highlightLines.material.opacity <= 0) return;
+  const pulse = 0.5 + 0.5 * Math.sin(now * 0.001 * highlightPulseTime);
+  const hlOpacity = 0.4 + 0.5 * pulse; // range 0.4 ~ 0.9
+  highlightLines.material.opacity = hlOpacity;
+  highlightGlowLines.material.opacity = hlOpacity * 0.6;
+}
+
+// Apply highlight color to affected particles (overrides depth coloring)
+function applyHighlightToParticles() {
+  if (!particleColors || !particleHaloColors || !particleGeometry || !particleHaloGeometry) return;
+  const instructions = props.highlightInstructions;
+  if (!instructions || instructions.length === 0) return;
+
+  // Map highlighted bone pairs back to BODY_BONES indices for particle coloring
+  const highlightedBoneIndices = new Set<number>();
+  for (const instr of instructions) {
+    for (const [from, to] of instr.bonePairs) {
+      for (let bi = 0; bi < BODY_BONES.length; bi++) {
+        const bone = BODY_BONES[bi];
+        if ((bone.start === from && bone.end === to) || (bone.start === to && bone.end === from)) {
+          highlightedBoneIndices.add(bi);
+        }
+      }
+    }
+  }
+
+  // Apply highlight color to matching particles
+  const hlColor = instructions.length > 0
+    ? new THREE.Color(instructions[0].color)
+    : HIGHLIGHT_COLORS.warning;
+
+  particleBindings.forEach((binding, index) => {
+    if (highlightedBoneIndices.has(binding.boneIndex)) {
+      writeColor(particleColors!, index, hlColor);
+      writeColor(particleHaloColors!, index, hlColor);
+    }
+  });
+
+  const ca = particleGeometry?.getAttribute("color") as THREE.BufferAttribute | undefined;
+  const hca = particleHaloGeometry?.getAttribute("color") as THREE.BufferAttribute | undefined;
+  if (ca) ca.needsUpdate = true;
+  if (hca) hca.needsUpdate = true;
+}
+
 function updateDepthParticleColors(bodyBuffer: Float32Array, points: THREE.Vector3[], landmarks: PoseReplayLandmark[]) {
   if (!particleColors) return;
   const particleCount = particleBindings.length + headBindings.length + palmBindings.length + footBindings.length;
@@ -621,16 +780,81 @@ function resizeRenderer() {
   camera.updateProjectionMatrix();
 }
 
-watch(() => props.frames, () => { playbackMs = 0; lastTick = 0; emit("update:progress", 0); _replayPrevPoints = null; void nextTick(() => updatePose(props.frames[0] ?? null)); });
+// --- Click detection via Raycaster ---
+function setupClickDetection() {
+  const canvas = renderer?.domElement;
+  if (!canvas) return;
+  canvas.addEventListener("click", onCanvasClick);
+}
+
+function onCanvasClick(event: MouseEvent) {
+  if (!renderer || !camera || !hasFrames.value || !linePositions) return;
+  const rect = renderer.domElement.getBoundingClientRect();
+  const clickX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+  const clickY = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+  // Project each skeleton bone line segment to screen space and check distance
+  const projMatrix = camera.projectionMatrix.clone();
+  const viewMatrix = camera.matrixWorldInverse;
+  const mvp = projMatrix.multiply(viewMatrix);
+
+  let closestDist = 0.08; // threshold in NDC
+  let closestBone: [number, number] | null = null;
+
+  for (let i = 0; i < SKELETON_BONES.length; i++) {
+    const offset = i * 6;
+    const p1 = new THREE.Vector3(linePositions[offset], linePositions[offset + 1], linePositions[offset + 2]);
+    const p2 = new THREE.Vector3(linePositions[offset + 3], linePositions[offset + 4], linePositions[offset + 5]);
+
+    // Skip hidden bones
+    if (p1.x > 9000 || p2.x > 9000) continue;
+
+    // Project to NDC
+    p1.project(camera);
+    p2.project(camera);
+
+    // Distance from click point to line segment in NDC
+    const dist = distToSegmentSq(clickX, clickY, p1.x, p1.y, p2.x, p2.y);
+    if (dist < closestDist * closestDist) {
+      closestDist = Math.sqrt(dist);
+      closestBone = SKELETON_BONES[i];
+    }
+  }
+
+  if (closestBone) {
+    emit("bodyPartClicked", closestBone);
+  }
+}
+
+// Squared distance from point (px,py) to line segment (ax,ay)-(bx,by)
+function distToSegmentSq(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return (px - ax) * (px - ax) + (py - ay) * (py - ay);
+  let t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  const cx = ax + t * dx;
+  const cy = ay + t * dy;
+  return (px - cx) * (px - cx) + (py - cy) * (py - cy);
+}
+
+watch(() => props.frames, () => { playbackMs = 0; lastTick = 0; emit("update:progress", 0); _replayPrevPoints = null; void nextTick(() => { updatePose(props.frames[0] ?? null); updateHighlightOverlay(); }); });
 watch(() => props.progress, (value) => { if (!props.playing) { playbackMs = value * getDuration(); updatePose(getFrameAt(playbackMs)); } });
 watch(() => props.backgroundImage, (imageUrl) => { updateSceneBackground(imageUrl || ""); });
+watch(() => props.highlightInstructions, () => {
+  if (hasFrames.value) {
+    applyHighlightToParticles();
+    updateHighlightOverlay();
+  }
+}, { deep: true });
 
 onMounted(() => { initScene(); });
 onBeforeUnmount(() => {
   window.cancelAnimationFrame(animationId);
   resizeObserver?.disconnect();
   controls?.dispose();
-  if (renderer) { renderer.dispose(); const parent = renderer.domElement.parentNode; if (parent) parent.removeChild(renderer.domElement); }
+  if (renderer) { renderer.domElement.removeEventListener("click", onCanvasClick); renderer.dispose(); const parent = renderer.domElement.parentNode; if (parent) parent.removeChild(renderer.domElement); }
 });
 </script>
 

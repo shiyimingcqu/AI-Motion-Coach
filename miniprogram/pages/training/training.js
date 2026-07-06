@@ -125,12 +125,12 @@ Page({
   _smoothDt: 0,
   _smoothHistory: [],
 
-  FRAME_INTERVAL: 15,
+  FRAME_INTERVAL: 17,
   FRAME_INTERVALS: {
-    jumping_jack: 15,
-    squat: 15,
-    push_up: 15,
-    plank: 15,
+    jumping_jack: 17,
+    squat: 17,
+    push_up: 17,
+    plank: 17,
   },
 
   onLoad(options) {
@@ -279,8 +279,18 @@ Page({
 
       case 'analysis':
         const incomingScore = data.score != null ? Math.round(data.score) : this.data.currentScore;
-        const issues = data.issues || [];
+        const issues = data.errors || [];
         const feedback = data.feedback || [];
+
+        // 累积纠错历史（用于结束汇总去重）
+        if (issues.length > 0) {
+          if (!this._errorHistory) this._errorHistory = [];
+          this._errorHistory.push(...issues);
+        }
+        if (feedback.length > 0) {
+          if (!this._feedbackHistory) this._feedbackHistory = [];
+          this._feedbackHistory.push(...feedback);
+        }
 
         let totalCount = this.data.totalCount;
         let validCount = this.data.validCount;
@@ -1008,6 +1018,8 @@ Page({
         this._lastCommittedScoreCount = 0;
         this._lastRealtimeScoreCommitTime = 0;
         this._poseDetectResetPending = true;
+        this._errorHistory = [];
+        this._feedbackHistory = [];
       } else {
         this.setData({ countdown: count });
       }
@@ -1214,7 +1226,7 @@ Page({
       currentPhase: phase,
       phaseLabel: phase ? '当前阶段: ' + phase : '',
       issues,
-      feedback: issues,
+      feedback: Array.isArray(frame.feedback) ? frame.feedback : [],
       debugFrames: index + 1,
       debugOkFrames: visible > 0 ? this.data.debugOkFrames + 1 : this.data.debugOkFrames,
       debugFrameSize: `demo ${index + 1}/${total}`,
@@ -1424,6 +1436,10 @@ Page({
       ? Math.round(this.data.scoresHistory.reduce((a, b) => a + b, 0) / this.data.scoresHistory.length)
       : this.data.currentScore;
 
+    // 纠错建议去重汇总（从逐次 score_rep 累积而来）
+    const allErrors = [...new Set((this._errorHistory || []).filter(Boolean))];
+    const allFeedbacks = [...new Set((this._feedbackHistory || []).filter(Boolean))];
+
     const resultData = {
       exercise_key: this.data.exerciseKey,
       exercise_name: this.data.exerciseName,
@@ -1433,6 +1449,8 @@ Page({
       error_count: (session && session.error_count) || this.data.errorCount,
       average_score: (session && session.average_score) || avgScore,
       session_id: (session && session.session_id) || '',
+      issues: allErrors,
+      suggestions: allFeedbacks,
     };
 
     if (this._poseReplayFrames && this._poseReplayFrames.length > 0) {
