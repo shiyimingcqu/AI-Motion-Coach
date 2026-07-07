@@ -18,8 +18,8 @@ from app.services.session.session_service import session_service
 class VideoAnalysisService:
     def __init__(self, storage_root: str):
         self.storage_root = Path(storage_root)
-        # 与实时视频测试保持一致的分析帧上限
-        self.default_max_frames = 120
+        # 默认上限与网页端约 10fps 采样接近；短于上限时读全片
+        self.default_max_frames = 240
 
     def analyze_video(
         self,
@@ -35,11 +35,16 @@ class VideoAnalysisService:
             persist_session=True,
             user_id=user_id,
         )
-        output_uri = self._render_annotated_video(
-            source_uri=source_uri,
-            exercise=exercise,
-            max_frames=self.default_max_frames,
-        )
+        output_uri = ""
+        try:
+            output_uri = self._render_annotated_video(
+                source_uri=source_uri,
+                exercise=exercise,
+                max_frames=self.default_max_frames,
+            )
+        except Exception:
+            # 标注视频生成失败不影响分析结果（Windows 上 VP80 编码器常不可用）
+            output_uri = ""
         return {
             "output_uri": output_uri,
             "session_id": analysis.get("session_id"),
@@ -219,7 +224,13 @@ class VideoAnalysisService:
         formatted_feedback = unified_feedback_service.format_for_ai(unified_feedback)
         session_id: str | None = None
 
-        if persist_session and session_summary["total_count"] > 0:
+        has_analysis_signal = (
+            session_summary["total_count"] > 0
+            or processed_frames > 0
+            or bool(formatted_feedback.get("errors"))
+            or bool(unified_feedback.get("items"))
+        )
+        if persist_session and has_analysis_signal:
             error_snapshots = extract_video_error_snapshots(
                 frame_results or [],
                 float(session_summary["average_score"]),
@@ -238,6 +249,7 @@ class VideoAnalysisService:
                 user_id=user_id,
                 pose_replay_meta={
                     "source": "video_analysis",
+                    "processed_frames": processed_frames,
                     "error_snapshots": error_snapshots,
                     "highlight_snapshots": highlight_snapshots,
                 },
@@ -298,13 +310,42 @@ class VideoAnalysisService:
 
     @staticmethod
     def _iter_capture_frames(capture: cv2.VideoCapture, limit: int):
-        frame_index = 0
-        while frame_index < limit:
+        """均匀抽取整段视频帧，避免只读开头导致漏掉动作（与网页播完整个视频对齐）。"""
+        limit = max(1, int(limit))
+        total = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+
+        if total <= 0:
+            frame_index = 0
+            while frame_index < limit:
+                ok, frame = capture.read()
+                if not ok:
+                    break
+                yield frame_index, frame
+                frame_index += 1
+            return
+
+        if total <= limit:
+            for frame_index in range(total):
+                ok, frame = capture.read()
+                if not ok:
+                    break
+                yield frame_index, frame
+            return
+
+        if limit == 1:
+            capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+            ok, frame = capture.read()
+            if ok:
+                yield 0, frame
+            return
+
+        for sample_index in range(limit):
+            frame_index = int(round(sample_index * (total - 1) / (limit - 1)))
+            capture.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
             ok, frame = capture.read()
             if not ok:
-                break
+                continue
             yield frame_index, frame
-            frame_index += 1
 
     def _process_pose_on_frame(self, frame, pose):
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)

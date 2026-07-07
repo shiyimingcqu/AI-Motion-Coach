@@ -3,39 +3,22 @@
   <scroll-view class="dashboard-scroll" scroll-y enhanced show-scrollbar="{{false}}">
     <!-- Hero 横幅 -->
     <view class="hero-card">
-      <image class="hero-bg" src="/assets/fitness/hero-runner.png" mode="aspectFit"></image>
-      <view class="hero-text">
-        <view class="hero-tip">今天继续训练，</view>
-        <view class="hero-tip">保持标准动作！</view>
-        <view class="hero-sub">科学评估 · 精准纠正 · 持续进步</view>
-      </view>
+      <image class="hero-bg" src="/assets/fitness/hero-runner.png" mode="aspectFill"></image>
     </view>
 
     <!-- 2x2 功能宫格 -->
     <view class="grid-2x2">
-      <view class="grid-item grid-blue" bindtap="goToTraining">
-        <image class="grid-art" src="/assets/fitness/icon-realtime.png" mode="aspectFit"></image>
-        <view class="grid-title">开始实时评估</view>
-        <view class="grid-sub">摄像头实时识别</view>
-        <view class="grid-arrow">›</view>
+      <view class="grid-card" bindtap="goToTraining">
+        <image class="grid-card-bg" src="/assets/fitness/icon-realtime.png" mode="aspectFill"></image>
       </view>
-      <view class="grid-item grid-cyan" bindtap="goToVideoAnalysis">
-        <image class="grid-art" src="/assets/fitness/icon-upload.png" mode="aspectFit"></image>
-        <view class="grid-title">上传视频分析</view>
-        <view class="grid-sub">捕捉识别分析</view>
-        <view class="grid-arrow">›</view>
+      <view class="grid-card" bindtap="goToVideoAnalysis">
+        <image class="grid-card-bg" src="/assets/fitness/icon-upload.png" mode="aspectFill"></image>
       </view>
-      <view class="grid-item grid-purple" bindtap="goToReports">
-        <image class="grid-art" src="/assets/fitness/icon-records.png" mode="aspectFit"></image>
-        <view class="grid-title">训练记录</view>
-        <view class="grid-sub">查看历史训练数据</view>
-        <view class="grid-arrow">›</view>
+      <view class="grid-card" bindtap="goToReports">
+        <image class="grid-card-bg" src="/assets/fitness/icon-records.png" mode="aspectFill"></image>
       </view>
-      <view class="grid-item grid-orange" bindtap="goToExercises">
-        <image class="grid-art" src="/assets/fitness/icon-library.png" mode="aspectFit"></image>
-        <view class="grid-title">动作库</view>
-        <view class="grid-sub">学习标准动作要领</view>
-        <view class="grid-arrow">›</view>
+      <view class="grid-card" bindtap="goToExercises">
+        <image class="grid-card-bg" src="/assets/fitness/icon-library.png" mode="aspectFill"></image>
       </view>
     </view>
 

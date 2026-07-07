@@ -55,10 +55,14 @@
       <text class="loading-text">正在同步训练分析与建议...</text>
     </view>
 
-    <!-- 3. 训练反馈（最重要） -->
-    <view class="card section-card" wx:if="{{displayFeedbackItems.length > 0}}">
+    <!-- 3. 训练反馈（与网页 Session Feedback 同源 /api/feedback） -->
+    <view class="card section-card loading-card" wx:if="{{feedbackLoading && displayFeedbackItems.length === 0}}">
+      <text class="loading-text">正在加载训练反馈...</text>
+    </view>
+
+    <view class="card section-card" wx:elif="{{displayFeedbackItems.length > 0}}">
       <view class="section-title-row">
-        <text class="section-title-text">需要注意</text>
+        <text class="section-title-text">训练反馈</text>
       </view>
       <view class="feedback-stats" wx:if="{{feedbackStats.critical || feedbackStats.warning || feedbackStats.minor || feedbackStats.positive}}">
         <view class="feedback-stat-chip critical" wx:if="{{feedbackStats.critical}}">严重 {{feedbackStats.critical}}</view>
@@ -73,7 +77,9 @@
           wx:key="index"
         >
           <text class="feedback-type-tag feedback-type-tag-{{item.tone}}">{{item.type}}</text>
-          <text class="feedback-problem">{{item.problem}}</text>
+          <view class="feedback-copy">
+            <text class="feedback-problem">{{item.problem}}</text>
+          </view>
         </view>
       </view>
     </view>
@@ -96,30 +102,27 @@
       </view>
     </view>
 
-    <!-- 4. AI 建议（可折叠） -->
+    <!-- 4. AI 建议（生成后可展开） -->
     <view class="card section-card ai-card">
-      <view class="section-title-row section-title-tap" bindtap="toggleAiAdvice">
+      <view class="section-title-row section-title-tap">
         <view class="ai-title-wrap">
           <text class="section-title-text">AI 建议</text>
           <text class="ai-status-tag" wx:if="{{aiAdvicePending}}">生成中</text>
         </view>
-        <text class="section-subtitle">{{showAiAdvice ? '收起 ▲' : '展开 ▼'}}</text>
       </view>
 
-      <block wx:if="{{showAiAdvice}}">
-        <view class="ai-loading" wx:if="{{aiAdvicePending && !aiAdvice}}">
-          <text>正在生成个性化建议...</text>
-        </view>
-        <view class="ai-content" wx:elif="{{aiAdvice}}">
-          <text class="ai-text">{{aiAdvice}}</text>
-        </view>
-        <view class="ai-empty" wx:else>
-          <text>{{aiAdviceFailed ? 'AI 建议暂时不可用，可参考上方动作反馈。' : '正在准备 AI 建议...'}}</text>
-        </view>
-      </block>
-      <view class="ai-preview" wx:elif="{{aiAdvice}}" bindtap="toggleAiAdvice">
-        <text class="ai-preview-text">{{aiAdvicePreview}}</text>
-        <text class="ai-preview-hint">点击展开全文</text>
+      <view class="ai-loading" wx:if="{{aiAdvicePending && !aiAdvice}}">
+        <text>正在生成个性化建议...</text>
+      </view>
+      <view class="ai-empty" wx:elif="{{!aiAdvice}}">
+        <text>{{aiAdviceFailed ? 'AI 建议暂时不可用，可参考上方动作反馈。' : '正在准备 AI 建议...'}}</text>
+      </view>
+      <view class="ai-content" wx:else>
+        <text class="ai-text {{showAiAdvice ? '' : 'ai-text-collapsed'}}">{{aiAdvice}}</text>
+      </view>
+
+      <view class="ai-toggle" wx:if="{{aiAdvice}}" bindtap="toggleAiAdvice">
+        <text class="ai-toggle-text">{{showAiAdvice ? '收起' : '展开'}}</text>
       </view>
     </view>
 
@@ -169,6 +172,9 @@
     <view class="share-modal-panel">
       <text class="share-modal-title">训练成果卡片</text>
       <image class="share-poster-preview" src="{{sharePosterUrl}}" mode="widthFix" show-menu-by-longpress />
+      <button class="btn btn-outline share-random-btn" bindtap="randomizeShareCardBackground" loading="{{sharePosterLoading}}">
+        随机更换样式
+      </button>
       <button class="btn btn-primary share-send-btn" open-type="share">发送给好友</button>
       <button class="btn btn-outline share-save-btn" bindtap="saveSharePoster">保存到相册</button>
       <text class="share-modal-cancel" bindtap="closeSharePreview">取消</text>

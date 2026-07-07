@@ -191,16 +191,21 @@ if router:
     @router.post("/video-test", status_code=201)
     async def realtime_video_test(
         exercise: str = Form("squat"),
-        max_frames: int = Form(120),
+        max_frames: int = Form(240),
+        persist_session: str = Form("false"),
         file: UploadFile = File(...),
         current_user=Depends(get_current_active_user) if get_current_active_user else None,
     ):
         source_uri = await local_storage.save_upload(file)
         try:
+            user_id = current_user.id if current_user else None
+            should_persist = str(persist_session).lower() in {"1", "true", "yes", "on"}
             return video_analysis_service.run_realtime_video_test(
                 source_uri=source_uri,
                 exercise=exercise,
                 max_frames=max_frames,
+                persist_session=should_persist,
+                user_id=user_id,
             )
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -477,10 +482,50 @@ if router:
                         replay_frames = replay_frames[-60000:]
 
                 keypoints = _parse_keypoints(payload.get("keypoints", {}))
-                result = analyzer.analyze_frame(
-                    keypoints, state,
-                    frame_index=len(replay_frames) - 1 if replay_frames else 0,
-                )
+                frame_index = len(replay_frames) - 1 if replay_frames else 0
+                try:
+                    result = analyzer.analyze_frame(
+                        keypoints, state,
+                        frame_index=frame_index,
+                    )
+                except ValueError as exc:
+                    await websocket.send_json({
+                        "type": "analysis",
+                        "exercise_type": analyzer.exercise_type,
+                        "phase": getattr(analyzer, "stage", "ready"),
+                        "stage": getattr(analyzer, "stage", "ready"),
+                        "count": analyzer.count,
+                        "valid_count": analyzer.valid_count,
+                        "score": 0,
+                        "issues": [],
+                        "errors": [],
+                        "feedback": [],
+                        "features": {},
+                        "metrics": {},
+                        "detail_scores": {},
+                        "skip_reason": str(exc),
+                    })
+                    continue
+                except Exception as exc:
+                    logger.warning("Realtime frame analysis failed (%s): %s", analyzer.exercise_type, exc)
+                    await websocket.send_json({
+                        "type": "analysis",
+                        "exercise_type": analyzer.exercise_type,
+                        "phase": getattr(analyzer, "stage", "ready"),
+                        "stage": getattr(analyzer, "stage", "ready"),
+                        "count": analyzer.count,
+                        "valid_count": analyzer.valid_count,
+                        "score": 0,
+                        "issues": [],
+                        "errors": [],
+                        "feedback": [],
+                        "features": {},
+                        "metrics": {},
+                        "detail_scores": {},
+                        "skip_reason": "analysis_error",
+                    })
+                    continue
+
                 result["metrics"] = result.get("features", {})
                 result["stage"] = result.get("stage") or result.get("phase", "")
                 result["errors"] = result.get("errors") or result.get("issues", [])

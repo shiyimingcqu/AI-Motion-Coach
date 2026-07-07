@@ -219,8 +219,24 @@
   border-top: 1rpx solid var(--border-light);
 }
 
-.detail-footer .btn {
+.detail-footer-dual {
+  display: flex;
+  gap: 16rpx;
+}
+
+.detail-footer-dual .btn {
+  flex: 1;
+}
+
+.detail-footer .btn-primary {
   background: linear-gradient(135deg, #4f8cff 0%, #2f6fe0 100%);
   color: #fff;
   box-shadow: 0 8rpx 24rpx rgba(79, 140, 255, 0.3);
+}
+
+.detail-footer .btn-outline {
+  background: #fff;
+  color: var(--primary);
+  border: 2rpx solid rgba(79, 140, 255, 0.35);
+  box-shadow: none;
 }

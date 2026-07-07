@@ -1,7 +1,7 @@
 ﻿// 训练页 - 核心逻辑
 // 摄像头帧捕获 → POST pose-detect 获取关键点 → WebSocket 实时评分 → Canvas 骨架绘制
 const ApiClient = require('../../utils/api');
-const { EXERCISE_CONFIG, getScoreLevel, API_BASE_URL } = require('../../utils/constants');
+const { EXERCISE_CONFIG, getScoreLevel, getApiBaseUrl } = require('../../utils/constants');
 const AuthManager = require('../../utils/auth');
 const { showToast } = require('../../utils/util');
 
@@ -28,6 +28,25 @@ const METRIC_CONFIG = {
     { key: 'leg_spread_angle', label: '双腿夹角', aliases: ['leg_spread_angle'] },
     { key: 'wrist_height', label: '手腕高度', aliases: ['wrist_height'] },
     { key: 'ankle_distance', label: '脚踝距离', aliases: ['ankle_distance'] },
+  ],
+  burpee: [
+    { key: 'hip_angle', label: '髋角', aliases: ['hip_angle'] },
+    { key: 'body_line_angle', label: '身体直线角', aliases: ['body_line_angle'] },
+    { key: 'wrist_height', label: '手腕高度', aliases: ['wrist_height'] },
+  ],
+  lunge: [
+    { key: 'knee_angle', label: '膝角', aliases: ['knee_angle'] },
+    { key: 'hip_angle', label: '髋角', aliases: ['hip_angle'] },
+    { key: 'trunk_angle', label: '躯干倾斜角', aliases: ['trunk_angle'] },
+    { key: 'knee_symmetry_diff', label: '左右膝差', aliases: ['knee_symmetry_diff'] },
+  ],
+  high_knees: [
+    { key: 'knee_height', label: '抬膝高度', aliases: ['knee_height'] },
+    { key: 'knee_angle', label: '膝角', aliases: ['knee_angle'] },
+  ],
+  glute_bridge: [
+    { key: 'hip_angle', label: '髋角', aliases: ['hip_angle'] },
+    { key: 'body_line_angle', label: '身体直线角', aliases: ['body_line_angle'] },
   ],
 };
 
@@ -100,6 +119,7 @@ Page({
     isDemoMode: false,
     demoVideoSrc: '',
     demoProgress: '',
+    devtoolsHint: '',
     _errorCountTotal: 0,
   },
 
@@ -140,6 +160,10 @@ Page({
     dumbbell_fly: 16,
     lat_pulldown: 16,
     dumbbell_shoulder_press: 16,
+    burpee: 16,
+    lunge: 16,
+    high_knees: 16,
+    glute_bridge: 16,
   },
 
   onLoad(options) {
@@ -160,6 +184,23 @@ Page({
       cameraWidth: sysInfo.windowWidth,
       cameraHeight: Math.floor(sysInfo.windowHeight * 0.55),
     });
+  },
+
+  onReady() {
+    try {
+      const sys = wx.getSystemInfoSync();
+      if (sys.platform === 'devtools') {
+        this.setData({
+          devtoolsHint: '开发者工具摄像头能力有限，若检测不到数据请用真机；或点右上角 ··· → 拍照测试',
+        });
+      }
+    } catch (e) {}
+
+    if (AuthManager.isLoggedIn()) {
+      this.connectWebSocket().catch((err) => {
+        console.warn('[WS] 预连接失败:', err);
+      });
+    }
   },
 
   onUnload() {
@@ -184,6 +225,7 @@ Page({
       try {
         const cameraCtx = wx.createCameraContext('trainingCamera');
         this._cameraContext = cameraCtx;
+        this._cameraFrameMode = 'jpeg';
 
         const listener = cameraCtx.onCameraFrame((frame) => {
           this.handleCameraFrame(frame);
@@ -191,12 +233,12 @@ Page({
 
         listener.start({
           mode: 'jpeg',
-        size: this.data.exerciseKey === 'jumping_jack' ? 'small' : 'medium'
-      });
+          size: this.data.exerciseKey === 'jumping_jack' ? 'small' : 'medium',
+        });
 
         this._frameListener = listener;
         this.setData({ cameraReady: true });
-        console.log('[Camera] 帧监听已启动');
+        console.log('[Camera] 帧监听已启动 (jpeg)');
         resolve();
       } catch (e) {
         console.error('[Camera] 初始化失败:', e);
@@ -213,53 +255,83 @@ Page({
 
   // ========== WebSocket 连接 ==========
   connectWebSocket() {
+    if (this._wsReady && this._wsTask) {
+      return Promise.resolve();
+    }
+
     const token = AuthManager.getToken();
     if (!token) {
       this.setData({ debugWsStatus: '无Token', debugLastError: '未登录，请重新登录' });
-      showToast('请先登录');
-      return;
+      return Promise.reject(new Error('未登录，请先登录'));
     }
 
-    const wsUrl = API_BASE_URL.replace('http://', 'ws://').replace('https://', 'wss://');
+    const apiBase = getApiBaseUrl();
+    const wsUrl = apiBase.replace('http://', 'ws://').replace('https://', 'wss://');
 
-    this.setData({ debugWsStatus: '连接中...' });
+    this.setData({ debugWsStatus: '连接中...', debugApiBase: apiBase });
 
-    this._wsTask = wx.connectSocket({
-      url: `${wsUrl}/api/realtime/pose?exercise_type=${this.data.exerciseKey}&token=${token}`,
-      success: () => {
-        console.log('[WS] 正在连接...');
-      },
-      fail: (err) => {
-        console.error('[WS] 连接失败:', err);
-        this.setData({ debugWsStatus: '连接失败', debugLastError: err.errMsg || 'unknown' });
-      }
-    });
-
-    this._wsTask.onOpen(() => {
-      console.log('[WS] 已连接');
-      this._wsReady = true;
-      this.setData({ debugWsStatus: '已连接' });
-      this.sendWS({ type: 'start', exercise_type: this.data.exerciseKey });
-    });
-
-    this._wsTask.onMessage((msg) => {
+    if (this._wsTask) {
       try {
-        const data = JSON.parse(msg.data);
-        this.handleWSMessage(data);
-      } catch (e) {
-        console.error('[WS] 消息解析失败:', e);
-      }
-    });
-
-    this._wsTask.onError((err) => {
-      console.error('[WS] 错误:', err);
-      this.setData({ debugWsStatus: '错误', debugLastError: err.errMsg || 'WS error' });
-    });
-
-    this._wsTask.onClose((res) => {
-      console.log('[WS] 已关闭, code:', res.code, 'reason:', res.reason);
+        this._wsTask.close({});
+      } catch (e) {}
+      this._wsTask = null;
       this._wsReady = false;
-      this.setData({ debugWsStatus: '已关闭(' + (res.code || '?') + ')' });
+    }
+
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (fn, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        fn(value);
+      };
+
+      const timer = setTimeout(() => {
+        finish(reject, new Error('WebSocket 连接超时，请确认后端已启动'));
+      }, 12000);
+
+      this._wsTask = wx.connectSocket({
+        url: `${wsUrl}/api/realtime/pose?exercise_type=${this.data.exerciseKey}&token=${encodeURIComponent(token)}`,
+        success: () => {
+          console.log('[WS] 正在连接...');
+        },
+        fail: (err) => {
+          console.error('[WS] 连接失败:', err);
+          this.setData({ debugWsStatus: '连接失败', debugLastError: err.errMsg || 'unknown' });
+          finish(reject, new Error(err.errMsg || 'WebSocket 连接失败'));
+        },
+      });
+
+      this._wsTask.onOpen(() => {
+        console.log('[WS] 已连接');
+        this._wsReady = true;
+        this.setData({ debugWsStatus: '已连接' });
+        this.sendWS({ type: 'start', exercise_type: this.data.exerciseKey });
+        finish(resolve);
+      });
+
+      this._wsTask.onMessage((msg) => {
+        try {
+          const data = JSON.parse(msg.data);
+          this.handleWSMessage(data);
+        } catch (e) {
+          console.error('[WS] 消息解析失败:', e);
+        }
+      });
+
+      this._wsTask.onError((err) => {
+        console.error('[WS] 错误:', err);
+        this._wsReady = false;
+        this.setData({ debugWsStatus: '错误', debugLastError: err.errMsg || 'WS error' });
+        finish(reject, new Error(err.errMsg || 'WebSocket 错误'));
+      });
+
+      this._wsTask.onClose((res) => {
+        console.log('[WS] 已关闭, code:', res.code, 'reason:', res.reason);
+        this._wsReady = false;
+        this.setData({ debugWsStatus: '已关闭(' + (res.code || '?') + ')' });
+      });
     });
   },
 
@@ -458,7 +530,7 @@ Page({
         this._poseDetectResetPending = false;
       }
 
-      const result = await ApiClient.post('/api/realtime/pose-detect', payload);
+      const result = await ApiClient.post('/api/realtime/pose-detect', payload, { timeout: 120000 });
       const totalMs = Date.now() - startedAt;
       const backendMs = result && result.process_ms != null ? Math.round(result.process_ms) : null;
 
@@ -499,11 +571,14 @@ Page({
               if (Object.keys(namedKeypoints).length > 0) {
                 this.sendWS({
                   type: 'frame',
+                  exercise: this.data.exerciseKey,
                   keypoints: namedKeypoints,
                   timestamp_ms: replayFrame ? replayFrame.timestamp_ms : undefined,
-                  replay_keypoints: replayFrame ? replayFrame.landmarks : undefined
+                  replay_keypoints: replayFrame ? replayFrame.landmarks : undefined,
                 });
               }
+            } else {
+              this.setData({ debugLastError: 'WS 未连接，分数暂无法更新' });
             }
           } else if (frameData.error) {
           // 后端返回了错误信息
@@ -565,6 +640,21 @@ Page({
   },
 
   async _cameraFrameToJpegBase64(frame) {
+    if (!frame || !frame.data) {
+      return '';
+    }
+
+    // jpeg 模式下 frame.data 已是 JPEG 二进制，直接转 base64，勿当 RGBA 像素处理
+    if (this._cameraFrameMode === 'jpeg') {
+      try {
+        if (typeof wx.arrayBufferToBase64 === 'function') {
+          return wx.arrayBufferToBase64(frame.data);
+        }
+      } catch (e) {
+        console.warn('[Camera] jpeg 转 base64 失败:', e);
+      }
+    }
+
     await this._initFrameCanvas();
 
     const canvas = this._frameCanvas;
@@ -591,11 +681,18 @@ Page({
     }
     ctx.putImageData(imageData, 0, 0);
 
-    const maxSide = this.data.exerciseKey === 'jumping_jack' ? 192 : 320;
+    let isMobile = false;
+    try {
+      isMobile = wx.getSystemInfoSync().platform !== 'devtools';
+    } catch (e) {}
+
+    const maxSide = this.data.exerciseKey === 'jumping_jack' ? (isMobile ? 160 : 192) : (isMobile ? 256 : 320);
     const scale = Math.min(1, maxSide / Math.max(width, height));
     const destWidth = Math.max(1, Math.round(width * scale));
     const destHeight = Math.max(1, Math.round(height * scale));
-    const quality = this.data.exerciseKey === 'jumping_jack' ? 0.35 : 0.60;
+    const quality = isMobile
+      ? 0.4
+      : (this.data.exerciseKey === 'jumping_jack' ? 0.35 : 0.60);
 
     const tempPath = await new Promise((resolve, reject) => {
       wx.canvasToTempFilePath({
@@ -791,9 +888,11 @@ Page({
   },
 
   _shouldCommitScore(repFinished, totalCount, incomingScore) {
-    if (this.data.exerciseKey === 'plank') {
+    const periodicExercises = ['plank', 'burpee', 'high_knees'];
+    if (periodicExercises.includes(this.data.exerciseKey)) {
       if (!incomingScore || incomingScore <= 0) return false;
       const now = Date.now();
+      if (repFinished) return true;
       if (!this._lastRealtimeScoreCommitTime || now - this._lastRealtimeScoreCommitTime >= 3000) {
         this._lastRealtimeScoreCommitTime = now;
         return true;
@@ -1017,22 +1116,35 @@ Page({
   // ========== 训练控制 ==========
   async startTraining() {
     if (this.data.state !== 'ready') return;
+    if (!AuthManager.isLoggedIn()) {
+      showToast('请先登录');
+      wx.navigateTo({ url: '/pages/login/login' });
+      return;
+    }
+
     this._trainingFinishedCalled = false;
     this.setData({ debugFrames: 0, debugOkFrames: 0, debugErrors: 0, _errorCountTotal: 0 });
 
-    // 初始化摄像头
-    if (!this.data.cameraReady) {
-      try {
+    wx.showLoading({ title: '准备中...', mask: true });
+
+    try {
+      if (!this.data.cameraReady) {
         await this.initCamera();
-      } catch (e) {
-        showToast('摄像头初始化失败');
-        this.setData({ debugLastError: 'initCamera 失败' });
-        return;
       }
+      await this.connectWebSocket();
+    } catch (e) {
+      wx.hideLoading();
+      const errMsg = (e && e.message) || '初始化失败';
+      this.setData({ debugLastError: errMsg });
+      wx.showModal({
+        title: '无法开始训练',
+        content: errMsg + '\n\n请确认已登录、后端已启动，并在开发者工具中开启摄像头模拟。',
+        showCancel: false,
+      });
+      return;
     }
 
-    // 连接 WebSocket
-    this.connectWebSocket();
+    wx.hideLoading();
 
     // 倒计时
     this.setData({ state: 'countdown', countdown: 3 });
@@ -1445,7 +1557,7 @@ Page({
             wx.hideLoading();
             // readFile 对视频文件可能失败，退到上传方式
             wx.uploadFile({
-              url: API_BASE_URL + '/api/videos/upload',
+              url: getApiBaseUrl() + '/api/videos/upload',
               filePath: res.tempFilePath,
               name: 'file',
               formData: { exercise: that.data.exerciseKey },
@@ -1494,7 +1606,13 @@ Page({
       ? Math.round(this.data.scoresHistory.reduce((a, b) => a + b, 0) / this.data.scoresHistory.length)
       : this.data.currentScore;
 
-    // 纠错建议去重汇总（从逐次 score_rep 累积而来）
+    const sessionScore = session && session.average_score != null
+      ? Math.round(Number(session.average_score))
+      : null;
+    const resolvedAverageScore = (sessionScore != null && sessionScore > 0)
+      ? sessionScore
+      : Math.round(Number(avgScore || this.data.currentScore || 0));
+
     const allErrors = [...new Set((this._errorHistory || []).filter(Boolean))];
     const allFeedbacks = [...new Set((this._feedbackHistory || []).filter(Boolean))];
 
@@ -1505,7 +1623,7 @@ Page({
       total_count: (session && session.total_count) || this.data.totalCount,
       valid_count: (session && session.valid_count) || this.data.validCount,
       error_count: (session && session.error_count) || this.data.errorCount,
-      average_score: (session && session.average_score) || avgScore,
+      average_score: resolvedAverageScore,
       session_id: (session && session.session_id) || '',
       feedback_summary: (session && session.feedback_summary) || '',
       issues: allErrors,

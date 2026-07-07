@@ -4,6 +4,7 @@
     "pages/dashboard/dashboard",
     "pages/exercises/list",
     "pages/exercises/detail",
+    "pages/video-upload/video-upload",
     "pages/training/training",
     "pages/result/result",
     "pages/reports/reports",

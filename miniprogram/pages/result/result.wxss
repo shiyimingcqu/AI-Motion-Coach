@@ -304,23 +304,14 @@
   border-radius: 14rpx;
 }
 
-.ai-preview {
-  padding: 14rpx 16rpx;
-  background: #f8fbff;
-  border-radius: 14rpx;
+.ai-toggle {
+  margin-top: 10rpx;
+  display: flex;
+  justify-content: flex-start;
 }
 
-.ai-preview-text {
-  display: block;
-  font-size: 24rpx;
-  line-height: 1.6;
-  color: var(--text-secondary);
-}
-
-.ai-preview-hint {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 20rpx;
+.ai-toggle-text {
+  font-size: 22rpx;
   color: var(--primary);
 }
 
@@ -419,12 +410,25 @@
 
 .feedback-detection-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12rpx;
   padding: 14rpx 18rpx;
   border-radius: 12rpx;
   border-left: 6rpx solid #ff3f46;
   background: #fff0f0;
+}
+
+.feedback-copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.feedback-suggestion {
+  font-size: 22rpx;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 
 .feedback-detection-row.warning {
@@ -525,6 +529,14 @@
   line-height: 1.8;
   color: var(--text-secondary);
   white-space: pre-wrap;
+}
+
+.ai-text-collapsed {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
 }
 
 /* Section 通用 */
@@ -818,6 +830,11 @@
 
 .share-send-btn,
 .share-save-btn {
+  width: 100%;
+  margin-top: 20rpx;
+}
+
+.share-random-btn {
   width: 100%;
   margin-top: 20rpx;
 }

@@ -238,7 +238,10 @@ class HighKneesAnalyzer(BaseExerciseAnalyzer):
         final = round(total_score / total_weight, 1) if total_weight else 0
         return {"score": final, "issues": issues, "detail_scores": detail_scores, "feedback": feedback}
 
-    def analyze_frame(self, landmarks: Keypoints, state: dict) -> dict:
+    def analyze_frame(self, landmarks: Keypoints, state: dict, frame_index: int | None = None) -> dict:
+        if frame_index is not None:
+            self._frame_index = frame_index
+
         features = self.extract_features(landmarks)
         phase = self.detect_phase(features, state)
         current_stage = self.stage
@@ -273,6 +276,7 @@ class HighKneesAnalyzer(BaseExerciseAnalyzer):
         frame_issues: list[str] = []
         frame_feedback: list[str] = []
         frame_score = score_result["score"]
+        self._record_frame_score(frame_score)
 
         if rep_completed:
             rep_summary = self.summarize_rep(self._rep_samples)
