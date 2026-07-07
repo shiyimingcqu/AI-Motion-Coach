@@ -1,10 +1,10 @@
 """Base exercise analyzer — defines the interface all exercise analyzers must implement."""
 
-from app.services.analysis.models import NormalizedKeypoint
-from app.services.analysis.angle_calculator import calculate_angle
-from app.services.analysis.template_service import TemplateService
-from collections import deque
+from collections import Counter, deque
 import time
+
+from app.services.analysis.angle_calculator import calculate_angle
+from app.services.analysis.models import NormalizedKeypoint
 
 Keypoints = dict[str, NormalizedKeypoint]
 
@@ -36,11 +36,19 @@ class BaseExerciseAnalyzer:
         self.scores_history: list[float] = []
         self.previous_stage = "ready"
         self.stage_stability_counter = 0
-        self.current_rep_scores: list[float] = []
-        self.current_rep_frames: list[dict[str, float]] = []
-        self._rep_started = False
-        self._seen_peak = False
-        self.template_service = TemplateService()
+        self._rep_samples: list[dict[str, float]] = []
+        self.rep_summaries: list[dict[str, float]] = []
+        self.rep_results: list[dict] = []
+        self.session_issue_counts: Counter[str] = Counter()
+        self.session_feedback_counts: Counter[str] = Counter()
+
+        # Frame-level tracking for rep_segments (按单次动作筛选回放)
+        self._frame_index: int = 0
+        self._last_rep_completed_count: int = -1
+        self._rep_start_frame_index: int = 0
+        self._rep_standing_frame: int = 0
+        self.rep_segments: list[dict] = []
+        self.rep_nodes: list[dict] = []
 
     def reset(self):
         """Reset all internal state for a new training session."""
@@ -53,10 +61,17 @@ class BaseExerciseAnalyzer:
         self.scores_history.clear()
         self.previous_stage = "ready"
         self.stage_stability_counter = 0
-        self.current_rep_scores.clear()
-        self.current_rep_frames.clear()
-        self._rep_started = False
-        self._seen_peak = False
+        self._frame_index = 0
+        self._last_rep_completed_count = -1
+        self._rep_start_frame_index = 0
+        self._rep_standing_frame = 0
+        self._rep_samples = []
+        self.rep_summaries = []
+        self.rep_results = []
+        self.rep_segments = []
+        self.rep_nodes = []
+        self.session_issue_counts = Counter()
+        self.session_feedback_counts = Counter()
 
     # ─── abstract methods ────────────────────────────────────
 
@@ -72,24 +87,65 @@ class BaseExerciseAnalyzer:
         """Return {'score': float, 'issues': list[str], 'feedback': list[str]}."""
         raise NotImplementedError
 
-    def _should_count_rep(self, current_stage: str, phase: str) -> bool:
-        """Return True when a full repetition has just completed."""
-        return (
-            current_stage in ("bottom", "down")
-            and phase in ("up", "standing", "top_support", "ascending")
-        )
+    def rep_sample_phases(self) -> tuple[str, ...]:
+        """Movement phases where rep summary samples are collected."""
+        return ("down", "bottom", "descending")
 
-    def _mark_rep_checkpoint(self, phase: str, score_result: dict) -> None:
-        """Record whether the latest lowering/open phase was valid."""
-        if phase in ("bottom", "open_peak", "down"):
-            self._last_down_was_valid = len(score_result["issues"]) == 0
+    def rep_completion_from_phases(self) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        """Return (lowering_phases, rising_phases) that mark one completed rep."""
+        return (("down", "bottom", "descending"), ("up", "standing", "top_support", "ascending"))
 
-    def _track_frame_score(self, score_result: dict, phase: str) -> None:
-        """Optional per-frame score accumulation (e.g. static holds)."""
+    def rep_summary_phase(self) -> str:
+        """Phase label used when scoring a completed rep summary."""
+        return "bottom"
+
+    def summarize_rep(self, samples: list[dict[str, float]]) -> dict[str, float]:
+        """Collapse per-frame samples into one rep-level feature snapshot."""
+        if not samples:
+            return {}
+        return dict(samples[-1])
+
+    def score_rep(self, summary: dict[str, float]) -> dict:
+        """Score a completed rep using summarized features."""
+        return self.score_frame(summary, self.rep_summary_phase())
+
+    def get_session_issue_counts(self) -> Counter[str]:
+        return self.session_issue_counts
+
+    def get_session_feedback_counts(self) -> Counter[str]:
+        return self.session_feedback_counts
+
+    # ─── metric inference for rep_segment issues ─────────────
+
+    @staticmethod
+    def _infer_metric_from_issue(issue: str) -> str | None:
+        """Try to infer a metric name from Chinese issue text."""
+        if not issue:
+            return None
+        if "膝" in issue or "蹲" in issue:
+            return "knee_angle"
+        if "躯干" in issue or "前倾" in issue or "塌腰" in issue:
+            return "trunk_angle"
+        if "肘" in issue:
+            return "elbow_angle"
+        if "臀" in issue or "髋" in issue:
+            return "hip_angle"
+        if "肩" in issue:
+            return "shoulder_abduction_angle"
+        if "对称" in issue:
+            return "knee_symmetry_diff"
+        if "身体" in issue or "直线" in issue:
+            return "body_line_angle"
+        if "踝" in issue or "脚" in issue:
+            return "ankle_distance"
+        return None
 
     # ─── public entry point ──────────────────────────────────
 
-    def analyze_frame(self, landmarks: Keypoints, state: dict) -> dict:
+    def analyze_frame(self, landmarks: Keypoints, state: dict, frame_index: int | None = None) -> dict:
+        if frame_index is not None:
+            self._frame_index = frame_index
+
         features = self.extract_features(landmarks)
         phase = self.detect_phase(features, state)
         current_stage = self.stage
@@ -99,46 +155,106 @@ class BaseExerciseAnalyzer:
         smoothed = self._smooth_features()
 
         score_result = self.score_frame(smoothed, phase)
-        self._track_rep_motion(smoothed, phase, score_result["score"])
-        is_rep_finished = self._is_rep_finished(current_stage, phase)
-        display_score = score_result["score"]
-        display_issues = score_result["issues"]
-        display_feedback = score_result.get("feedback", [])
-        display_detail_scores = score_result.get("detail_scores", {})
 
-        # Count and score only after a full repetition returns to its finish phase.
-        if is_rep_finished:
-            rep_result = self._score_completed_rep()
+        lowering_phases, rising_phases = self.rep_completion_from_phases()
+        rep_completed = current_stage in lowering_phases and phase in rising_phases
+        if rep_completed and self._last_rep_completed_count == self.count + 1:
+            rep_completed = False
+
+        frame_issues: list[str] = []
+        frame_feedback: list[str] = []
+        frame_score = score_result["score"]
+
+        # Rep segment tracking
+        if phase == "standing":
+            # Capture the last standing frame before next rep starts
+            self._rep_standing_frame = self._frame_index
+
+        if phase in self.rep_sample_phases():
+            if not self._rep_samples:
+                # First down/bottom frame — start from the last standing frame
+                self._rep_start_frame_index = getattr(self, "_rep_standing_frame", self._frame_index)
+            self._rep_samples.append(dict(smoothed))
+
+        if rep_completed:
+            # End frame: extend to standing (captured on next standing visit)
+            # but for rep filtering, include at least the down→up range
+            end_frame = self._frame_index
+            standing = getattr(self, "_rep_standing_frame", -1)
+            if standing > self._rep_start_frame_index:
+                end_frame = standing
+            rep_summary = self.summarize_rep(self._rep_samples)
+            rep_result = self.score_rep(rep_summary) if rep_summary else {
+                "score": 0,
+                "issues": [],
+                "feedback": [],
+            }
+            self._last_down_was_valid = len(rep_result.get("issues", [])) == 0
+            frame_issues = rep_result.get("issues", [])
+            frame_feedback = rep_result.get("feedback", [])
+            frame_score = rep_result.get("score", frame_score)
+            for issue in frame_issues:
+                self.session_issue_counts[issue] += 1
+            for suggestion in frame_feedback:
+                self.session_feedback_counts[suggestion] += 1
+            self.rep_summaries.append(rep_summary)
+            self.rep_results.append(rep_result)
+
+            # Record rep segment before clearing samples
+            rep_issues: list[dict] = []
+            rep_issue_texts = rep_result.get("issues", [])
+            rep_feedback_texts = rep_result.get("feedback", [])
+            for i, issue_text in enumerate(rep_issue_texts):
+                suggestion = rep_feedback_texts[i] if i < len(rep_feedback_texts) else ""
+                metric = self._infer_metric_from_issue(issue_text)
+                rep_issues.append({
+                    "issue": issue_text,
+                    "suggestion": suggestion,
+                    "severity": "warning",
+                    "metric": metric or "",
+                    "value": rep_summary.get(metric, 0) if metric else 0,
+                })
+
+            self.rep_segments.append({
+                "rep_index": self.count + 1,
+                "start_frame_index": self._rep_start_frame_index,
+                "end_frame_index": max(end_frame, self._frame_index),
+                "score": rep_result.get("score", 0),
+                "issues": rep_issues,
+            })
+            self.rep_nodes.append({
+                "rep_index": self.count + 1,
+                "frame_index": self._frame_index,
+                "start_frame_index": self._rep_start_frame_index,
+                "score": rep_result.get("score", 0),
+                "issues": rep_issues,
+            })
+
+            self._rep_samples = []
+
+        # Count a rep only when we cross once from the lowering/bottom phase
+        # into the rising/finished phase. Using the committed current stage
+        # avoids double-counting on sequences like bottom -> up -> standing.
+        if rep_completed:
             self.count += 1
-            display_score = rep_result["score"]
-            display_detail_scores = rep_result["detail_scores"]
-            if display_score >= 75:
+            self._last_rep_completed_count = self.count
+            if self._last_down_was_valid:
                 self.valid_count += 1
-            self.scores_history.append(display_score)
-            self._reset_rep_motion()
-
-        self._mark_rep_checkpoint(phase, score_result)
-        self._track_frame_score(score_result, phase)
+            self.scores_history.append(frame_score)
 
         self.previous_stage = current_stage
         self.stage = phase
-        state["phase"] = phase
 
         return {
             "exercise_type": self.exercise_type,
             "phase": phase,
-            "stage": phase,
             "count": self.count,
             "valid_count": self.valid_count,
             "features": smoothed,
-            "metrics": smoothed,
-            "score": display_score,
-            "current_score": display_score,
-            "issues": display_issues,
-            "errors": display_issues,
-            "feedback": display_feedback,
-            "detail_scores": display_detail_scores,
-            "is_rep_finished": is_rep_finished,
+            "score": frame_score,
+            "issues": frame_issues,
+            "feedback": frame_feedback,
+            "detail_scores": score_result.get("detail_scores", {}),
         }
 
     def get_session_summary(self) -> dict:
@@ -168,79 +284,6 @@ class BaseExerciseAnalyzer:
             vals = [h[k] for h in self.feature_history]
             smoothed[k] = sum(vals) / len(vals)
         return smoothed
-
-    def _track_rep_motion(self, features: dict[str, float], phase: str, score: float):
-        active_phases = {
-            "down", "bottom", "up",
-            "descending", "ascending",
-            "opening", "open_peak", "closing", "complete",
-        }
-        peak_phases = {"bottom", "open_peak"}
-
-        if phase in active_phases:
-            self._rep_started = True
-        if phase in peak_phases:
-            self._seen_peak = True
-        if self._rep_started:
-            self.current_rep_frames.append(dict(features))
-            self.current_rep_scores.append(float(score))
-
-    def _is_rep_finished(self, previous_phase: str, phase: str) -> bool:
-        if not self._rep_started or not self._seen_peak:
-            return False
-
-        if self.exercise_type == "squat":
-            return phase == "standing" and previous_phase in {"up", "bottom", "down"}
-        if self.exercise_type == "push_up":
-            return phase == "top_support" and previous_phase in {"ascending", "bottom"}
-        if self.exercise_type == "jumping_jack":
-            return phase in {"complete", "closed"} and previous_phase in {"closing", "open_peak"}
-
-        return (
-            phase in {"standing", "top_support", "complete", "closed"}
-            and previous_phase in {"up", "ascending", "closing", "bottom", "open_peak"}
-        )
-
-    def _score_completed_rep(self) -> dict:
-        scores = [s for s in self.current_rep_scores if s > 0]
-        if not scores:
-            return {"score": 0.0, "detail_scores": {}}
-
-        avg_score = sum(scores) / len(scores)
-        min_score = min(scores)
-        fallback_score = round(avg_score * 0.7 + min_score * 0.3, 1)
-        try:
-            template_result = self.template_service.score_by_template(
-                self.exercise_type,
-                self.current_rep_frames,
-            )
-            sequence_score = float(template_result.get("score", 0.0))
-            if sequence_score > 0:
-                detail_scores = template_result.get("detail_scores", {})
-                detail_scores["frame_average"] = round(avg_score, 1)
-                detail_scores["weakest_phase"] = round(min_score, 1)
-                detail_scores["template_sequence"] = round(sequence_score, 1)
-                display_score = max(sequence_score, fallback_score - 5)
-                return {
-                    "score": round(display_score, 1),
-                    "detail_scores": detail_scores,
-                }
-        except Exception:
-            pass
-
-        return {
-            "score": fallback_score,
-            "detail_scores": {
-                "sequence_average": round(avg_score, 1),
-                "weakest_phase": round(min_score, 1),
-            },
-        }
-
-    def _reset_rep_motion(self):
-        self.current_rep_scores.clear()
-        self.current_rep_frames.clear()
-        self._rep_started = False
-        self._seen_peak = False
 
     @staticmethod
     def _score_by_range(value: float, good_range: tuple[float, float],

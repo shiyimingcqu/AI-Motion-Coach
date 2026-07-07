@@ -7,6 +7,7 @@ except ModuleNotFoundError:
 class AnalysisTaskCreate(BaseModel):
     exercise: str
     source_uri: str
+    camera_view: str = "front"
 
 
 class SessionCreate(BaseModel):

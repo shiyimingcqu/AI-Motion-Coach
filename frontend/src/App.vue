@@ -33,8 +33,7 @@
           <header class="topbar">
             <div>
               <strong>{{ pageTitle }}</strong>
-              <span v-if="!authStore.isAdmin">今天 3 次训练 · 平均分 86</span>
-              <span v-else>用户、训练、报告与规则管理</span>
+              <span>今天 {{ todaySessions }} 次训练 · 平均分 {{ todayAvgScore }}</span>
             </div>
             <label class="search-box">
               <Search :size="16" />
@@ -48,7 +47,7 @@
                 </button>
                 <div v-if="showNotifications" class="dropdown-panel notification-panel">
                   <strong>消息通知</strong>
-                  <p>今日训练报告已生成，可前往个人报告查看。</p>
+                  <p>今日训练报告已生成，可前往报告导出查看。</p>
                   <p>深蹲动作规则已更新，建议训练前先阅读。</p>
                   <p>本周平均分较上周提升 6 分，继续保持。</p>
                 </div>
@@ -94,7 +93,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useRoute, useRouter } from "vue-router";
 import {
@@ -122,6 +121,7 @@ import {
 import UserAvatar from "./components/UserAvatar.vue";
 import { useAuthStore } from "./stores/auth";
 import { useSettingsStore } from "./stores/settings";
+import { getDashboardStats } from "./api/dashboard";
 
 const route = useRoute();
 const router = useRouter();
@@ -150,10 +150,7 @@ const pageTitleMap: Record<string, string> = {
   "/feedback": "Error Feedback / 动作错误反馈",
   "/sessions": "Training Sessions / 训练记录",
   "/exercises": "Exercise Library / 动作库",
-  "/progress": "Personal Progress / 个人进步趋势",
-  "/reports": "Evaluation Reports / 评估报告",
-  "/score-trends": "Score Trends / 分数趋势",
-  "/motion-quality": "Motion Quality Metrics / 动作质量指标",
+  "/score-trends": "Action Assessment / 动作评估",
   "/export": "Export Reports / 报告导出",
   "/rules": "Exercise Rules / 动作规则配置",
   "/users": "User Management / 用户管理",
@@ -161,11 +158,6 @@ const pageTitleMap: Record<string, string> = {
 };
 
 const pageTitle = computed(() => pageTitleMap[route.path] ?? "Pose Training AI");
-const pageSubtitle = computed(() =>
-  authStore.isAdmin
-    ? "System Management / 管理后台"
-    : "Student Training Workspace / 学生训练工作台"
-);
 
 const roleText = computed(() =>
   authStore.isAdmin ? "管理员" : "学生用户"
@@ -182,10 +174,7 @@ const baseNavItems = [
   { path: "/feedback", label: "动作反馈", icon: Target },
   { path: "/sessions", label: "训练记录", icon: ClipboardList },
   { path: "/exercises", label: "动作库", icon: Dumbbell },
-  { path: "/progress", label: "个人进步", icon: TrendingUp },
-  { path: "/reports", label: "个人报告", icon: BarChart3 },
-  { path: "/score-trends", label: "分数趋势", icon: BarChart3 },
-  { path: "/motion-quality", label: "动作质量", icon: LineChart },
+  { path: "/score-trends", label: "动作评估", icon: BarChart3 },
   { path: "/export", label: "报告导出", icon: FileDown },
 ];
 
@@ -209,6 +198,32 @@ const searchPlaceholder = computed(() =>
 );
 
 const showNotifications = ref(false);
+
+// 从后端获取今日训练数据
+const todaySessions = ref(0);
+const todayAvgScore = ref(0);
+
+async function fetchTodayStats() {
+  try {
+    const stats = await getDashboardStats();
+    console.log("[App] dashboard stats:", stats);
+    todaySessions.value = stats.today_sessions;
+    todayAvgScore.value = stats.today_avg_score ?? stats.average_score;
+  } catch (e) {
+    console.error("[App] fetchTodayStats failed:", e);
+  }
+}
+
+// 监听认证状态变化 + 组件挂载时立即执行
+watch(
+  () => authStore.isAuthenticated,
+  (authenticated) => {
+    if (authenticated) {
+      fetchTodayStats();
+    }
+  },
+  { immediate: true }
+);
 
 function toggleNotifications() {
   showNotifications.value = !showNotifications.value;
@@ -275,5 +290,4 @@ function handleLogout() {
   border-color: #ef4444;
   color: #ef4444;
 }
-
 </style>

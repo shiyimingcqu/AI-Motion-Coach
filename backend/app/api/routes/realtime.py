@@ -1,37 +1,64 @@
 """Realtime analysis WebSocket and HTTP endpoints — multi-exercise support."""
 
-import os
-import time
-from pathlib import Path
+import base64
+import json
+import logging
+
+import numpy as np
 
 from app.api.deps import get_current_active_user
 from app.core.security import decode_access_token
 from app.db.session import SessionLocal
-from app.models.entities import UserORM
+from app.models.entities import UserORM, SessionORM
 from app.services.analysis.models import NormalizedKeypoint
 from app.services.analysis.analyzers.registry import get_analyzer, ANALYZER_REGISTRY
-from app.services.analysis.exercise_metrics import get_core_metrics
+from app.services.pose.mediapipe_engine import MediaPipePoseEngine
 from app.services.storage.local_storage import local_storage
 from app.services.session.session_service import session_service
 from app.services.video.video_analysis_service import video_analysis_service
 
+logger = logging.getLogger(__name__)
+_pose_engine = None
+
+
+def _get_pose_engine():
+    global _pose_engine
+    if _pose_engine is None:
+        _pose_engine = MediaPipePoseEngine()
+    return _pose_engine
+
+
+def _landmarks_dict_to_array(landmarks_dict: dict) -> list:
+    """Convert MediaPipe engine output {idx: {x,y,z,visibility}} to array of 33 elements."""
+    arr = [None] * 33
+    for idx_str, kp in landmarks_dict.items():
+        idx = int(idx_str)
+        if 0 <= idx < 33:
+            arr[idx] = {"x": kp["x"], "y": kp["y"], "z": kp.get("z", 0.0), "visibility": kp.get("visibility", 1.0)}
+    return arr
+
+
+def _decode_base64_image(base64_str: str):
+    """Decode base64 image string to BGR numpy array."""
+    import cv2
+    try:
+        if "," in base64_str:
+            base64_str = base64_str.split(",", 1)[1]
+        img_bytes = base64.b64decode(base64_str)
+        nparr = np.frombuffer(img_bytes, np.uint8)
+        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        return frame
+    except Exception as exc:
+        logger.warning("Failed to decode base64 image: %s", exc)
+        return None
+
 try:
-    from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect, Query
+    from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect, Query
 except ModuleNotFoundError:
     APIRouter = None
-    File = Form = HTTPException = UploadFile = WebSocket = WebSocketDisconnect = Query = None
-
-try:
-    import cv2
-    import numpy as np
-    import base64
-except ModuleNotFoundError:
-    cv2 = None
-    np = None
-    base64 = None
+    File = Form = HTTPException = Request = UploadFile = WebSocket = WebSocketDisconnect = Query = None
 
 router = APIRouter(prefix="/realtime", tags=["realtime"]) if APIRouter else None
-_pose_detect_states: dict[str, dict] = {}
 
 
 def _parse_keypoints(raw_keypoints: dict) -> dict[str, NormalizedKeypoint]:
@@ -45,80 +72,86 @@ def _parse_keypoints(raw_keypoints: dict) -> dict[str, NormalizedKeypoint]:
     }
 
 
-# Module-level MediaPipe PoseLandmarker instance (lazy init, reused across requests)
-_landmarker = None
-
-
-def _find_pose_landmarker_model() -> Path:
-    candidates = [
-        Path(__file__).resolve().parents[3] / "pose_landmarker_lite.task",
-        Path(r"C:\temp\pose_landmarker_lite.task"),
-        Path(__file__).resolve().parents[4] / "frontend" / "public" / "mediapipe" / "models" / "pose_landmarker_lite.task",
-    ]
-
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-
-    raise RuntimeError(
-        "pose_landmarker_lite.task not found. Tried: "
-        + ", ".join(str(candidate) for candidate in candidates)
-    )
-
-
-def _get_landmarker():
-    """Get or create the MediaPipe PoseLandmarker instance (singleton)."""
-    global _landmarker
-    if _landmarker is None:
-        try:
-            from mediapipe.tasks.python import BaseOptions
-            from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions, RunningMode
-
-            # 模型文件（避免中文路径，MediaPipe C++ 层不支持）
-            model_path = r"C:\temp\pose_landmarker_lite.task"
-            if not os.path.exists(model_path):
-                raise RuntimeError(f"模型文件不存在: {model_path}")
-
-            options = PoseLandmarkerOptions(
-                base_options=BaseOptions(model_asset_path=model_path),
-                running_mode=RunningMode.IMAGE,
-                num_poses=1,
-                min_pose_detection_confidence=0.3,
-                min_pose_presence_confidence=0.3,
-                min_tracking_confidence=0.3,
-            )
-            _landmarker = PoseLandmarker.create_from_options(options)
-        except Exception as e:
-            raise RuntimeError(f"MediaPipe 初始化失败: {e}")
-    return _landmarker
-
-
-def _get_landmarker():
-    """Get or create the MediaPipe PoseLandmarker instance (singleton)."""
-    global _landmarker
-    if _landmarker is None:
-        try:
-            from mediapipe.tasks.python import BaseOptions
-            from mediapipe.tasks.python.vision import PoseLandmarker, PoseLandmarkerOptions, RunningMode
-
-            model_path = _find_pose_landmarker_model()
-            model_buffer = model_path.read_bytes()
-
-            options = PoseLandmarkerOptions(
-                base_options=BaseOptions(model_asset_buffer=model_buffer),
-                running_mode=RunningMode.IMAGE,
-                num_poses=1,
-                min_pose_detection_confidence=0.3,
-                min_pose_presence_confidence=0.3,
-                min_tracking_confidence=0.3,
-            )
-            _landmarker = PoseLandmarker.create_from_options(options)
-        except Exception as e:
-            raise RuntimeError(f"MediaPipe 初始化失败: {e}")
-    return _landmarker
-
-
 if router:
+    @router.post("/pose-detect")
+    async def pose_detect(request: Request):
+        """
+        Detect pose keypoints from base64-encoded image frames.
+        Request body:
+        {
+            "exercise_type": "squat",
+            "frames": [{"image": "<base64 JPEG>"}],
+            "reset_state": false
+        }
+        Response:
+        {
+            "frames": [{
+                "keypoints": [{"x": 0.5, "y": 0.6, "visibility": 0.9}, ...],
+                "features": {...},
+                "analysis": {...}
+            }]
+        }
+        """
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+        exercise_type = body.get("exercise_type", "squat")
+        frames = body.get("frames", [])
+        reset_state = body.get("reset_state", False)
+
+        if not frames or not isinstance(frames, list):
+            raise HTTPException(status_code=400, detail="frames must be a non-empty list")
+
+        engine = _get_pose_engine()
+        results = []
+
+        for frame_item in frames[:5]:  # limit to 5 frames per request
+            img_b64 = frame_item.get("image", "")
+            if not img_b64:
+                results.append({"keypoints": [None] * 33})
+                continue
+
+            frame = _decode_base64_image(img_b64)
+            if frame is None:
+                results.append({"keypoints": [None] * 33})
+                continue
+
+            try:
+                landmarks_dict = engine.infer(frame)
+            except FileNotFoundError as exc:
+                raise HTTPException(status_code=500, detail=str(exc))
+            except Exception as exc:
+                logger.warning("Pose inference failed: %s", exc)
+                results.append({"keypoints": [None] * 33})
+                continue
+
+            keypoints_array = _landmarks_dict_to_array(landmarks_dict)
+
+            # Optionally run analysis if we have enough visible keypoints
+            analysis = None
+            try:
+                analyzer = get_analyzer(exercise_type)
+                named_kps = {}
+                for i, kp in enumerate(keypoints_array):
+                    if kp and kp.get("visibility", 0) > 0.3:
+                        named_kps[str(i)] = NormalizedKeypoint(
+                            x=kp["x"], y=kp["y"], visibility=kp["visibility"]
+                        )
+                if named_kps:
+                    features = analyzer.extract_features(named_kps)
+                    analysis = {"features": features}
+            except Exception:
+                pass
+
+            result = {"keypoints": keypoints_array}
+            if analysis:
+                result["analysis"] = analysis.get("features")
+            results.append(result)
+
+        return {"frames": results}
+
     @router.get("/analyzers")
     def list_analyzers(
         current_user=Depends(get_current_active_user) if get_current_active_user else None,
@@ -140,7 +173,6 @@ if router:
             "keypoints": { ... }
         }
         """
-        started_at = time.perf_counter()
         exercise_type = request.get("exercise_type", "squat")
         raw_keypoints = request.get("keypoints", {})
 
@@ -161,20 +193,17 @@ if router:
         exercise: str = Form("squat"),
         max_frames: int = Form(120),
         file: UploadFile = File(...),
+        current_user=Depends(get_current_active_user) if get_current_active_user else None,
     ):
+        source_uri = await local_storage.save_upload(file)
         try:
-            source_uri = await local_storage.save_upload(file)
             return video_analysis_service.run_realtime_video_test(
                 source_uri=source_uri,
                 exercise=exercise,
                 max_frames=max_frames,
             )
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=400, detail=f"视频文件路径不存在: {exc}") from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-        except Exception as exc:
-            raise HTTPException(status_code=500, detail=f"视频分析失败: {exc}") from exc
 
     @router.post("/score-action", status_code=200)
     async def score_action(
@@ -218,150 +247,6 @@ if router:
 
         return result
 
-    @router.post("/pose-detect")
-    async def pose_detect(
-        request: dict = Body(...),
-    ):
-        """
-        接收 base64 图片帧，运行 MediaPipe Pose，返回关键点和特征。
-
-        Request:
-        {
-            "exercise_type": "squat",
-            "frames": [{"image": "base64_jpeg_data"}, ...]
-        }
-
-        Response:
-        {
-            "frames": [{
-                "keypoints": [{"x":0.5,"y":0.3,"z":0,"visibility":0.99}, ...],  # 33点
-                "features": {"knee_angle":120.5,...}
-            }, ...]
-        }
-        """
-        started_at = time.perf_counter()
-        if cv2 is None or np is None or base64 is None:
-            raise HTTPException(status_code=500, detail="cv2/numpy 不可用")
-
-        exercise_type = request.get("exercise_type", "squat")
-        frames = request.get("frames", [])
-        if exercise_type == "jumping_jack" and request.get("reset_state"):
-            _pose_detect_states[exercise_type] = {}
-            try:
-                get_analyzer(exercise_type).reset()
-            except Exception:
-                pass
-
-        if not frames:
-            raise HTTPException(status_code=400, detail="frames 不能为空")
-
-        try:
-            analyzer = get_analyzer(exercise_type)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc))
-
-        # 获取 MediaPipe Pose 单例
-        try:
-            landmarker = _get_landmarker()
-        except RuntimeError as exc:
-            raise HTTPException(status_code=500, detail=str(exc))
-
-        landmark_names = [
-            "nose", "left_eye_inner", "left_eye", "left_eye_outer",
-            "right_eye_inner", "right_eye", "right_eye_outer",
-            "left_ear", "right_ear", "mouth_left", "mouth_right",
-            "left_shoulder", "right_shoulder", "left_elbow", "right_elbow",
-            "left_wrist", "right_wrist", "left_pinky", "right_pinky",
-            "left_index", "right_index", "left_thumb", "right_thumb",
-            "left_hip", "right_hip", "left_knee", "right_knee",
-            "left_ankle", "right_ankle", "left_heel", "right_heel",
-            "left_foot_index", "right_foot_index",
-        ]
-
-        results = []
-        for frame_data in frames:
-            try:
-                image_b64 = frame_data.get("image", "")
-                if not image_b64:
-                    results.append({"keypoints": None, "features": None})
-                    continue
-
-                # 解码 base64 图片
-                try:
-                    img_bytes = base64.b64decode(image_b64)
-                    nparr = np.frombuffer(img_bytes, np.uint8)
-                    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                    if img is None:
-                        results.append({"keypoints": None, "features": None})
-                        continue
-                except Exception:
-                    results.append({"keypoints": None, "features": None})
-                    continue
-
-                # MediaPipe 处理（新 Tasks API）
-                from mediapipe import Image, ImageFormat
-                rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                mp_image = Image(image_format=ImageFormat.SRGB, data=rgb)
-                mp_result = landmarker.detect(mp_image)
-
-                if not mp_result.pose_landmarks:
-                    results.append({"keypoints": None, "features": None, "error": "未检测到人体"})
-                    continue
-
-                # 提取 33 关键点
-                landmarks = mp_result.pose_landmarks[0]
-                keypoints = []
-                for i in range(33):
-                    if i < len(landmarks):
-                        lm = landmarks[i]
-                        keypoints.append({
-                            "x": round(lm.x, 6),
-                            "y": round(lm.y, 6),
-                            "z": round(lm.z, 6),
-                            "visibility": round(lm.visibility, 6),
-                        })
-                    else:
-                        keypoints.append({"x": 0, "y": 0, "z": 0, "visibility": 0})
-
-                # 构建 NormalizedKeypoint 字典用于特征提取
-                named_keypoints = {}
-                for idx, name in enumerate(landmark_names):
-                    if idx < len(landmarks):
-                        lm = landmarks[idx]
-                        named_keypoints[name] = NormalizedKeypoint(
-                            x=lm.x, y=lm.y, visibility=lm.visibility
-                        )
-
-                # 提取动作特征
-                features = None
-                analysis = None
-                try:
-                    features = analyzer.extract_features(named_keypoints)
-                except Exception:
-                    pass
-                if exercise_type == "jumping_jack" and features is not None:
-                    state = _pose_detect_states.setdefault(exercise_type, {})
-                    try:
-                        analysis = analyzer.analyze_frame(named_keypoints, state)
-                    except Exception:
-                        analysis = None
-
-                results.append({
-                    "keypoints": keypoints,
-                    "features": features,
-                    "analysis": analysis,
-                })
-            except Exception as e:
-                import traceback
-                tb = traceback.format_exc()
-                results.append({"keypoints": None, "features": None, "error": str(e)[:200]})
-
-        return {
-            "exercise_type": exercise_type,
-            "frames": results,
-            "process_ms": round((time.perf_counter() - started_at) * 1000, 1),
-        }
-
     @router.websocket("/pose")
     async def realtime_pose(websocket: WebSocket, exercise_type: str = Query("squat")):
         await websocket.accept()
@@ -387,6 +272,12 @@ if router:
         state: dict = {}
         running = False
         saved_session = None
+        replay_frames: list[dict] = []
+        error_snapshots: list[dict] = []
+        last_frame_score = 100.0
+        last_error_capture_ms = -100000
+        ERROR_CAPTURE_THRESHOLD = 80
+        ERROR_CAPTURE_COOLDOWN_MS = 2500
 
         def save_session_once():
             nonlocal saved_session
@@ -394,13 +285,95 @@ if router:
                 return saved_session
 
             summary = analyzer.get_session_summary()
-            summary = video_analysis_service._normalize_session_summary(
-                summary,
-                analyzer.exercise_type,
-                processed_frames=1,
-            )
-            if summary["total_count"] <= 0 and summary["duration_seconds"] <= 0:
+            if summary["total_count"] <= 0 and not replay_frames:
                 return None
+
+            avg_score = float(summary["average_score"])
+            if replay_frames and avg_score < ERROR_CAPTURE_THRESHOLD:
+                has_landmark_snap = any(s.get("landmarks") for s in error_snapshots)
+                pick_frame = (
+                    min(
+                        replay_frames,
+                        key=lambda f: float(
+                            next(
+                                (s.get("score") for s in error_snapshots if s.get("timestamp_ms") == f.get("timestamp_ms")),
+                                avg_score,
+                            )
+                        ),
+                    )
+                    if error_snapshots
+                    else replay_frames[len(replay_frames) // 2]
+                )
+                lm = pick_frame.get("landmarks") if isinstance(pick_frame, dict) else None
+                ts = int(pick_frame.get("timestamp_ms", 0)) if isinstance(pick_frame, dict) else 0
+                if lm and not has_landmark_snap:
+                    error_snapshots.append({
+                        "timestamp_ms": ts,
+                        "score": avg_score,
+                        "landmarks": lm,
+                        "errors": ["本次训练平均分低于阈值，建议对照反馈重点改进"],
+                        "capture_type": "session_summary",
+                    })
+                elif lm and not any(s.get("capture_type") == "session_summary" for s in error_snapshots):
+                    error_snapshots.append({
+                        "timestamp_ms": ts,
+                        "score": avg_score,
+                        "landmarks": lm,
+                        "errors": ["本次训练平均分低于阈值，建议对照反馈重点改进"],
+                        "capture_type": "session_summary",
+                    })
+
+            replay_meta = {
+                "source": "web_realtime",
+                "sample_interval_ms": 100,
+                "frame_count": len(replay_frames),
+                "error_snapshots": error_snapshots[:30],
+            }
+            from app.services.report.error_frame_service import ensure_meta_error_snapshots
+            replay_meta = ensure_meta_error_snapshots(
+                replay_meta,
+                replay_frames,
+                avg_score,
+            )
+
+            # 即使未计次也保存 session，便于跳转反馈页展示分析建议
+            # 生成 rep_segments（按单次动作筛选回放）
+            rep_segments_payload: list[dict] = []
+            if hasattr(analyzer, "rep_segments"):
+                for seg in analyzer.rep_segments:
+                    si = seg.get("start_frame_index", 0)
+                    ei = seg.get("end_frame_index", 0)
+                    st = replay_frames[si]["timestamp_ms"] if si < len(replay_frames) else 0
+                    et = replay_frames[ei]["timestamp_ms"] if ei < len(replay_frames) else 0
+                    rep_segments_payload.append({
+                        "rep_index": seg["rep_index"],
+                        "start_frame_index": si,
+                        "end_frame_index": ei,
+                        "start_timestamp_ms": st,
+                        "end_timestamp_ms": et,
+                        "score": seg.get("score", 0),
+                        "issues": seg.get("issues", []),
+                    })
+            rep_nodes_payload: list[dict] = []
+            if hasattr(analyzer, "rep_nodes"):
+                for node in analyzer.rep_nodes:
+                    frame_index = int(node.get("frame_index", 0))
+                    timestamp_ms = (
+                        replay_frames[frame_index]["timestamp_ms"]
+                        if 0 <= frame_index < len(replay_frames)
+                        else 0
+                    )
+                    rep_nodes_payload.append({
+                        "rep_index": node.get("rep_index"),
+                        "frame_index": frame_index,
+                        "timestamp_ms": timestamp_ms,
+                        "start_frame_index": int(node.get("start_frame_index", frame_index)),
+                        "score": node.get("score", 0),
+                        "issues": node.get("issues", []),
+                    })
+
+            replay_meta["rep_segments"] = rep_segments_payload
+            replay_meta["rep_nodes"] = rep_nodes_payload
 
             saved_session = session_service.create_session(
                 exercise=summary["exercise"],
@@ -410,7 +383,37 @@ if router:
                 error_count=summary["error_count"],
                 average_score=summary["average_score"],
                 user_id=user_id,
+                pose_replay_frames=replay_frames,
+                pose_replay_meta=replay_meta,
             )
+
+            # 保存反馈摘要（AI 建议后台异步生成，不阻塞跳转评估页）
+            try:
+                from app.services.analysis.unified_feedback_service import (
+                    build_unified_feedback_from_analyzer,
+                    unified_feedback_service,
+                )
+                from app.services.session.feedback_persistence import (
+                    build_feedback_data,
+                    load_session_orm,
+                    save_session_feedback_summary,
+                )
+
+                unified_feedback = build_unified_feedback_from_analyzer(analyzer)
+                formatted = unified_feedback_service.format_for_ai(unified_feedback)
+                feedback_data = build_feedback_data(unified_feedback, formatted)
+                save_session_feedback_summary(
+                    saved_session.session_id,
+                    feedback_data,
+                    generate_ai_async=True,
+                    exercise=summary["exercise"],
+                )
+                refreshed = load_session_orm(saved_session.session_id)
+                if refreshed is not None:
+                    saved_session = refreshed
+            except Exception:
+                pass  # 反馈保存失败不影响主流程
+
             return saved_session
 
         try:
@@ -424,12 +427,13 @@ if router:
                     analyzer.reset()
                     state = {}
                     saved_session = None
+                    replay_frames = []
+                    error_snapshots = []
+                    last_frame_score = 100.0
+                    last_error_capture_ms = -100000
                     running = True
                     await websocket.send_json({
-                        "type": "status",
-                        "state": "running",
-                        "exercise_type": new_exercise,
-                        "core_metrics": [metric.to_dict() for metric in get_core_metrics(new_exercise)],
+                        "type": "status", "state": "running", "exercise_type": new_exercise,
                     })
                     continue
 
@@ -463,27 +467,51 @@ if router:
                     })
                     continue
 
-                keypoints = _parse_keypoints(payload.get("keypoints", {}))
-                try:
-                    result = analyzer.analyze_frame(keypoints, state)
-                except ValueError as exc:
-                    error_message = "关键点不足"
-                    await websocket.send_json({
-                        "type": "analysis",
-                        "stage": "invalid",
-                        "phase": "invalid",
-                        "count": analyzer.count,
-                        "valid_count": analyzer.valid_count,
-                        "score": 0,
-                        "issues": [error_message],
-                        "errors": [error_message],
-                        "feedback": [str(exc)],
-                        "metrics": {},
-                        "features": {},
+                replay_keypoints = payload.get("replay_keypoints")
+                if isinstance(replay_keypoints, list) and len(replay_keypoints) >= 33:
+                    replay_frames.append({
+                        "timestamp_ms": int(payload.get("timestamp_ms", len(replay_frames) * 100)),
+                        "landmarks": replay_keypoints[:33],
                     })
-                    continue
+                    if len(replay_frames) > 60000:
+                        replay_frames = replay_frames[-60000:]
+
+                keypoints = _parse_keypoints(payload.get("keypoints", {}))
+                result = analyzer.analyze_frame(
+                    keypoints, state,
+                    frame_index=len(replay_frames) - 1 if replay_frames else 0,
+                )
                 result["metrics"] = result.get("features", {})
+                result["stage"] = result.get("stage") or result.get("phase", "")
+                result["errors"] = result.get("errors") or result.get("issues", [])
                 result["type"] = "analysis"
+
+                frame_score = result.get("score", 0)
+                frame_errors = result.get("errors") or []
+                if isinstance(replay_keypoints, list) and len(replay_keypoints) >= 33:
+                    ts = int(payload.get("timestamp_ms", len(replay_frames) * 100))
+                    score_f = float(frame_score) if isinstance(frame_score, (int, float)) else 100.0
+                    crossed_below = last_frame_score >= ERROR_CAPTURE_THRESHOLD and score_f < ERROR_CAPTURE_THRESHOLD
+                    has_errors = bool(frame_errors)
+                    cooldown_ok = ts - last_error_capture_ms >= ERROR_CAPTURE_COOLDOWN_MS
+
+                    if score_f < ERROR_CAPTURE_THRESHOLD and cooldown_ok:
+                        should_capture = crossed_below or has_errors or len(error_snapshots) == 0
+                        if should_capture:
+                            error_snapshots.append({
+                                "timestamp_ms": ts,
+                                "score": score_f,
+                                "landmarks": replay_keypoints[:33],
+                                "errors": frame_errors[:5] if frame_errors else [f"实时评分 {score_f:.0f} 分低于 {ERROR_CAPTURE_THRESHOLD} 分阈值"],
+                                "metrics": result.get("features") or result.get("metrics") or {},
+                                "capture_type": "threshold_cross",
+                            })
+                            last_error_capture_ms = ts
+                            if len(error_snapshots) > 30:
+                                error_snapshots[:] = error_snapshots[-30:]
+
+                    last_frame_score = score_f
+
                 await websocket.send_json(result)
 
         except WebSocketDisconnect:

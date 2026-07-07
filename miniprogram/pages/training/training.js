@@ -94,6 +94,7 @@ Page({
 
     // 内部
     startTime: 0,
+    _trainingFinishedCalled: false,
     scoresHistory: [],
     cameraReady: false,
     isDemoMode: false,
@@ -119,13 +120,20 @@ Page({
   _lastRealtimeScoreCommitTime: 0,
   _poseDetectResetPending: false,
   _serverMetricConfig: {},
+  _poseReplayFrames: [],
+  _poseReplayNodes: [],
+  _poseReplayStartedAt: 0,
+  _lastReplayNodeCount: 0,
+  _prevSmoothedLandmarks: null,
+  _smoothDt: 0,
+  _smoothHistory: [],
 
-  FRAME_INTERVAL: 140,
+  FRAME_INTERVAL: 17,
   FRAME_INTERVALS: {
-    jumping_jack: 60,
-    squat: 140,
-    push_up: 140,
-    plank: 220,
+    jumping_jack: 17,
+    squat: 17,
+    push_up: 17,
+    plank: 17,
   },
 
   onLoad(options) {
@@ -274,9 +282,20 @@ Page({
 
       case 'analysis':
         const incomingScore = data.score != null ? Math.round(data.score) : this.data.currentScore;
-        const issues = data.issues || [];
+        const issues = data.errors || [];
         const feedback = data.feedback || [];
 
+        // 累积纠错历史（用于结束汇总去重）
+        if (issues.length > 0) {
+          if (!this._errorHistory) this._errorHistory = [];
+          this._errorHistory.push(...issues);
+        }
+        if (feedback.length > 0) {
+          if (!this._feedbackHistory) this._feedbackHistory = [];
+          this._feedbackHistory.push(...feedback);
+        }
+
+        const previousTotalCount = this.data.totalCount;
         let totalCount = this.data.totalCount;
         let validCount = this.data.validCount;
         let errorCount = this.data.errorCount;
@@ -291,6 +310,9 @@ Page({
 
         if (data.count != null) {
           totalCount = data.count;
+        }
+        if (data.count != null && data.count > previousTotalCount) {
+          this._recordReplayNode(data.count, issues, feedback, incomingScore);
         }
         validCount = data.valid_count != null ? data.valid_count : validCount;
         errorCount = data.error_count != null ? data.error_count : Math.max(0, totalCount - validCount);
@@ -313,7 +335,7 @@ Page({
           this.data.scoresHistory.push(incomingScore);
         }
 
-        this.setData({
+        const setDataObj = {
           currentScore: displayScore,
           scoreColor,
           totalCount,
@@ -322,15 +344,26 @@ Page({
           calories,
           currentPhase: phase,
           phaseLabel,
-          issues,
-          feedback,
           metrics: newMetrics,
           metricCards: this._buildMetricCards(this.data.exerciseKey, newMetrics),
-        });
+        };
+        // 只在有纠错文案时才更新，避免空帧覆盖上一次的建议（"闪一下"问题）
+        if (issues.length > 0) {
+          setDataObj.issues = issues;
+        }
+        if (feedback.length > 0) {
+          setDataObj.feedback = feedback;
+        }
+        this.setData(setDataObj);
         break;
 
       case 'summary':
         console.log('[WS] 训练总结:', data);
+        if (this._finishTimer) {
+          clearTimeout(this._finishTimer);
+          this._finishTimer = null;
+        }
+        this._finishNavigated = true;
         this.onTrainingFinished(data.session || data);
         break;
     }
@@ -428,40 +461,44 @@ Page({
 
           // 更新骨架关键点
           if (frameData.keypoints && frameData.keypoints.length > 0) {
-          const hasVisible = frameData.keypoints.some(kp => kp && kp.visibility > 0.5);
-          if (hasVisible) {
-            const debugOkFrames = this.data.debugOkFrames + 1;
-            this.setData({ debugOkFrames });
+            let replayFrame = null;
+            const hasVisible = frameData.keypoints.some(kp => kp && kp.visibility > 0.5);
+            if (hasVisible) {
+              const debugOkFrames = this.data.debugOkFrames + 1;
+              this.setData({ debugOkFrames });
+              replayFrame = this._captureReplayFrame(frameData.keypoints);
 
-            // 同时通过 setData 和组件方法更新
-            const newMetrics = this._buildMetricsFromKeypoints(frameData.keypoints, frameData.features, this.data.metrics);
-            this.setData({
-              currentKeypoints: frameData.keypoints,
-              metrics: newMetrics,
-              metricCards: this._buildMetricCards(this.data.exerciseKey, newMetrics),
-              debugLastError: backendMs == null ? `延迟 ${totalMs}ms` : `延迟 ${totalMs}ms / 后端 ${backendMs}ms`,
-            });
-            const skeletonComp = this.selectComponent('#skeleton');
-            if (skeletonComp) {
-              try {
-                skeletonComp.updateKeypoints(frameData.keypoints);
-              } catch (e) {
-                console.warn('[Frame] 骨架绘制失败:', e);
+              // 同时通过 setData 和组件方法更新
+              const newMetrics = this._buildMetricsFromKeypoints(frameData.keypoints, frameData.features, this.data.metrics);
+              this.setData({
+                currentKeypoints: frameData.keypoints,
+                metrics: newMetrics,
+                metricCards: this._buildMetricCards(this.data.exerciseKey, newMetrics),
+                debugLastError: backendMs == null ? `延迟 ${totalMs}ms` : `延迟 ${totalMs}ms / 后端 ${backendMs}ms`,
+              });
+              const skeletonComp = this.selectComponent('#skeleton');
+              if (skeletonComp) {
+                try {
+                  skeletonComp.updateKeypoints(frameData.keypoints);
+                } catch (e) {
+                  console.warn('[Frame] 骨架绘制失败:', e);
+                }
               }
             }
-          }
 
-          if (this.data.exerciseKey === 'jumping_jack' && frameData.analysis) {
-            this.handleWSMessage({ type: 'analysis', ...frameData.analysis });
-          } else if (this._wsReady) {
-            const namedKeypoints = this._convertToNamedKeypoints(frameData.keypoints);
-            if (Object.keys(namedKeypoints).length > 0) {
-              this.sendWS({
-                type: 'frame',
-                keypoints: namedKeypoints
-              });
+            if (this.data.exerciseKey === 'jumping_jack' && frameData.analysis) {
+              this.handleWSMessage({ type: 'analysis', ...frameData.analysis });
+            } else if (this._wsReady) {
+              const namedKeypoints = this._convertToNamedKeypoints(frameData.keypoints);
+              if (Object.keys(namedKeypoints).length > 0) {
+                this.sendWS({
+                  type: 'frame',
+                  keypoints: namedKeypoints,
+                  timestamp_ms: replayFrame ? replayFrame.timestamp_ms : undefined,
+                  replay_keypoints: replayFrame ? replayFrame.landmarks : undefined
+                });
+              }
             }
-          }
           } else if (frameData.error) {
           // 后端返回了错误信息
           debugErrors = this.data.debugErrors + 1;
@@ -614,6 +651,56 @@ Page({
       }
     }
     return result;
+  },
+
+  _captureReplayFrame(keypointsArray) {
+    const raw = this._normalizeReplayKeypoints(keypointsArray);
+    if (raw.length < 33) return null;
+
+    const now = Date.now();
+    const startedAt = this._poseReplayStartedAt || this.data.startTime || now;
+    const frame = {
+      timestamp_ms: Math.max(0, now - startedAt),
+      landmarks: raw,
+    };
+
+    this._poseReplayFrames.push(frame);
+    if (this._poseReplayFrames.length > 36000) {
+      this._poseReplayFrames = this._poseReplayFrames.slice(-36000);
+    }
+
+    return frame;
+  },
+
+  _recordReplayNode(repIndex, issues, feedback, score) {
+    const frameIndex = Math.max(0, this._poseReplayFrames.length - 1);
+    const frame = this._poseReplayFrames[frameIndex] || null;
+    if (!repIndex || repIndex <= this._lastReplayNodeCount || !frame) return;
+
+    this._lastReplayNodeCount = repIndex;
+    this._poseReplayNodes.push({
+      rep_index: repIndex,
+      frame_index: frameIndex,
+      timestamp_ms: Number(frame.timestamp_ms || 0),
+      score: Number(score || 0),
+      issues: (issues || []).map((issue, index) => ({
+        issue,
+        suggestion: feedback && feedback[index] ? feedback[index] : '',
+        severity: 'warning',
+        metric: '',
+        value: 0,
+      })),
+    });
+  },
+
+  _normalizeReplayKeypoints(keypointsArray) {
+    if (!Array.isArray(keypointsArray)) return [];
+    return keypointsArray.slice(0, 33).map((kp) => ({
+      x: Number(kp && kp.x) || 0,
+      y: Number(kp && kp.y) || 0,
+      z: Number(kp && kp.z) || 0,
+      visibility: kp && kp.visibility != null ? (Number(kp.visibility) || 0) : 1,
+    }));
   },
 
   _namedKeypointsToArray(namedKeypoints) {
@@ -924,6 +1011,7 @@ Page({
   // ========== 训练控制 ==========
   async startTraining() {
     if (this.data.state !== 'ready') return;
+    this._trainingFinishedCalled = false;
     this.setData({ debugFrames: 0, debugOkFrames: 0, debugErrors: 0, _errorCountTotal: 0 });
 
     // 初始化摄像头
@@ -948,10 +1036,15 @@ Page({
       count--;
       if (count <= 0) {
         clearInterval(timer);
+        const startedAt = Date.now();
         const metrics = this._emptyMetricsForExercise(this.data.exerciseKey);
+        this._poseReplayFrames = [];
+        this._poseReplayNodes = [];
+        this._poseReplayStartedAt = startedAt;
+        this._lastReplayNodeCount = 0;
         this.setData({
           state: 'running',
-          startTime: Date.now(),
+          startTime: startedAt,
           countdown: 0,
           currentScore: 0,
           totalCount: 0,
@@ -967,6 +1060,8 @@ Page({
         this._lastCommittedScoreCount = 0;
         this._lastRealtimeScoreCommitTime = 0;
         this._poseDetectResetPending = true;
+        this._errorHistory = [];
+        this._feedbackHistory = [];
       } else {
         this.setData({ countdown: count });
       }
@@ -1000,14 +1095,20 @@ Page({
 
   _doFinish() {
     this.setData({ state: 'finished' });
+    this._finishNavigated = false;
     this.sendWS({ type: 'finish' });
 
-    // 2 秒后自动跳转结果页
-    setTimeout(() => {
-      if (this.data.state === 'finished') {
+    if (this._finishTimer) {
+      clearTimeout(this._finishTimer);
+    }
+
+    // 不等 AI 生成，只等后端保存 session 并返回 summary
+    this._finishTimer = setTimeout(() => {
+      if (this.data.state === 'finished' && !this._finishNavigated) {
+        this._finishNavigated = true;
         this.onTrainingFinished(null);
       }
-    }, 2000);
+    }, 5000);
   },
 
   // ========== 调试功能 ==========
@@ -1173,7 +1274,7 @@ Page({
       currentPhase: phase,
       phaseLabel: phase ? '当前阶段: ' + phase : '',
       issues,
-      feedback: issues,
+      feedback: Array.isArray(frame.feedback) ? frame.feedback : [],
       debugFrames: index + 1,
       debugOkFrames: visible > 0 ? this.data.debugOkFrames + 1 : this.data.debugOkFrames,
       debugFrameSize: `demo ${index + 1}/${total}`,
@@ -1378,10 +1479,18 @@ Page({
   },
 
   onTrainingFinished(session) {
+    // Guard against double invocation — WS summary + _doFinish timeout
+    if (this._trainingFinishedCalled) return;
+    this._trainingFinishedCalled = true;
+
     const duration = Math.round((Date.now() - (this.data.startTime || Date.now())) / 1000);
     const avgScore = this.data.scoresHistory.length > 0
       ? Math.round(this.data.scoresHistory.reduce((a, b) => a + b, 0) / this.data.scoresHistory.length)
       : this.data.currentScore;
+
+    // 纠错建议去重汇总（从逐次 score_rep 累积而来）
+    const allErrors = [...new Set((this._errorHistory || []).filter(Boolean))];
+    const allFeedbacks = [...new Set((this._feedbackHistory || []).filter(Boolean))];
 
     const resultData = {
       exercise_key: this.data.exerciseKey,
@@ -1392,12 +1501,38 @@ Page({
       error_count: (session && session.error_count) || this.data.errorCount,
       average_score: (session && session.average_score) || avgScore,
       session_id: (session && session.session_id) || '',
+      feedback_summary: (session && session.feedback_summary) || '',
+      issues: allErrors,
+      suggestions: allFeedbacks,
     };
+
+    if (this._poseReplayFrames && this._poseReplayFrames.length > 0) {
+      const replayKey = `pose_replay_${Date.now()}`;
+      try {
+        wx.setStorageSync(replayKey, this._poseReplayFrames);
+        resultData.replay_key = replayKey;
+        resultData.has_replay = true;
+        resultData.replay_nodes = this._poseReplayNodes || [];
+      } catch (e) {
+        console.warn('[Replay] 临时保存回放帧失败:', e);
+      }
+    }
+
+    const resultKey = `training_result_${Date.now()}`;
+    try {
+      wx.setStorageSync(resultKey, resultData);
+    } catch (e) {
+      console.warn('[Result] 缓存训练结果失败:', e);
+    }
 
     this.cleanup();
 
+    const navigateUrl = resultKey
+      ? `/pages/result/result?key=${encodeURIComponent(resultKey)}`
+      : `/pages/result/result?data=${encodeURIComponent(JSON.stringify(resultData))}`;
+
     wx.redirectTo({
-      url: `/pages/result/result?data=${encodeURIComponent(JSON.stringify(resultData))}`,
+      url: navigateUrl,
       fail: () => {
         wx.navigateBack();
       }

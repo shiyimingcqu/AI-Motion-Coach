@@ -1,6 +1,6 @@
 """Report REST endpoints — evaluation reports with charts and calorie data."""
 
-from app.api.deps import get_current_active_user
+from app.api.deps import get_current_active_user, require_admin
 from app.services.report.report_service import report_service
 from app.services.session.session_service import session_service
 
@@ -47,6 +47,25 @@ if router:
             date_to=date_to or None,
             include_all_users=include_all,
             exercise=exercise or None,
+        )
+
+    @router.get("/error-frames")
+    def list_error_frames(
+        date_from: str = Query("", description="Start date (YYYY-MM-DD)"),
+        date_to: str = Query("", description="End date (YYYY-MM-DD)"),
+        exercise: str = Query("", description="Filter by exercise key"),
+        current_user=Depends(get_current_active_user) if get_current_active_user else None,
+    ):
+        from app.services.report.error_frame_service import error_frame_service
+
+        user_id = current_user.id if current_user else None
+        include_all = bool(current_user and current_user.role == "admin")
+        return error_frame_service.list_error_frames(
+            user_id=user_id,
+            date_from=date_from or None,
+            date_to=date_to or None,
+            exercise=exercise or None,
+            include_all_users=include_all,
         )
 
     @router.get("/export")
@@ -112,7 +131,7 @@ if router:
 
     @router.get("/class")
     def class_report(
-        current_user=Depends(get_current_active_user) if get_current_active_user else None,
+        current_user=Depends(require_admin),
     ):
         return report_service.class_summary()
 
@@ -135,10 +154,7 @@ if router:
 
         username = current_user.username if current_user else "学员"
         if format == "pdf":
-            from app.services.report.pdf_report_service import pdf_report_builder
-
-            summary = report_service.personal_summary(user_id=session.user_id)
-            pdf_bytes = pdf_report_builder.build(summary, [session], username=username)
+            pdf_bytes = report_service.export_session_pdf(session, username=username)
             return Response(
                 content=pdf_bytes,
                 media_type="application/pdf",

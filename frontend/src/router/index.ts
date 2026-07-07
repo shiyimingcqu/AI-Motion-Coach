@@ -5,13 +5,13 @@ import DashboardView from "../views/DashboardView.vue";
 import RealtimeDetectView from "../views/RealtimeDetectView.vue";
 import VideoUploadView from "../views/VideoUploadView.vue";
 import SessionsView from "../views/SessionsView.vue";
-import ReportsView from "../views/ReportsView.vue";
-import PersonalProgressView from "../views/PersonalProgressView.vue";
 import ScoreTrendsView from "../views/ScoreTrendsView.vue";
-import MotionQualityView from "../views/MotionQualityView.vue";
 import ExerciseRulesView from "../views/ExerciseRulesView.vue";
 import ProfileView from "../views/ProfileView.vue";
 import SettingsView from "../views/SettingsView.vue";
+import ReferenceVideosView from "../views/ReferenceVideosView.vue";
+import TrainingResultView from "../views/TrainingResultView.vue";
+import UserManagementView from "../views/UserManagementView.vue";
 import ExportReportsView from "../views/ExportReportsView.vue";
 import ExerciseLibraryView from "../views/ExerciseLibraryView.vue";
 import ErrorFeedbackView from "../views/ErrorFeedbackView.vue";
@@ -24,6 +24,8 @@ import AdminReportsView from "../views/AdminReportsView.vue";
 import AdminTemplatesView from "../views/AdminTemplatesView.vue";
 import AdminSettingsView from "../views/AdminSettingsView.vue";
 
+const STANDALONE_PATHS = ["/profile", "/settings"];
+
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -34,19 +36,17 @@ export const router = createRouter({
     { path: "/feedback", component: ErrorFeedbackView, meta: { userOnly: true } },
     { path: "/sessions", component: SessionsView, meta: { userOnly: true } },
     { path: "/exercises", component: ExerciseLibraryView, meta: { userOnly: true } },
-    { path: "/progress", component: PersonalProgressView, meta: { userOnly: true } },
-    { path: "/reports", component: ReportsView, meta: { userOnly: true } },
+    { path: "/progress", redirect: "/export" },
+    { path: "/reports", redirect: "/export" },
+    { path: "/motion-quality", redirect: "/export" },
     { path: "/score-trends", component: ScoreTrendsView, meta: { userOnly: true } },
-    { path: "/motion-quality", component: MotionQualityView, meta: { userOnly: true } },
     { path: "/export", component: ExportReportsView, meta: { userOnly: true } },
-    { path: "/profile", component: ProfileView, meta: { userOnly: true, layoutTransition: "layout-slide-up" } },
-    { path: "/settings", component: SettingsView, meta: { userOnly: true, layoutTransition: "layout-slide-up" } },
-
-    // 兼容 main 分支的管理路由（重定向到 admin 后台）
     { path: "/rules", redirect: "/admin/rules" },
-    { path: "/users", redirect: "/admin/users" },
-
-    // 管理员后台路由
+    { path: "/users", component: UserManagementView, meta: { adminOnly: true } },
+    { path: "/profile", component: ProfileView, meta: { userOnly: true } },
+    { path: "/settings", component: SettingsView, meta: { userOnly: true } },
+    { path: "/reference-videos", component: ReferenceVideosView, meta: { userOnly: true } },
+    { path: "/training-result", component: TrainingResultView, meta: { userOnly: true } },
     { path: "/admin", component: AdminDashboardView, meta: { adminOnly: true } },
     { path: "/admin/users", component: AdminUsersView, meta: { adminOnly: true } },
     { path: "/admin/admins", component: AdminAdminsView, meta: { adminOnly: true } },
@@ -58,7 +58,18 @@ export const router = createRouter({
   ]
 });
 
-router.beforeEach(async (to, _from, next) => {
+router.beforeEach(async (to, from, next) => {
+  const toStandalone = STANDALONE_PATHS.includes(to.path);
+  const fromStandalone = STANDALONE_PATHS.includes(from.path);
+
+  if (toStandalone && !fromStandalone) {
+    to.meta.layoutTransition = "page-soft-forward";
+  } else if (!toStandalone && fromStandalone) {
+    to.meta.layoutTransition = "page-soft-back";
+  } else {
+    to.meta.layoutTransition = undefined;
+  }
+
   const authStore = useAuthStore();
 
   if (authStore.token && !authStore.user) {

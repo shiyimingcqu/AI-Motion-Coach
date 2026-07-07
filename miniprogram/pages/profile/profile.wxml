@@ -104,6 +104,11 @@
       </view>
     </view>
 
+    <!-- 退出登录按钮 -->
+    <view class="logout-section">
+      <button class="logout-btn" bindtap="handleLogout">退出登录</button>
+    </view>
+
     <view style="height: 40rpx;"></view>
   </scroll-view>
 </view>

@@ -12,6 +12,13 @@ export type BackendKeypoint = {
 
 export type BackendKeypoints = Record<string, BackendKeypoint>;
 
+export type PoseReplayLandmark = {
+  x: number;
+  y: number;
+  z: number;
+  visibility: number;
+};
+
 const NAME_TO_INDEX: Record<string, number> = {
   nose: 0,
   left_eye_inner: 1,
@@ -166,7 +173,21 @@ export function toBackendKeypoints(landmarks: NormalizedLandmark[]): BackendKeyp
   return keypoints;
 }
 
-export function drawPose(canvas: HTMLCanvasElement, landmarks: NormalizedLandmark[] | null) {
+export function toReplayLandmarks(landmarks: NormalizedLandmark[]): PoseReplayLandmark[] {
+  return landmarks.slice(0, 33).map((landmark) => ({
+    x: roundPoint(landmark.x),
+    y: roundPoint(landmark.y),
+    z: roundPoint(landmark.z ?? 0),
+    visibility: roundPoint(landmark.visibility ?? 1),
+  }));
+}
+
+export function drawPose(
+  canvas: HTMLCanvasElement,
+  landmarks: NormalizedLandmark[] | null,
+  video?: HTMLVideoElement | null,
+  fit: "contain" | "cover" | "fill" = "fill",
+) {
   const context = canvas.getContext("2d");
   if (!context) return;
 
@@ -178,6 +199,8 @@ export function drawPose(canvas: HTMLCanvasElement, landmarks: NormalizedLandmar
     return;
   }
 
+  const displayRect = getVideoDisplayRect(canvas, video, fit);
+
   context.lineCap = "round";
   context.lineJoin = "round";
 
@@ -186,9 +209,12 @@ export function drawPose(canvas: HTMLCanvasElement, landmarks: NormalizedLandmar
     const end = landmarks[to];
     if (!isVisible(start) || !isVisible(end)) continue;
 
+    const startPoint = mapLandmarkToCanvas(start, displayRect);
+    const endPoint = mapLandmarkToCanvas(end, displayRect);
+
     context.beginPath();
-    context.moveTo(start.x * canvas.width, start.y * canvas.height);
-    context.lineTo(end.x * canvas.width, end.y * canvas.height);
+    context.moveTo(startPoint.x, startPoint.y);
+    context.lineTo(endPoint.x, endPoint.y);
     context.strokeStyle = "rgba(240, 178, 63, 0.96)";
     context.lineWidth = 5;
     context.shadowColor = "rgba(16, 23, 19, 0.7)";
@@ -200,8 +226,7 @@ export function drawPose(canvas: HTMLCanvasElement, landmarks: NormalizedLandmar
   for (const landmark of landmarks) {
     if (!isVisible(landmark)) continue;
 
-    const x = landmark.x * canvas.width;
-    const y = landmark.y * canvas.height;
+    const { x, y } = mapLandmarkToCanvas(landmark, displayRect);
     context.beginPath();
     context.arc(x, y, 5, 0, Math.PI * 2);
     context.fillStyle = "rgba(215, 239, 227, 0.96)";
@@ -216,6 +241,57 @@ export function clearPoseCanvas(canvas: HTMLCanvasElement | null) {
   const context = canvas?.getContext("2d");
   if (!canvas || !context) return;
   context.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function getVideoDisplayRect(
+  canvas: HTMLCanvasElement,
+  video: HTMLVideoElement | null | undefined,
+  fit: "contain" | "cover" | "fill",
+) {
+  const targetWidth = canvas.clientWidth || canvas.width;
+  const targetHeight = canvas.clientHeight || canvas.height;
+
+  if (!video || fit === "fill" || !video.videoWidth || !video.videoHeight) {
+    return { x: 0, y: 0, width: targetWidth, height: targetHeight };
+  }
+
+  const sourceWidth = video.videoWidth;
+  const sourceHeight = video.videoHeight;
+  const sourceRatio = sourceWidth / sourceHeight;
+  const targetRatio = targetWidth / targetHeight;
+
+  if (fit === "contain") {
+    if (sourceRatio > targetRatio) {
+      const width = targetWidth;
+      const height = targetWidth / sourceRatio;
+      return { x: 0, y: (targetHeight - height) / 2, width, height };
+    }
+
+    const height = targetHeight;
+    const width = targetHeight * sourceRatio;
+    return { x: (targetWidth - width) / 2, y: 0, width, height };
+  }
+
+  // object-fit: cover
+  if (sourceRatio > targetRatio) {
+    const height = targetHeight;
+    const width = targetHeight * sourceRatio;
+    return { x: (targetWidth - width) / 2, y: 0, width, height };
+  }
+
+  const width = targetWidth;
+  const height = targetWidth / sourceRatio;
+  return { x: 0, y: (targetHeight - height) / 2, width, height };
+}
+
+function mapLandmarkToCanvas(
+  landmark: NormalizedLandmark,
+  rect: { x: number; y: number; width: number; height: number },
+) {
+  return {
+    x: rect.x + landmark.x * rect.width,
+    y: rect.y + landmark.y * rect.height,
+  };
 }
 
 function syncCanvasSize(canvas: HTMLCanvasElement) {
@@ -242,6 +318,127 @@ function drawPoseMessage(
 
 function isVisible(landmark?: NormalizedLandmark) {
   return Boolean(landmark && (landmark.visibility ?? 1) >= 0.45);
+}
+
+export type PoseHighlightPart = {
+  landmark_indices: number[];
+  severity?: string;
+};
+
+function partColor(severity?: string) {
+  if (severity === "success") {
+    return {
+      stroke: "rgba(52, 211, 153, 0.95)",
+      fill: "#34d399",
+      ring: "#a7f3d0",
+      glow: "rgba(52, 211, 153, 0.45)",
+      heat: "#10b981",
+    };
+  }
+  return {
+    stroke: "rgba(249, 115, 22, 0.95)",
+    fill: "#f97316",
+    ring: "#fed7aa",
+    glow: "rgba(239, 68, 68, 0.42)",
+    heat: "#ef4444",
+  };
+}
+
+function drawHeatmapGlow(
+  context: CanvasRenderingContext2D,
+  mapped: Array<{ x: number; y: number }>,
+  highlightMap: Map<number, string>,
+) {
+  for (const [index, severity] of highlightMap.entries()) {
+    const point = mapped[index];
+    if (!point) continue;
+    const colors = partColor(severity);
+    const radius = severity === "success" ? 26 : 30;
+    const glow = context.createRadialGradient(point.x, point.y, 2, point.x, point.y, radius);
+    glow.addColorStop(0, colors.glow);
+    glow.addColorStop(1, "rgba(0,0,0,0)");
+    context.fillStyle = glow;
+    context.beginPath();
+    context.arc(point.x, point.y, radius, 0, Math.PI * 2);
+    context.fill();
+  }
+}
+
+export function drawPoseWithErrorHighlights(
+  canvas: HTMLCanvasElement,
+  landmarks: PoseReplayLandmark[] | null,
+  errorParts: PoseHighlightPart[] = [],
+) {
+  const context = canvas.getContext("2d");
+  if (!context) return;
+
+  syncCanvasSize(canvas);
+  context.clearRect(0, 0, canvas.width, canvas.height);
+
+  const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
+  gradient.addColorStop(0, "#0f172a");
+  gradient.addColorStop(1, "#1e293b");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (!landmarks || landmarks.length < 11) {
+    drawPoseMessage(canvas, context, "暂无姿态画面，完成实时检测或视频分析后将自动截取");
+    return;
+  }
+
+  const highlightMap = new Map<number, string>();
+  for (const part of errorParts) {
+    for (const index of part.landmark_indices) {
+      highlightMap.set(index, part.severity || "error");
+    }
+  }
+
+  const displayRect = { x: 0, y: 0, width: canvas.clientWidth || canvas.width, height: canvas.clientHeight || canvas.height };
+  const mapped = landmarks.map((landmark) => mapLandmarkToCanvas(landmark as NormalizedLandmark, displayRect));
+
+  if (highlightMap.size > 0) {
+    drawHeatmapGlow(context, mapped, highlightMap);
+  }
+
+  context.lineCap = "round";
+  context.lineJoin = "round";
+
+  for (const [from, to] of BODY_CONNECTIONS) {
+    const start = landmarks[from];
+    const end = landmarks[to];
+    if (!start || !end || (start.visibility ?? 1) < 0.35 || (end.visibility ?? 1) < 0.35) continue;
+
+    const startPoint = mapped[from];
+    const endPoint = mapped[to];
+    const fromSeverity = highlightMap.get(from);
+    const toSeverity = highlightMap.get(to);
+    const isHighlighted = Boolean(fromSeverity || toSeverity);
+    const severity = fromSeverity === "success" || toSeverity === "success" ? "success" : "error";
+    const colors = isHighlighted ? partColor(severity) : null;
+
+    context.beginPath();
+    context.moveTo(startPoint.x, startPoint.y);
+    context.lineTo(endPoint.x, endPoint.y);
+    context.strokeStyle = colors ? colors.stroke : "rgba(100, 116, 139, 0.5)";
+    context.lineWidth = isHighlighted ? 7 : 3.5;
+    context.stroke();
+  }
+
+  landmarks.forEach((landmark, index) => {
+    if ((landmark.visibility ?? 1) < 0.35) return;
+    const { x, y } = mapped[index];
+    const severity = highlightMap.get(index);
+    const colors = severity ? partColor(severity) : null;
+    context.beginPath();
+    context.arc(x, y, severity ? 9 : 4.5, 0, Math.PI * 2);
+    context.fillStyle = colors ? colors.fill : "#64748b";
+    context.fill();
+    context.strokeStyle = colors ? colors.ring : "#334155";
+    context.lineWidth = severity ? 2.5 : 1.5;
+    context.stroke();
+  });
+
+  return mapped;
 }
 
 export function drawPoseFromKeypoints(

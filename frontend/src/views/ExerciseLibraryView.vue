@@ -2,7 +2,7 @@
   <div class="exercise-library-page">
     <header class="section-page-header">
       <div>
-        <h1>Exercise Library / 动作库</h1>
+        <h1>{{ $t("exerciseLibrary.title") }}</h1>
         <p>Browse and learn exercises with proper form guidance</p>
       </div>
       <div class="header-actions">
@@ -16,27 +16,27 @@
     <section class="filter-card library-filter-card">
       <label class="session-search">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input v-model="searchQuery" type="search" placeholder="Search exercises... / 搜索动作..." />
+        <input v-model="searchQuery" type="search" :placeholder="$t('exerciseLibrary.search')" />
       </label>
       <select v-model="categoryFilter">
-        <option value="">All / 全部</option>
-        <option value="lower">Lower Body / 下肢</option>
-        <option value="upper">Upper Body / 上肢</option>
-        <option value="core">Core / 核心</option>
-        <option value="full">Full Body / 全身</option>
+        <option value="">{{ $t("exerciseLibrary.category_all") }}</option>
+        <option value="lower">{{ $t("exerciseLibrary.category_lower") }}</option>
+        <option value="upper">{{ $t("exerciseLibrary.category_upper") }}</option>
+        <option value="core">{{ $t("exerciseLibrary.category_core") }}</option>
+        <option value="full">{{ $t("exerciseLibrary.category_full") }}</option>
       </select>
       <select v-model="levelFilter">
-        <option value="">All / 全部</option>
-        <option value="beginner">Beginner / 初级</option>
-        <option value="intermediate">Intermediate / 中级</option>
-        <option value="advanced">Advanced / 高级</option>
+        <option value="">{{ $t("exerciseLibrary.level_all") }}</option>
+        <option value="beginner">{{ $t("exerciseLibrary.level_beginner") }}</option>
+        <option value="intermediate">{{ $t("exerciseLibrary.level_intermediate") }}</option>
+        <option value="advanced">{{ $t("exerciseLibrary.level_advanced") }}</option>
       </select>
     </section>
 
     <!-- Gallery View -->
     <section v-if="showGallery" class="gallery-section">
-      <StateDisplay v-if="loading" type="loading" skeleton="cards" text="加载动作库..." />
-      <StateDisplay v-else-if="galleryItems.length === 0" type="empty" title="暂无动作数据" text="后端服务未连接或动作库为空，请在管理页面添加动作" />
+      <StateDisplay v-if="loading" type="loading" skeleton="cards" :text="$t('exerciseLibrary.loading')" />
+      <StateDisplay v-else-if="galleryItems.length === 0" type="empty" :title="$t('exerciseLibrary.noData')" :text="$t('exerciseLibrary.noDataText')" />
       <template v-else>
         <div class="gallery-container">
           <CircularGallery
@@ -62,8 +62,8 @@
 
     <!-- Grid View -->
     <section v-else class="library-grid">
-      <StateDisplay v-if="loading" type="loading" skeleton="cards" text="加载动作库..." />
-      <StateDisplay v-else-if="filteredExercises.length === 0" type="empty" title="暂无匹配动作" text="尝试调整筛选条件或检查后端服务是否运行" />
+      <StateDisplay v-if="loading" type="loading" skeleton="cards" :text="$t('exerciseLibrary.loading')" />
+      <StateDisplay v-else-if="filteredExercises.length === 0" type="empty" :title="$t('exerciseLibrary.noMatch')" :text="$t('exerciseLibrary.noMatchText')" />
       <article v-for="exercise in filteredExercises" :key="exercise.name" class="library-card">
         <div class="exercise-hero">
           <span>{{ exercise.emoji }}</span>
@@ -74,7 +74,7 @@
               <h2>{{ exercise.name }}</h2>
               <p>{{ exercise.category }}</p>
             </div>
-            <span class="level-pill" :class="exercise.level.toLowerCase()">{{ exercise.level }}</span>
+            <span class="level-pill" :class="exercise.levelKey">{{ exercise.level }}</span>
           </header>
           <p>{{ exercise.desc }}</p>
           <div class="library-meta-grid">
@@ -82,13 +82,13 @@
             <div><span>Calories</span><strong>{{ exercise.calories }}</strong></div>
           </div>
           <div class="key-points-box">
-            <strong>◎ Key Points / 要点</strong>
+            <strong>◎ {{ $t("exerciseLibrary.keyPoints") }}</strong>
             <span v-for="point in exercise.points" :key="point">• {{ point }}</span>
           </div>
           <footer>
             <button class="tutorial-button" type="button" @click="startTraining(exercise.exerciseKey)">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
-              开始训练
+              {{ $t("exerciseLibrary.startTraining") }}
             </button>
             <button class="details-button" type="button">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
@@ -104,11 +104,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
 import CircularGallery from "@/components/CircularGallery.vue";
 import { useTrainingStore } from "@/stores/training";
 import { getSimpleExercises, type ExerciseLibItem } from "@/api/exercises";
 import StateDisplay from "@/components/StateDisplay.vue";
 
+const { t } = useI18n();
 const router = useRouter();
 const store = useTrainingStore();
 const showGallery = ref(true);
@@ -122,13 +124,13 @@ const libraryExercises = computed(() =>
   backendExercises.value.length > 0
     ? backendExercises.value.map(e => {
         const catMap: Record<string, string> = {
-          squat: "Lower Body / 下肢", push_up: "Upper Body / 上肢",
-          jumping_jack: "Cardio / 心肺", plank: "Core / 核心",
-          lunge: "Lower Body / 下肢", burpee: "Full Body / 全身",
-          mountain_climber: "Core / 核心", pull_up: "Upper Body / 上肢",
-          dumbbell_curl: "Upper Body / 上肢", dumbbell_press: "Upper Body / 上肢",
-          high_knees: "Cardio / 心肺", russian_twist: "Core / 核心",
-          glute_bridge: "Lower Body / 下肢",
+          squat: t("categories.lower_body"), push_up: t("categories.upper_body"),
+          jumping_jack: t("categories.cardio"), plank: t("categories.core"),
+          lunge: t("categories.lower_body"), burpee: t("categories.full_body"),
+          mountain_climber: t("categories.core"), pull_up: t("categories.upper_body"),
+          dumbbell_curl: t("categories.upper_body"), dumbbell_press: t("categories.upper_body"),
+          high_knees: t("categories.cardio"), russian_twist: t("categories.core"),
+          glute_bridge: t("categories.lower_body"),
         };
         const catKeyMap: Record<string, string> = {
           squat: "lower", push_up: "upper", jumping_jack: "cardio", plank: "core",
@@ -137,12 +139,12 @@ const libraryExercises = computed(() =>
           high_knees: "cardio", russian_twist: "core", glute_bridge: "lower",
         };
         const levelMap: Record<string, string> = {
-          squat: "Intermediate", push_up: "Intermediate",
-          jumping_jack: "Beginner", plank: "Advanced",
-          lunge: "Intermediate", burpee: "Advanced",
-          mountain_climber: "Intermediate", pull_up: "Advanced",
-          dumbbell_curl: "Beginner", dumbbell_press: "Intermediate",
-          high_knees: "Beginner", russian_twist: "Intermediate", glute_bridge: "Beginner",
+          squat: t("exerciseLibrary.level_intermediate"), push_up: t("exerciseLibrary.level_intermediate"),
+          jumping_jack: t("exerciseLibrary.level_beginner"), plank: t("exerciseLibrary.level_advanced"),
+          lunge: t("exerciseLibrary.level_intermediate"), burpee: t("exerciseLibrary.level_advanced"),
+          mountain_climber: t("exerciseLibrary.level_intermediate"), pull_up: t("exerciseLibrary.level_advanced"),
+          dumbbell_curl: t("exerciseLibrary.level_beginner"), dumbbell_press: t("exerciseLibrary.level_intermediate"),
+          high_knees: t("exerciseLibrary.level_beginner"), russian_twist: t("exerciseLibrary.level_intermediate"), glute_bridge: t("exerciseLibrary.level_beginner"),
         };
         const levelKeyMap: Record<string, string> = {
           squat: "intermediate", push_up: "intermediate",
@@ -176,9 +178,9 @@ const libraryExercises = computed(() =>
         };
         return {
           name: e.name,
-          category: catMap[e.key] || "General / 通用",
+          category: catMap[e.key] || t("common.all"),
           categoryKey: catKeyMap[e.key] || "general",
-          level: levelMap[e.key] || "Intermediate",
+          level: levelMap[e.key] || t("exerciseLibrary.level_intermediate"),
           levelKey: levelKeyMap[e.key] || "intermediate",
           exerciseKey: e.key,
           emoji: emojiMap[e.key] || "🏋️",
@@ -251,9 +253,9 @@ onMounted(async () => {
   width: 100%; height: 520px; position: relative;
   border-radius: 16px;
   overflow: hidden;
-  background: linear-gradient(180deg, rgba(8,13,26,0.5), rgba(15,23,42,0.3));
-  border: 1px solid rgba(59,130,246,0.08);
-  box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+  background: linear-gradient(180deg, #f8fbff, #ffffff);
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 
 .gallery-footer {
@@ -264,19 +266,19 @@ onMounted(async () => {
   display: inline-flex; align-items: center; gap: 10px;
   padding: 8px 20px;
   border-radius: 999px;
-  background: rgba(15,23,42,0.7);
+  background: #f1f5f9;
   color: #64748b; font-size: 13px;
-  border: 1px solid rgba(59,130,246,0.08);
+  border: 1px solid #e2e8f0;
 }
 
-.gallery-hint svg { color: #475569; }
+.gallery-hint svg { color: #94a3b8; }
 
 /* ── header ── */
 :deep(.section-page-header) {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 18px;
 }
-:deep(.section-page-header h1) { color: #071225; font-size: 34px; letter-spacing: -0.045em; }
-:deep(.section-page-header p) { margin-top: 5px; color: #536179; font-size: 15px; }
+:deep(.section-page-header h1) { color: #0f172a; font-size: 34px; letter-spacing: -0.045em; }
+:deep(.section-page-header p) { margin-top: 5px; color: #64748b; font-size: 15px; }
 
 .header-actions { display: flex; gap: 10px; flex-shrink: 0; }
 
@@ -284,57 +286,57 @@ onMounted(async () => {
 .filter-card {
   display: grid; grid-template-columns: minmax(360px, 1fr) 180px 140px;
   gap: 16px; padding: 16px;
-  background: rgba(15,23,42,0.92); border: 1px solid rgba(59,130,246,0.12);
+  background: #ffffff; border: 1px solid #e2e8f0;
   border-radius: 12px; align-items: center;
 }
 .session-search {
   min-height: 42px; display: flex; align-items: center; gap: 10px;
-  padding: 0 16px; border: 1px solid rgba(59,130,246,0.1);
-  border-radius: 9px; background: rgba(8,13,26,0.8); color: #64748b;
+  padding: 0 16px; border: 1px solid #e2e8f0;
+  border-radius: 9px; background: #f8fbff; color: #94a3b8;
 }
-.session-search svg { color: #475569; flex-shrink: 0; }
+.session-search svg { color: #94a3b8; flex-shrink: 0; }
 .session-search input {
   width: 100%; min-width: 0; border: 0; outline: 0;
-  background: transparent; color: #f8fafc; font-size: 14px;
+  background: transparent; color: #0f172a; font-size: 14px;
 }
-.session-search input::placeholder { color: #475569; }
+.session-search input::placeholder { color: #94a3b8; }
 .filter-card select {
-  min-height: 42px; border: 1px solid rgba(59,130,246,0.1);
-  border-radius: 9px; background: rgba(8,13,26,0.8);
-  color: #cbd5e1; padding: 0 14px; font-size: 14px;
+  min-height: 42px; border: 1px solid #e2e8f0;
+  border-radius: 9px; background: #f8fbff;
+  color: #0f172a; padding: 0 14px; font-size: 14px;
 }
 
 /* ── grid cards ── */
 .library-grid { display: grid; grid-template-columns: repeat(3, minmax(280px, 1fr)); gap: 24px; }
-.library-card { overflow: hidden; border-radius: 14px; background: rgba(15,23,42,0.96); border: 1px solid rgba(59,130,246,0.1); box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
-.exercise-hero { height: 200px; display: grid; place-items: center; background: linear-gradient(135deg, #3b82f6, #8b5cf6); }
-.exercise-hero span { font-size: 52px; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3)); }
+.library-card { overflow: hidden; border-radius: 14px; background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.exercise-hero { height: 200px; display: grid; place-items: center; background: linear-gradient(135deg, #5b8cff, #8b5cf6); }
+.exercise-hero span { font-size: 52px; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.1)); }
 .library-card-body { display: grid; gap: 16px; padding: 24px; }
 .library-card-body header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.library-card-body h2 { font-size: 20px; color: #f8fafc; margin: 0; }
+.library-card-body h2 { font-size: 20px; color: #0f172a; margin: 0; }
 .library-card-body p { color: #64748b; margin: 0; font-size: 14px; }
 .level-pill { min-height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
-.level-pill { background: rgba(16,185,129,0.12); color: #34d399; }
-.level-pill.intermediate { background: rgba(59,130,246,0.12); color: #93c5fd; }
-.level-pill.advanced { background: rgba(239,68,68,0.12); color: #f87171; }
+.level-pill { background: rgba(16,185,129,0.12); color: #25b87b; }
+.level-pill.intermediate { background: rgba(91,140,255,0.12); color: #5b8cff; }
+.level-pill.advanced { background: rgba(239,68,68,0.12); color: #ef4444; }
 .library-meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.library-meta-grid div { display: grid; gap: 6px; padding: 12px; border-radius: 8px; background: rgba(8,13,26,0.4); }
-.library-meta-grid span { color: #64748b; font-size: 12px; }
-.library-meta-grid strong { color: #f8fafc; font-size: 15px; }
-.key-points-box { display: grid; gap: 6px; padding: 14px; border-radius: 8px; background: rgba(59,130,246,0.06); color: #93c5fd; font-size: 13px; border: 1px solid rgba(59,130,246,0.08); }
+.library-meta-grid div { display: grid; gap: 6px; padding: 12px; border-radius: 8px; background: #f8fbff; }
+.library-meta-grid span { color: #94a3b8; font-size: 12px; }
+.library-meta-grid strong { color: #0f172a; font-size: 15px; }
+.key-points-box { display: grid; gap: 6px; padding: 14px; border-radius: 8px; background: rgba(91,140,255,0.06); color: #5b8cff; font-size: 13px; border: 1px solid #d6e3ff; }
 .key-points-box strong { font-size: 13px; }
 .library-card footer { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .tutorial-button, .details-button {
   min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
 }
-.tutorial-button { border: 0; background: linear-gradient(135deg, #3b82f6, #6366f1); color: #fff; }
-.details-button { border: 1px solid rgba(59,130,246,0.1); background: rgba(8,13,26,0.5); color: #cbd5e1; }
+.tutorial-button { border: 0; background: linear-gradient(135deg, #5b8cff, #4f46e5); color: #fff; }
+.details-button { border: 1px solid #e2e8f0; background: #f8fbff; color: #475569; }
 
 .blue-action-button {
   min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   padding: 0 18px; border: 0; border-radius: 9px;
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  background: linear-gradient(135deg, #5b8cff, #4f46e5);
   color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
   white-space: nowrap;
 }

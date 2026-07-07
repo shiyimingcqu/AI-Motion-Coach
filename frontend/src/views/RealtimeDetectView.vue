@@ -1,4 +1,4 @@
-﻿﻿﻿﻿<template>
+<template>
   <div class="page realtime-page">
     <div v-if="finishPending" class="finish-overlay" role="dialog" aria-modal="true" aria-label="结束训练中">
       <div class="finish-modal">
@@ -59,10 +59,8 @@
           <h2>实时数据面板</h2>
         </div>
         <MetricTile label="当前动作" :value="activeExerciseDefinition.name" :hint="activeExerciseDefinition.key" />
-        <MetricTile label="阶段" :value="store.stage" hint="当前动作阶段" />
-        <MetricTile label="次数" :value="store.count" hint="total count" />
-        <MetricTile label="有效次数" :value="store.validCount" hint="valid count" />
-        <MetricTile label="评分" :value="store.score" hint="实时评分" />
+        <MetricTile label="阶段" :value="displayStage" hint="当前动作阶段" />
+        <MetricTile label="评分" :value="displayScore" hint="实时评分" />
 
         <div class="live-data-panel">
           <div class="live-data-header">
@@ -123,10 +121,52 @@
 
         <div v-if="cameraError" class="alert-line danger">{{ cameraError }}</div>
         <div v-if="savedMessage" class="alert-line">{{ savedMessage }}</div>
-        <div class="error-stack">
+        <div class="error-stack error-stack--errors">
           <strong>错误提示</strong>
-          <span v-if="store.errors.length === 0">暂无错误</span>
-          <span v-for="error in store.errors" :key="error">{{ error }}</span>
+          <span v-if="trainingState === 'idle'" class="stack-empty">--</span>
+          <template v-else>
+            <span v-if="store.errors.length === 0" class="stack-empty">暂无错误</span>
+            <span v-for="error in store.errors" :key="error">{{ error }}</span>
+          </template>
+        </div>
+
+        <div class="error-stack error-stack--advice">
+          <strong>实时建议</strong>
+          <span v-if="trainingState === 'idle'" class="stack-empty">--</span>
+          <template v-else>
+            <span v-if="store.feedbacks.length === 0" class="stack-empty">暂无建议</span>
+            <span v-for="advice in store.feedbacks" :key="advice">{{ advice }}</span>
+          </template>
+        </div>
+
+        <div class="live-data-panel ai-advice-panel">
+          <div class="ai-advice-header">
+            <div class="ai-advice-title">
+              <span class="ai-advice-icon"><Sparkles :size="16" /></span>
+              <div>
+                <strong>AI 智能建议</strong>
+                <small>训练结束后自动生成</small>
+              </div>
+            </div>
+            <label class="voice-toggle-pill" :class="{ active: voiceEnabled }">
+              <Volume2 :size="13" />
+              <input v-model="voiceEnabled" type="checkbox" class="sr-only" />
+              <span>播报</span>
+            </label>
+          </div>
+
+          <div v-if="aiLoading" class="ai-advice-loading">
+            <div class="ai-advice-spinner" aria-hidden="true"></div>
+            <span>正在生成建议...</span>
+          </div>
+
+          <div class="ai-advice-body" :class="{ 'is-loading': aiLoading }">
+            <AiAdviceContent
+              theme="dark"
+              :content="aiAdvice"
+              :placeholder="aiLoading ? '正在生成 AI 建议，请稍候...' : 'AI 建议将在训练结束后自动生成。'"
+            />
+          </div>
         </div>
 
         <!-- 模板评分结果 -->
@@ -183,16 +223,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { Camera, FileSearch, Pause, Play, RefreshCcw, Square, UploadCloud } from "lucide-vue-next";
+import { Camera, FileSearch, Pause, Play, RefreshCcw, Sparkles, Square, UploadCloud, Volume2 } from "lucide-vue-next";
 
 import { apiGet, apiUpload, apiWebSocketUrl, apiPost } from "../api/client";
 import { getSimpleExercises, type ExerciseLibItem } from "../api/exercises";
 import { createSession, getSessions, type SessionRecord } from "../api/sessions";
 import { useAuthStore } from "@/stores/auth";
+import AiAdviceContent from "../components/AiAdviceContent.vue";
 import MetricTile from "../components/MetricTile.vue";
 import SkeletonCanvas from "../components/SkeletonCanvas.vue";
+import { useAiAdvice } from "../composables/useAiAdvice";
 import {
   clearPoseCanvas,
   createPoseLandmarker,
@@ -201,6 +243,7 @@ import {
   drawPoseFromKeypoints,
   type BackendKeypoints,
   toBackendKeypoints,
+  toReplayLandmarks,
 } from "../services/poseLandmarker";
 import { useTrainingStore } from "../stores/training";
 
@@ -208,6 +251,11 @@ type TrainingState = "idle" | "connecting" | "running" | "paused" | "finished" |
 type PoseLandmarkerInstance = Awaited<ReturnType<typeof createPoseLandmarker>>;
 
 type MetricValues = Record<string, number>;
+
+type PoseReplayFramePayload = {
+  timestamp_ms: number;
+  landmarks: Array<{ x: number; y: number; z: number; visibility?: number }>;
+};
 
 type ExerciseOption = ExerciseLibItem & {
   core_angles: string[];
@@ -237,12 +285,15 @@ type TemplateOption = {
 };
 
 type VideoTestFrame = {
-  frame_index: number;
-  stage: string;
+  frame_index?: number;
+  stage?: string;
+  phase?: string;
   count: number;
   valid_count: number;
   score: number;
-  errors: string[];
+  errors?: string[];
+  issues?: string[];
+  feedback?: string[];
   keypoints?: BackendKeypoints;
   metrics?: MetricValues;
   features?: MetricValues;
@@ -271,6 +322,7 @@ const FINISH_TIMEOUT_MS = 5000;
 
 const router = useRouter();
 const store = useTrainingStore();
+const { aiAdvice, aiLoading, voiceEnabled, requestAiAdvice, clearAdvice } = useAiAdvice();
 const videoRef = ref<HTMLVideoElement | null>(null);
 const overlayRef = ref<HTMLCanvasElement | null>(null);
 const videoTestInput = ref<HTMLInputElement | null>(null);
@@ -292,6 +344,7 @@ const dynamicScoreInFlight = ref(false);
 const finishPending = ref(false);
 const finishStatusText = ref("");
 const trainingStartedAt = ref<number | null>(null);
+const autoAiTriggered = ref(false);
 
 let socket: WebSocket | null = null;
 let poseLandmarker: PoseLandmarkerInstance | null = null;
@@ -301,6 +354,7 @@ let finishTimeoutId: ReturnType<typeof setTimeout> | null = null;
 let videoTestUrl = "";
 let lastSentAt = 0;
 let motionFrames: MetricValues[] = [];
+let poseReplayFrames: PoseReplayFramePayload[] = [];
 let finishRecoveryInFlight = false;
 
 const DEFAULT_EXERCISE_OPTIONS: ExerciseOption[] = [
@@ -336,6 +390,78 @@ const DEFAULT_EXERCISE_OPTIONS: ExerciseOption[] = [
     core_angles: ["肩外展角", "双腿夹角", "手腕高度", "脚踝距离"],
     core_feature_keys: ["shoulder_abduction_angle", "leg_spread_angle", "wrist_height", "ankle_distance"],
   },
+  {
+    key: "lunge",
+    name: "弓步蹲",
+    description: "评估膝关节角度、髋部控制和躯干稳定性。",
+    supported_metrics: ["count", "valid_count", "score"],
+    core_angles: ["膝角", "髋角", "躯干倾斜角", "左右膝差"],
+    core_feature_keys: ["knee_angle", "hip_angle", "trunk_angle", "knee_symmetry_diff"],
+  },
+  {
+    key: "glute_bridge",
+    name: "臀桥",
+    description: "评估髋部伸展幅度和身体直线。",
+    supported_metrics: ["count", "valid_count", "score"],
+    core_angles: ["髋角", "身体直线角"],
+    core_feature_keys: ["hip_angle", "body_line_angle"],
+  },
+  {
+    key: "high_knees",
+    name: "高抬腿",
+    description: "评估抬膝高度和节奏。",
+    supported_metrics: ["count", "valid_count", "score"],
+    core_angles: ["抬膝高度", "膝角"],
+    core_feature_keys: ["knee_height", "knee_angle"],
+  },
+  {
+    key: "burpee",
+    name: "波比跳",
+    description: "评估髋肩角度和身体控制。",
+    supported_metrics: ["count", "valid_count", "score"],
+    core_angles: ["髋角", "身体直线角", "手腕高度"],
+    core_feature_keys: ["hip_angle", "body_line_angle", "wrist_height"],
+  },
+  {
+    key: "mountain_climber",
+    name: "登山跑",
+    description: "评估平板姿势、提膝高度和核心稳定。",
+    supported_metrics: ["count", "valid_count", "score"],
+    core_angles: ["身体直线角", "髋角", "提膝高度"],
+    core_feature_keys: ["body_line_angle", "hip_angle", "knee_raise"],
+  },
+  {
+    key: "pull_up",
+    name: "引体向上",
+    description: "评估上拉幅度、身体控制和左右对称。",
+    supported_metrics: ["count", "valid_count", "score"],
+    core_angles: ["肘角", "身体摆动", "左右对称差"],
+    core_feature_keys: ["elbow_angle", "body_line_angle", "symmetry_diff"],
+  },
+  {
+    key: "dumbbell_curl",
+    name: "哑铃弯举",
+    description: "评估弯举幅度和上臂稳定性。",
+    supported_metrics: ["count", "valid_count", "score"],
+    core_angles: ["肘角", "肩角", "左右对称差"],
+    core_feature_keys: ["elbow_angle", "shoulder_angle", "symmetry_diff"],
+  },
+  {
+    key: "dumbbell_press",
+    name: "哑铃推举",
+    description: "评估推举幅度和肩部控制。",
+    supported_metrics: ["count", "valid_count", "score"],
+    core_angles: ["肘角", "肩角", "左右对称差"],
+    core_feature_keys: ["elbow_angle", "shoulder_angle", "symmetry_diff"],
+  },
+  {
+    key: "russian_twist",
+    name: "俄罗斯转体",
+    description: "评估躯干旋转幅度和核心控制。",
+    supported_metrics: ["count", "valid_count", "score"],
+    core_angles: ["旋转幅度", "躯干角"],
+    core_feature_keys: ["rotation_offset", "trunk_angle"],
+  },
 ];
 
 const statusLabel = computed(() => {
@@ -356,8 +482,29 @@ const connectionClass = computed(() => {
   return "idle";
 });
 
+const displayStage = computed(() => {
+  if (trainingState.value === "idle") return "--";
+  return store.stage;
+});
+
+const displayScore = computed(() => {
+  if (trainingState.value === "idle") return "--";
+  return store.score;
+});
+
 const canPause = computed(() => trainingState.value === "running" || trainingState.value === "paused");
 const canSave = computed(() => (trainingState.value === "running" || trainingState.value === "paused") && !finishPending.value);
+const hasAdviceData = computed(() => {
+  const templateErrors = templateScore.value?.errors ?? [];
+  const templateSuggestions = templateScore.value?.suggestions ?? [];
+  return (
+    store.errors.length > 0
+    || store.feedbacks.length > 0
+    || store.count > 0
+    || templateErrors.length > 0
+    || templateSuggestions.length > 0
+  );
+});
 const displayTemplateScore = computed(() => liveTemplateScore.value ?? templateScore.value);
 const selectedTemplate = computed(() =>
   templateOptions.value.find((template) => template.template_id === selectedTemplateId.value)
@@ -373,6 +520,40 @@ const activeMetricDescriptors = computed(() =>
     label: activeExerciseDefinition.value.core_angles[index] ?? key,
   }))
 );
+
+async function generateAiAdvice() {
+  if (!hasAdviceData.value) return;
+
+  const errors = [
+    ...store.errors,
+    ...(templateScore.value?.errors ?? []),
+  ].filter(Boolean);
+  const feedbacks = [
+    ...store.feedbacks,
+    ...(templateScore.value?.suggestions ?? []),
+  ].filter(Boolean);
+
+  await requestAiAdvice({
+    exercise: store.currentExercise,
+    stage: store.stage,
+    errors: [...new Set(errors)],
+    feedbacks: [...new Set(feedbacks)],
+  });
+}
+
+function scheduleAutoAiAdvice() {
+  if (autoAiTriggered.value || aiLoading.value || !hasAdviceData.value) return;
+  autoAiTriggered.value = true;
+  window.setTimeout(() => {
+    void generateAiAdvice();
+  }, 800);
+}
+
+watch(trainingState, (state) => {
+  if (state === "finished") {
+    scheduleAutoAiAdvice();
+  }
+});
 
 function formatAngle(value?: number) {
   return typeof value === "number" && Number.isFinite(value) ? `${value.toFixed(1)}°` : "--";
@@ -473,10 +654,13 @@ async function connectCamera() {
 async function startTraining() {
   savedMessage.value = "";
   lastSessionId.value = "";
+  autoAiTriggered.value = false;
+  clearAdvice();
   poseStatus.value = "";
   cameraError.value = "";
   store.resetLiveMetrics();
   resetDynamicTemplateState(true);
+  poseReplayFrames = [];
   resetFinishState();
   trainingStartedAt.value = null;
   clearPoseCanvas(overlayRef.value);
@@ -514,10 +698,13 @@ function resetTraining() {
   lastSentAt = 0;
   savedMessage.value = "";
   lastSessionId.value = "";
+  autoAiTriggered.value = false;
+  clearAdvice();
   poseStatus.value = "";
   cameraError.value = "";
   store.resetLiveMetrics();
   resetDynamicTemplateState(true);
+  poseReplayFrames = [];
   resetFinishState();
   trainingStartedAt.value = null;
   clearPoseCanvas(overlayRef.value);
@@ -542,7 +729,7 @@ async function finishTraining() {
   stopVideoTestPlayback();
 
   if (!socket || socket.readyState !== WebSocket.OPEN) {
-    await saveSessionFallback("实时通道已断开，已根据当前统计补存本次训练记录。");
+    await saveSessionFallback("实时通道已断开，已根据当前统计补存本次训练记录。", true);
     return;
   }
 
@@ -625,7 +812,6 @@ function handleRealtimeMessage(message: Record<string, any>) {
     stopPoseLoop();
     poseStatus.value = "";
 
-    // 调用模板评分
     if (motionFrames.length > 0) {
       scoreByTemplate();
     }
@@ -668,7 +854,7 @@ function runPoseFrame(timestamp: number) {
   }
 
   const landmarks = detectPose(poseLandmarker, video, timestamp);
-  drawPose(canvas, landmarks);
+  drawPose(canvas, landmarks, video, "contain");
 
   if (!landmarks) {
     poseStatus.value = "未检测到人体，请站入画面";
@@ -676,11 +862,22 @@ function runPoseFrame(timestamp: number) {
     poseStatus.value = "";
     if (timestamp - lastSentAt >= SEND_INTERVAL_MS) {
       lastSentAt = timestamp;
+      const replayLandmarks = toReplayLandmarks(landmarks);
+      const replayFrame = {
+        timestamp_ms: trainingStartedAt.value ? Date.now() - trainingStartedAt.value : poseReplayFrames.length * SEND_INTERVAL_MS,
+        landmarks: replayLandmarks,
+      };
+      poseReplayFrames.push(replayFrame);
+      if (poseReplayFrames.length > 1800) {
+        poseReplayFrames = poseReplayFrames.slice(-1800);
+      }
       socket.send(JSON.stringify({
         type: "frame",
         exercise: store.currentExercise,
         timestamp: Date.now(),
+        timestamp_ms: replayFrame.timestamp_ms,
         keypoints: toBackendKeypoints(landmarks),
+        replay_keypoints: replayLandmarks,
       }));
     }
   }
@@ -709,6 +906,7 @@ async function handleVideoTestFile(event: Event) {
   clearPoseCanvas(overlayRef.value);
   store.resetLiveMetrics();
   resetDynamicTemplateState(true);
+  poseReplayFrames = [];
   savedMessage.value = "";
   lastSessionId.value = "";
   cameraError.value = "";
@@ -787,6 +985,13 @@ function buildFallbackSessionPayload() {
     valid_count: validCount,
     error_count: Math.max(0, totalCount - validCount),
     average_score: averageScore,
+    pose_replay: poseReplayFrames,
+    pose_replay_meta: {
+      schema_version: 1,
+      source: "web_realtime",
+      sample_interval_ms: SEND_INTERVAL_MS,
+      frame_count: poseReplayFrames.length,
+    },
   };
 }
 
@@ -817,7 +1022,7 @@ async function recoverAndRouteAfterFinish(successMessage: string) {
 
   try {
     const payload = buildFallbackSessionPayload();
-    if (payload.total_count <= 0) {
+    if (payload.total_count <= 0 && payload.pose_replay.length === 0) {
       resetFinishState();
       trainingState.value = "finished";
       savedMessage.value = "本次没有完成动作，未生成训练记录。";
@@ -834,16 +1039,16 @@ async function recoverAndRouteAfterFinish(successMessage: string) {
       return;
     }
 
-    await saveSessionFallback(successMessage);
+    await saveSessionFallback(successMessage, true);
   } finally {
     finishRecoveryInFlight = false;
   }
 }
 
-async function saveSessionFallback(successMessage: string) {
+async function saveSessionFallback(successMessage: string, allowZeroCount = false) {
   const payload = buildFallbackSessionPayload();
 
-  if (payload.total_count <= 0) {
+  if (payload.total_count <= 0 && payload.pose_replay.length === 0 && !allowZeroCount) {
     resetFinishState();
     trainingState.value = "finished";
     savedMessage.value = "本次没有完成动作，未生成训练记录。";
@@ -852,7 +1057,11 @@ async function saveSessionFallback(successMessage: string) {
 
   try {
     finishStatusText.value = "实时通道异常，正在用当前统计补存训练记录...";
-    const session = await createSession(payload);
+    const session = await createSession({
+      ...payload,
+      issues: [...new Set(store.errors.filter(Boolean))],
+      suggestions: [...new Set(store.feedbacks.filter(Boolean))],
+    });
     lastSessionId.value = session.session_id;
     resetFinishState();
     trainingState.value = "finished";
@@ -975,11 +1184,16 @@ async function scoreByTemplate(mode: "live" | "final" = "final") {
 
 function updateMetricsFromFrame(frame: VideoTestFrame) {
   store.updateLiveMetrics({
-    stage: String(frame.stage),
+    stage: String(frame.stage ?? frame.phase ?? "ready"),
     count: Number(frame.count ?? 0),
     valid_count: Number(frame.valid_count ?? 0),
     score: Number(frame.score ?? 0),
-    errors: Array.isArray(frame.errors) ? frame.errors : [],
+    errors: Array.isArray(frame.errors)
+      ? frame.errors
+      : Array.isArray(frame.issues)
+        ? frame.issues
+        : [],
+    feedback: Array.isArray(frame.feedback) ? frame.feedback : [],
   });
 }
 
@@ -1084,5 +1298,122 @@ onBeforeUnmount(() => {
 .primary-button.danger:disabled {
   background: var(--danger, #c84a3a);
   opacity: 0.58;
+}
+
+.ai-advice-panel {
+  gap: 14px;
+  background: rgba(2, 6, 23, 0.38);
+  border-color: #253047;
+}
+
+.ai-advice-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ai-advice-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ai-advice-title strong {
+  display: block;
+  color: #f8fafc;
+  font-size: 14px;
+}
+
+.ai-advice-title small {
+  display: block;
+  margin-top: 2px;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.ai-advice-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  color: #fff;
+}
+
+.voice-toggle-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border: 1px solid #334155;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #94a3b8;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.voice-toggle-pill.active {
+  border-color: #6366f1;
+  background: rgba(79, 70, 229, 0.22);
+  color: #c7d2fe;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ai-advice-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: #cbd5e1;
+  font-size: 12px;
+}
+
+.ai-advice-spinner {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border: 2px solid rgba(148, 163, 184, 0.2);
+  border-top-color: #60a5fa;
+  border-radius: 50%;
+  animation: ai-advice-spin 0.8s linear infinite;
+}
+
+.ai-advice-body {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.42);
+  border: 1px solid #253047;
+}
+
+.ai-advice-body.is-loading {
+  opacity: 0.55;
+}
+
+@keyframes ai-advice-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

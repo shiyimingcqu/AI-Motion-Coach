@@ -19,3 +19,7 @@ export function updateUser(id: number, data: Partial<Pick<UserRecord, "role" | "
 export function deleteUser(id: number) {
   return apiDelete<{ message: string; user_id: number }>(`/admin/users/${id}`);
 }
+
+export function deleteTask(task_id: string) {
+  return apiDelete<{ message: string; task_id: string }>(`/analysis/tasks/${task_id}`);
+}
