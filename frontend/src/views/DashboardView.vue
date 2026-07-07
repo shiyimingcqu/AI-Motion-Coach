@@ -1,70 +1,5 @@
 ﻿<template>
   <div class="sports-dashboard">
-    <section class="top-header">
-      <div class="th-left">
-        <div class="th-avatar">{{ userInitial }}</div>
-        <div class="th-info">
-          <strong>{{ userName }}</strong>
-          <p>{{ summarySubtitle }}</p>
-        </div>
-      </div>
-
-      <div class="th-score">
-        <span class="th-score-label">综合评分</span>
-        <div class="th-score-value">
-          <span class="th-score-num">{{ displayScore }}</span>
-          <span class="th-score-unit">/100</span>
-        </div>
-        <span class="th-score-badge" :class="scoreLevel">{{ scoreLabel }}</span>
-      </div>
-
-      <div class="th-compare">
-        <span class="th-compare-label">对比上次</span>
-        <strong class="th-compare-value" :class="scoreChangeTone">
-          <svg
-            v-if="scoreChangeIcon === 'up'"
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-          >
-            <path d="M12 19V5" />
-            <path d="m5 12 7-7 7 7" />
-          </svg>
-          <svg
-            v-else
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-          >
-            <path d="M12 5v14" />
-            <path d="m19 12-7 7-7-7" />
-          </svg>
-          {{ scoreChangeText }}
-        </strong>
-      </div>
-
-      <div class="th-actions">
-        <button class="btn-outline" @click="router.push('/reference-videos')" style="margin-right:10px;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="2" width="20" height="20" rx="3" /><polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none" />
-          </svg>
-          标准视频
-        </button>
-        <button class="btn-primary" @click="router.push('/exercises')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <polygon points="5,3 19,12 5,21" />
-          </svg>
-          开始训练
-        </button>
-      </div>
-    </section>
-
     <section class="core-row">
       <div class="main-panel">
         <header class="panel-header">
@@ -87,17 +22,24 @@
               检测到 {{ problems.length }} 个问题
             </span>
           </div>
-        </header>
-
-        <div class="metric-strip">
-          <div v-for="metric in sideMetrics" :key="metric.label" class="ms-item" :title="metric.tip">
-            <span class="ms-label">{{ metric.label }}</span>
-            <strong :class="metric.cls">{{ metric.value }}</strong>
-            <div class="ms-track">
-              <i :style="{ width: `${metric.value}%` }" :class="metric.cls"></i>
-            </div>
+          <div class="panel-summary">
+            <span class="summary-user">{{ userName }} · {{ selectedReplayExerciseName }}</span>
+            <span class="summary-score">评分 <strong>{{ displayScore }}</strong>/100</span>
+            <span class="summary-change" :class="scoreChangeTone">对比 {{ scoreChangeText }}</span>
+            <button class="btn-outline" @click="router.push('/reference-videos')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="2" width="20" height="20" rx="3" /><polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none" />
+              </svg>
+              标准视频
+            </button>
+            <button class="btn-primary" @click="router.push('/exercises')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5,3 19,12 5,21" />
+              </svg>
+              开始训练
+            </button>
           </div>
-        </div>
+        </header>
 
         <div ref="replayFullscreenRef" class="replay-fullscreen-shell">
         <div class="skel-area replay-stage">
@@ -174,84 +116,6 @@
             </div>
           </aside>
 
-          <div class="skel-layout">
-            <video
-              v-if="latestVideoUrl"
-              :key="latestVideoUrl"
-              :src="latestVideoUrl"
-              class="pose-video"
-              autoplay
-              loop
-              muted
-              playsinline
-              @loadedmetadata="onVideoMetadata"
-              @timeupdate="onVideoTimeUpdate"
-            />
-            <svg v-else viewBox="0 0 300 520" class="pose-skeleton breathing-skel">
-              <circle cx="150" cy="42" r="20" fill="none" stroke="#5b8cff" stroke-width="2.5" />
-              <line x1="150" y1="62" x2="150" y2="90" stroke="#5b8cff" stroke-width="2.5" />
-              <line x1="150" y1="90" x2="150" y2="210" stroke="#5b8cff" stroke-width="2.5" />
-              <line x1="110" y1="210" x2="190" y2="210" stroke="#5b8cff" stroke-width="2.5" />
-              <line x1="150" y1="110" x2="90" y2="172" stroke="#5b8cff" stroke-width="2.5" />
-              <line x1="90" y1="172" x2="72" y2="230" stroke="#5b8cff" stroke-width="2.5" />
-              <line x1="150" y1="110" x2="210" y2="172" stroke="#5b8cff" stroke-width="2.5" />
-              <line x1="210" y1="172" x2="228" y2="230" stroke="#5b8cff" stroke-width="2.5" />
-              <line x1="130" y1="210" x2="70" y2="350" stroke="#f97316" stroke-width="3" />
-              <line x1="70" y1="350" x2="55" y2="470" stroke="#f97316" stroke-width="2.5" />
-              <line x1="170" y1="210" x2="230" y2="350" stroke="#5b8cff" stroke-width="2.5" />
-              <line x1="230" y1="350" x2="245" y2="470" stroke="#5b8cff" stroke-width="2.5" />
-              <g fill="#5b8cff">
-                <circle cx="150" cy="90" r="5" />
-                <circle cx="150" cy="130" r="5" />
-                <circle cx="90" cy="172" r="5" />
-                <circle cx="72" cy="230" r="4.5" />
-                <circle cx="210" cy="172" r="5" />
-                <circle cx="228" cy="230" r="4.5" />
-                <circle cx="130" cy="210" r="5" />
-                <circle cx="170" cy="210" r="5" />
-              </g>
-              <g fill="#f97316">
-                <circle cx="70" cy="350" r="5" />
-                <circle cx="55" cy="470" r="4.5" />
-              </g>
-              <circle cx="230" cy="350" r="5" fill="#5b8cff" />
-              <circle cx="245" cy="470" r="4.5" fill="#5b8cff" />
-              <g class="warning-anim">
-                <circle
-                  cx="70"
-                  cy="350"
-                  r="24"
-                  fill="none"
-                  stroke="#ef4444"
-                  stroke-width="1.5"
-                  stroke-dasharray="4 3"
-                  opacity="0.7"
-                />
-                <text x="70" y="390" text-anchor="middle" fill="#ef4444" font-size="10" font-weight="700">
-                  膝内扣
-                </text>
-              </g>
-            </svg>
-          </div>
-
-          <div class="score-card-overlay">
-            <div class="score-ring-big" :style="{ '--ring-pct': `${scoreValueForRing}%` }">
-              <span class="score-ring-num">{{ scoreValueForRing }}</span>
-              <span class="score-ring-label">综合评分</span>
-            </div>
-            <div class="score-ring-meta">
-              <span class="score-ring-grade good">{{ scoreLabel }}</span>
-              <div class="score-ring-issues">
-                <span>主要问题：</span>
-                <strong>{{ issueSummary }}</strong>
-              </div>
-            </div>
-          </div>
-
-          <div class="view-strip">
-            <button :class="['view-angle', { active: activeView === 'front' }]" @click="switchView('front')">正面</button>
-            <button :class="['view-angle', { active: activeView === 'side' }]" @click="switchView('side')">侧面</button>
-          </div>
         </div>
 
         <div class="phase-flow-bar">
@@ -297,27 +161,6 @@
             >
               第{{ seg.rep_index }}次
             </button>
-          </div>
-
-          <p v-if="!hasLatestAnalysis && selectedReplayFrames.length === 0" class="phase-no-data">暂无分析数据，上传视频完成分析后此处将显示动作阶段</p>
-          <div v-else class="phase-flow">
-            <div
-              v-for="(phase, index) in phases"
-              :key="phase"
-              class="phase-step"
-              :class="{ done: index < phaseDoneCount }"
-            >
-              <div class="phase-circle">
-                <svg v-if="index < phaseDoneCount" width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                <span v-else>{{ index + 1 }}</span>
-              </div>
-              <span class="phase-label">{{ phase }}</span>
-            </div>
-            <div class="phase-connector">
-              <div class="phase-connector-fill" :style="{ width: hasLatestAnalysis ? '100%' : '0%' }"></div>
-            </div>
           </div>
 
           <div class="play-controls">
@@ -414,6 +257,10 @@
       </aside>
     </section>
 
+<<<<<<< HEAD
+  </div>
+</template>
+=======
     <section class="charts-row">
       <div class="chart-card">
         <header class="chart-card-header">
@@ -452,6 +299,7 @@
     </section>
   </div>
 </template>
+>>>>>>> origin/main
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
@@ -1056,18 +904,51 @@ async function loadSessionFeedback(sessionId: string) {
 
 // Click on right panel problem → highlight 3D body part
 function onProblemClick(index: number) {
-  selectedProblem.value = index;
   const problem = problems.value[index];
-  const canHighlightCurrentRep = selectedRepFilter.value !== null
-    && problem?.repIndex === selectedRepFilter.value;
-  if (!canHighlightCurrentRep) {
+  if (!problem || !problem.metric || problem.repIndex == null) {
+    selectedProblem.value = index;
     currentHighlights.value = [];
     return;
   }
-  if (!problem || !problem.metric) {
+
+  if (selectedRepFilter.value !== problem.repIndex) {
+    selectedRepFilter.value = problem.repIndex;
+    replayProgress.value = 0;
+    replayPlaying.value = true;
+    selectedProblem.value = null;
+    currentHighlights.value = [];
+    nextTick(() => {
+      const targetIndex = findProblemIndexAfterRepSwitch(problem);
+      const nextIndex = targetIndex >= 0 ? targetIndex : 0;
+      selectedProblem.value = nextIndex;
+      applyProblemHighlight(problems.value[nextIndex] || problem);
+    });
+    return;
+  }
+
+  selectedProblem.value = index;
+  applyProblemHighlight(problem);
+}
+
+function normalizeProblemTitle(title: string) {
+  return title.replace(/^第\d+次[:：]\s*/, "");
+}
+
+function findProblemIndexAfterRepSwitch(source: ProblemItem) {
+  const sourceTitle = normalizeProblemTitle(source.title);
+  return problems.value.findIndex((item) => (
+    item.repIndex === source.repIndex
+    && item.metric === source.metric
+    && normalizeProblemTitle(item.title) === sourceTitle
+  ));
+}
+
+function applyProblemHighlight(problem: ProblemItem | null | undefined) {
+  if (!problem || !problem.metric || selectedRepFilter.value === null || problem.repIndex !== selectedRepFilter.value) {
     currentHighlights.value = [];
     return;
   }
+
   const mapping = METRIC_BODY_PART_MAP[problem.metric];
   if (mapping) {
     currentHighlights.value = [
@@ -1084,14 +965,18 @@ function onProblemClick(index: number) {
 
 // Click on 3D body part → select corresponding problem in right panel
 function on3DBodyPartClicked(bonePair: [number, number]) {
+  if (selectedRepFilter.value === null) return;
+
   const idx = problems.value.findIndex((p) => {
+    if (p.repIndex !== selectedRepFilter.value) return false;
     if (!p.bodyPart) return false;
     return p.bodyPart.bones.some(
       (b) => (b[0] === bonePair[0] && b[1] === bonePair[1]) || (b[0] === bonePair[1] && b[1] === bonePair[0]),
     );
   });
   if (idx >= 0) {
-    onProblemClick(idx);
+    selectedProblem.value = idx;
+    applyProblemHighlight(problems.value[idx]);
     activeTab.value = "problems";
     nextTick(() => {
       document.querySelector(`.problem-item:nth-child(${idx + 1})`)?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -1494,27 +1379,37 @@ onBeforeUnmount(() => {
 <style scoped>
 .sports-dashboard {
   display: grid;
-  gap: 18px;
-  max-width: 1560px;
+  gap: 8px;
+  max-width: 1680px;
   margin: 0 auto;
+  min-height: calc(100vh - 92px);
+  padding: 0 4px;
+  color: #102033;
 }
 
 .top-header,
 .main-panel,
 .section-card,
 .chart-card {
-  border: 1px solid #d6e3ff;
-  border-radius: 14px;
-  background: linear-gradient(180deg, #ffffff, #f8fbff);
-  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.07);
+  border: 1px solid #d8e0ea;
+  border-radius: 10px;
+  background: #fbfcfe;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
 }
 
 .top-header {
-  display: grid;
-  grid-template-columns: auto auto 1fr auto;
+  width: fit-content;
+  max-width: 100%;
+  justify-self: start;
+  display: inline-flex;
   align-items: center;
-  gap: 28px;
-  padding: 16px 24px;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .th-left,
@@ -1526,19 +1421,44 @@ onBeforeUnmount(() => {
 }
 
 .th-left {
-  gap: 14px;
+  gap: 10px;
+  min-width: 0;
 }
 
 .th-avatar {
-  width: 46px;
-  height: 46px;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
-  border-radius: 11px;
-  background: linear-gradient(135deg, #5b8cff, #4f46e5);
+  border-radius: 8px;
+  background: linear-gradient(135deg, #0f766e, #2563eb);
   color: #fff;
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 800;
+}
+
+.th-left,
+.th-score,
+.th-compare {
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid #d8e0ea;
+  border-radius: 9px;
+  background: rgba(251, 252, 254, 0.92);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+}
+
+.th-info {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.th-info p {
+  max-width: 220px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .th-info strong,
@@ -1567,7 +1487,7 @@ onBeforeUnmount(() => {
 }
 
 .th-score {
-  gap: 10px;
+  gap: 8px;
 }
 
 .th-score-value {
@@ -1577,10 +1497,10 @@ onBeforeUnmount(() => {
 }
 
 .th-score-num {
-  font-size: 30px;
+  font-size: 19px;
   font-weight: 900;
   line-height: 1;
-  background: linear-gradient(135deg, #5b8cff, #8b5cf6);
+  background: linear-gradient(135deg, #0f766e, #2563eb);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -1599,7 +1519,7 @@ onBeforeUnmount(() => {
 }
 
 .th-score-badge {
-  padding: 2px 10px;
+  padding: 2px 8px;
   font-size: 10px;
 }
 
@@ -1611,14 +1531,14 @@ onBeforeUnmount(() => {
 }
 
 .th-compare {
-  gap: 8px;
+  gap: 7px;
 }
 
 .th-compare-value {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 800;
 }
 
@@ -1631,7 +1551,15 @@ onBeforeUnmount(() => {
 }
 
 .th-actions {
-  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 2px;
+  justify-self: start;
+}
+
+.th-actions .btn-outline {
+  margin-right: 0 !important;
 }
 
 .btn-primary,
@@ -1650,28 +1578,28 @@ onBeforeUnmount(() => {
 .play-btn-small,
 .ba-btn.primary {
   color: #fff;
-  background: linear-gradient(135deg, #5b8cff, #4f46e5);
+  background: linear-gradient(135deg, #0f766e, #2563eb);
 }
 
 .btn-primary {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 24px;
+  padding: 6px 13px;
   border: none;
-  border-radius: 10px;
-  box-shadow: 0 4px 16px rgba(91, 140, 255, 0.3);
+  border-radius: 8px;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.22);
 }
 
 .btn-outline {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 20px;
-  border: 1.5px solid #5b8cff;
-  border-radius: 10px;
+  padding: 6px 11px;
+  border: 1px solid #2563eb;
+  border-radius: 8px;
   background: transparent;
-  color: #5b8cff;
+  color: #2563eb;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -1683,26 +1611,71 @@ onBeforeUnmount(() => {
 
 .core-row {
   display: grid;
-  grid-template-columns: 1.38fr 1fr;
-  gap: 18px;
-  align-items: start;
+  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.72fr);
+  gap: 12px;
+  align-items: stretch;
+  min-height: 0;
 }
 
 .main-panel {
   overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
 }
 
 .panel-header {
   display: flex;
   align-items: center;
-  padding: 12px 18px;
-  border-bottom: 1px solid #e8effd;
-  background: #f8fafc;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 14px;
+  border-bottom: 1px solid #e4eaf2;
+  background: #f4f7fb;
 }
 
 .panel-left {
-  gap: 14px;
+  gap: 10px;
   flex-wrap: wrap;
+  min-width: 0;
+}
+
+.panel-summary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.panel-summary > span {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 9px;
+  border: 1px solid #d8e0ea;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.summary-score strong {
+  margin: 0 3px;
+  color: #2563eb;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.summary-change.down {
+  color: #ef4444;
+}
+
+.summary-change.up {
+  color: #25b87b;
 }
 
 .panel-title-icon {
@@ -1715,15 +1688,15 @@ onBeforeUnmount(() => {
 .skel-stage-label,
 .phase-step.active .phase-label,
 .btn-full-plan {
-  color: #5b8cff;
+  color: #2563eb;
 }
 
 .phase-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 12px;
-  background: rgba(91, 140, 255, 0.08);
+  padding: 3px 10px;
+  background: rgba(37, 99, 235, 0.08);
   font-size: 12px;
 }
 
@@ -1738,15 +1711,15 @@ onBeforeUnmount(() => {
 }
 
 .pulse-blue {
-  background: #5b8cff;
-  box-shadow: 0 0 10px rgba(91, 140, 255, 0.5);
+  background: #2563eb;
+  box-shadow: 0 0 10px rgba(37, 99, 235, 0.42);
 }
 
 .status-pill {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 12px;
+  padding: 3px 10px;
   font-size: 12px;
 }
 
@@ -1811,6 +1784,9 @@ onBeforeUnmount(() => {
 .replay-fullscreen-shell {
   position: relative;
   background: #01040a;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-height: 0;
 }
 
 .replay-fullscreen-shell:fullscreen {
@@ -1849,7 +1825,7 @@ onBeforeUnmount(() => {
 }
 
 .replay-stage {
-  min-height: clamp(520px, 58vw, 720px);
+  min-height: clamp(360px, calc(100vh - 310px), 560px);
   background:
     linear-gradient(rgba(1, 4, 10, 0.56), rgba(1, 4, 10, 0.64)),
     radial-gradient(circle at 50% 46%, rgba(56, 213, 255, 0.13), transparent 26%),
@@ -1874,8 +1850,8 @@ onBeforeUnmount(() => {
 .view-strip {
   position: absolute;
   z-index: 5;
-  border: 1px solid #d6e3ff;
-  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(248, 250, 252, 0.9);
   backdrop-filter: blur(8px);
 }
 
@@ -2226,17 +2202,17 @@ onBeforeUnmount(() => {
 
 .phase-flow-bar {
   display: grid;
-  gap: 12px;
-  padding: 14px 18px;
-  border-top: 1px solid rgba(59, 130, 246, 0.06);
-  background: rgba(2, 6, 16, 0.86);
+  gap: 9px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(59, 130, 246, 0.1);
+  background: #07111f;
 }
 
 .replay-toolbar {
   display: flex;
   align-items: stretch;
   justify-content: space-between;
-  gap: 14px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -2323,7 +2299,7 @@ onBeforeUnmount(() => {
 .play-controls {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
 }
 
@@ -2440,8 +2416,11 @@ onBeforeUnmount(() => {
 
 .right-col {
   display: grid;
-  gap: 14px;
-  align-content: start;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-content: stretch;
+  min-height: 0;
+  max-height: calc(100vh - 92px);
 }
 
 .tab-bar {
@@ -2468,16 +2447,27 @@ onBeforeUnmount(() => {
 }
 
 .section-card {
-  padding: 18px;
+  padding: 14px;
+  min-height: 0;
+}
+
+.right-col .section-card:first-child {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.right-col .section-card:last-child {
+  padding-bottom: 12px;
 }
 
 .sc-header {
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  margin-bottom: 14px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e8effd;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e4eaf2;
 }
 
 .sc-header-icon,
@@ -2510,37 +2500,54 @@ onBeforeUnmount(() => {
 .advice-accordion,
 .accordion-body {
   display: grid;
-  gap: 8px;
+  gap: 7px;
+}
+
+.problem-list {
+  overflow: auto;
+  padding-right: 4px;
+  overscroll-behavior: contain;
+}
+
+.problem-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.problem-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.22);
 }
 
 .problem-item,
 .advice-item {
-  padding: 12px;
-  border-radius: 9px;
+  padding: 10px;
+  border-radius: 8px;
 }
 
 .problem-item {
   border: 1px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.16s, background 0.16s, box-shadow 0.16s;
 }
 
 .problem-item.high {
-  background: rgba(239, 68, 68, 0.04);
-  border-color: rgba(239, 68, 68, 0.1);
+  background: rgba(239, 68, 68, 0.045);
+  border-color: rgba(239, 68, 68, 0.12);
 }
 
 .problem-item.medium {
-  background: rgba(249, 115, 22, 0.04);
-  border-color: rgba(249, 115, 22, 0.1);
+  background: rgba(245, 158, 11, 0.06);
+  border-color: rgba(245, 158, 11, 0.14);
 }
 
 .problem-item.low {
-  background: rgba(91, 140, 255, 0.03);
-  border-color: rgba(91, 140, 255, 0.07);
+  background: rgba(20, 184, 166, 0.045);
+  border-color: rgba(20, 184, 166, 0.1);
 }
 
 .problem-item.selected {
-  outline: 1px solid rgba(91, 140, 255, 0.3);
-  box-shadow: 0 0 12px rgba(91, 140, 255, 0.15);
+  outline: 1px solid rgba(37, 99, 235, 0.36);
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.12);
 }
 
 .pi-body-part {
@@ -2584,8 +2591,8 @@ onBeforeUnmount(() => {
 
 .pi-num.low,
 .pi-badge.low {
-  background: rgba(91, 140, 255, 0.08);
-  color: #5b8cff;
+  background: rgba(20, 184, 166, 0.09);
+  color: #0f766e;
 }
 
 .pi-badge {
@@ -2621,6 +2628,11 @@ onBeforeUnmount(() => {
   font-size: 12px;
   line-height: 1.5;
   color: #475569;
+}
+
+.right-col .section-card:last-child > div:last-child {
+  padding: 0 4px 2px !important;
+  color: #334155 !important;
 }
 
 .charts-row {
@@ -2681,14 +2693,18 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 1200px) {
-  .top-header,
   .core-row,
   .charts-row {
     grid-template-columns: 1fr;
   }
 
-  .top-header {
-    gap: 16px;
+  .panel-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .panel-summary {
+    justify-content: flex-start;
   }
 }
 
@@ -2697,10 +2713,30 @@ onBeforeUnmount(() => {
     gap: 14px;
   }
 
-  .top-header,
   .chart-card,
   .section-card {
-    padding: 14px;
+    padding: 0;
+  }
+
+  .panel-summary {
+    width: 100%;
+  }
+
+  .th-left,
+  .th-score,
+  .th-compare {
+    width: 100%;
+  }
+
+  .th-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .panel-summary .btn-outline,
+  .panel-summary .btn-primary {
+    flex: 1;
+    justify-content: center;
   }
 
   .metric-strip {
