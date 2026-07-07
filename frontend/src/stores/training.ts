@@ -114,6 +114,56 @@ export const exercises: Exercise[] = [
     accent: "#06b6d4"
   },
   {
+    key: "bench_press",
+    name: "卧推",
+    category: "上肢力量",
+    level: "中级",
+    duration: "10 分钟",
+    modes: ["摄像头实时检测", "视频上传分析"],
+    errors: ["推起幅度不足", "手腕肘部不对齐"],
+    accent: "#2563eb"
+  },
+  {
+    key: "barbell_squat",
+    name: "杠铃深蹲",
+    category: "下肢力量",
+    level: "高级",
+    duration: "12 分钟",
+    modes: ["摄像头实时检测", "视频上传分析"],
+    errors: ["躯干前倾过大", "杠铃路径偏移"],
+    accent: "#16a34a"
+  },
+  {
+    key: "dumbbell_fly",
+    name: "哑铃飞鸟",
+    category: "上肢力量",
+    level: "中级",
+    duration: "8 分钟",
+    modes: ["摄像头实时检测", "视频上传分析"],
+    errors: ["打开幅度异常", "左右轨迹不对称"],
+    accent: "#db2777"
+  },
+  {
+    key: "lat_pulldown",
+    name: "高位下拉",
+    category: "上肢力量",
+    level: "中级",
+    duration: "10 分钟",
+    modes: ["摄像头实时检测", "视频上传分析"],
+    errors: ["身体后仰借力", "下拉幅度不足"],
+    accent: "#0891b2"
+  },
+  {
+    key: "dumbbell_shoulder_press",
+    name: "哑铃推肩",
+    category: "上肢力量",
+    level: "中级",
+    duration: "10 分钟",
+    modes: ["摄像头实时检测", "视频上传分析"],
+    errors: ["腰背后仰", "左右推举不同步"],
+    accent: "#7c3aed"
+  },
+  {
     key: "dumbbell_curl",
     name: "哑铃弯举",
     category: "上肢力量",

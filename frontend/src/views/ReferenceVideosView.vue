@@ -195,7 +195,9 @@ function exerciseName(key: string): string {
   const map: Record<string, string> = {
     squat: "深蹲", push_up: "俯卧撑", plank: "平板支撑", lunge: "弓步蹲",
     jumping_jack: "开合跳", burpee: "波比跳", high_knees: "高抬腿",
-    mountain_climber: "登山跑", pull_up: "引体向上", dumbbell_curl: "哑铃弯举",
+    mountain_climber: "登山跑", pull_up: "引体向上", bench_press: "卧推",
+    barbell_squat: "杠铃深蹲", dumbbell_fly: "哑铃飞鸟", lat_pulldown: "高位下拉",
+    dumbbell_curl: "哑铃弯举", dumbbell_shoulder_press: "哑铃推肩",
   };
   return map[key] || key;
 }

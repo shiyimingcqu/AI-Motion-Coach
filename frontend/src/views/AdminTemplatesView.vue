@@ -145,6 +145,12 @@ const fallbackExercises: ExerciseLibItem[] = [
   { key: "jumping_jack", name: "开合跳", description: "", supported_metrics: [] },
   { key: "burpee", name: "波比跳", description: "", supported_metrics: [] },
   { key: "high_knees", name: "高抬腿", description: "", supported_metrics: [] },
+  { key: "bench_press", name: "卧推", description: "", supported_metrics: [] },
+  { key: "barbell_squat", name: "杠铃深蹲", description: "", supported_metrics: [] },
+  { key: "dumbbell_fly", name: "哑铃飞鸟", description: "", supported_metrics: [] },
+  { key: "lat_pulldown", name: "高位下拉", description: "", supported_metrics: [] },
+  { key: "pull_up", name: "引体向上", description: "", supported_metrics: [] },
+  { key: "dumbbell_shoulder_press", name: "哑铃推肩", description: "", supported_metrics: [] },
 ];
 
 const route = useRoute();

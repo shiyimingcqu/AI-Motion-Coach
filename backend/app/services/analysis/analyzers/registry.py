@@ -14,6 +14,13 @@ from app.services.analysis.analyzers.pull_up_analyzer import PullUpAnalyzer
 from app.services.analysis.analyzers.push_up_analyzer import PushUpAnalyzer
 from app.services.analysis.analyzers.russian_twist_analyzer import RussianTwistAnalyzer
 from app.services.analysis.analyzers.squat_analyzer import SquatAnalyzer
+from app.services.analysis.analyzers.strength_analyzers import (
+    BarbellSquatAnalyzer,
+    BenchPressAnalyzer,
+    DumbbellFlyAnalyzer,
+    DumbbellShoulderPressAnalyzer,
+    LatPulldownAnalyzer,
+)
 
 ANALYZER_CLASSES: dict[str, type[BaseExerciseAnalyzer]] = {
     "squat": SquatAnalyzer,
@@ -28,6 +35,11 @@ ANALYZER_CLASSES: dict[str, type[BaseExerciseAnalyzer]] = {
     "pull_up": PullUpAnalyzer,
     "dumbbell_curl": DumbbellCurlAnalyzer,
     "dumbbell_press": DumbbellPressAnalyzer,
+    "bench_press": BenchPressAnalyzer,
+    "barbell_squat": BarbellSquatAnalyzer,
+    "dumbbell_fly": DumbbellFlyAnalyzer,
+    "lat_pulldown": LatPulldownAnalyzer,
+    "dumbbell_shoulder_press": DumbbellShoulderPressAnalyzer,
     "russian_twist": RussianTwistAnalyzer,
 }
 

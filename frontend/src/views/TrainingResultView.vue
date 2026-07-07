@@ -123,6 +123,12 @@ const exerciseMap: Record<string, string> = {
   push_up: "俯卧撑",
   jumping_jack: "开合跳",
   plank: "平板支撑",
+  pull_up: "引体向上",
+  bench_press: "卧推",
+  barbell_squat: "杠铃深蹲",
+  dumbbell_fly: "哑铃飞鸟",
+  lat_pulldown: "高位下拉",
+  dumbbell_shoulder_press: "哑铃推肩",
 };
 const exerciseLabel = computed(() => exerciseMap[exercise.value] ?? exercise.value);
 

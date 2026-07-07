@@ -85,6 +85,36 @@ EXERCISES = [
         core_feature_keys=get_core_feature_keys("pull_up"),
     ),
     ExerciseDefinition(
+        key="bench_press", name="卧推", description="评估推起幅度、腕肘对齐、肩部轨迹和左右同步。",
+        supported_metrics=["count", "valid_count", "score"],
+        core_angles=get_core_angle_labels("bench_press"),
+        core_feature_keys=get_core_feature_keys("bench_press"),
+    ),
+    ExerciseDefinition(
+        key="barbell_squat", name="杠铃深蹲", description="评估下蹲深度、躯干控制、手腕近似杠铃路径和左右膝稳定。",
+        supported_metrics=["count", "valid_count", "score", "depth_ratio"],
+        core_angles=get_core_angle_labels("barbell_squat"),
+        core_feature_keys=get_core_feature_keys("barbell_squat"),
+    ),
+    ExerciseDefinition(
+        key="dumbbell_fly", name="哑铃飞鸟", description="评估飞鸟打开幅度、肘部微屈保持和左右轨迹对称。",
+        supported_metrics=["count", "valid_count", "score"],
+        core_angles=get_core_angle_labels("dumbbell_fly"),
+        core_feature_keys=get_core_feature_keys("dumbbell_fly"),
+    ),
+    ExerciseDefinition(
+        key="lat_pulldown", name="高位下拉", description="评估下拉幅度、手腕高度、躯干后仰和左右同步。",
+        supported_metrics=["count", "valid_count", "score"],
+        core_angles=get_core_angle_labels("lat_pulldown"),
+        core_feature_keys=get_core_feature_keys("lat_pulldown"),
+    ),
+    ExerciseDefinition(
+        key="dumbbell_shoulder_press", name="哑铃推肩", description="评估推举伸展、肩部上举、手腕肩部对齐和核心稳定。",
+        supported_metrics=["count", "valid_count", "score"],
+        core_angles=get_core_angle_labels("dumbbell_shoulder_press"),
+        core_feature_keys=get_core_feature_keys("dumbbell_shoulder_press"),
+    ),
+    ExerciseDefinition(
         key="dumbbell_curl", name="哑铃弯举", description="评估弯举幅度和上臂稳定性。",
         supported_metrics=["count", "valid_count", "score"],
         core_angles=get_core_angle_labels("dumbbell_curl"),

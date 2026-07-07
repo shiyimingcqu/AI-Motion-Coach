@@ -132,6 +132,12 @@ const EXERCISE_MAP: Record<string, string> = {
   plank: "平板支撑",
   lunge: "弓步",
   high_knee: "高抬腿",
+  pull_up: "引体向上",
+  bench_press: "卧推",
+  barbell_squat: "杠铃深蹲",
+  dumbbell_fly: "哑铃飞鸟",
+  lat_pulldown: "高位下拉",
+  dumbbell_shoulder_press: "哑铃推肩",
   side_raise: "侧平举",
 };
 

@@ -223,7 +223,7 @@ if router:
         video_dir = Path(settings.storage_root) / "template_videos"
         video_dir.mkdir(parents=True, exist_ok=True)
         suffix = Path(video_file.filename or "").suffix or ".mp4"
-        video_path = video_dir / f"{template_id}{suffix}"
+        video_path = video_dir / f"{template_id}_{uuid4().hex[:8]}{suffix}"
 
         try:
             with open(temp_path, 'wb') as f:
