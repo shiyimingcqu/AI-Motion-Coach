@@ -22,6 +22,11 @@
     </view>
   </view>
 
+  <!-- 开发者工具提示 -->
+  <view class="devtools-hint" wx:if="{{devtoolsHint}}">
+    <text>{{devtoolsHint}}</text>
+  </view>
+
   <!-- 倒计时覆盖层 -->
   <view class="countdown-overlay" wx:if="{{state === 'countdown'}}">
     <text class="countdown-number">{{countdown}}</text>

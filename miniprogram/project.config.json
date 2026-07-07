@@ -45,7 +45,8 @@
   },
   "compileType": "miniprogram",
   "libVersion": "3.3.4",
-  "appid": "wx8e98571b5b5ca71f",
+  "appid": "wxf76cdf95687c42c7",
+  "_appid_prev": "wx8e98571b5b5ca71f",
   "projectname": "pose-evaluation-miniapp",
   "condition": {},
   "editorSetting": {

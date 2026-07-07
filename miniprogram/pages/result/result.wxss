@@ -419,12 +419,25 @@
 
 .feedback-detection-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12rpx;
   padding: 14rpx 18rpx;
   border-radius: 12rpx;
   border-left: 6rpx solid #ff3f46;
   background: #fff0f0;
+}
+
+.feedback-copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.feedback-suggestion {
+  font-size: 22rpx;
+  color: var(--text-secondary);
+  line-height: 1.5;
 }
 
 .feedback-detection-row.warning {

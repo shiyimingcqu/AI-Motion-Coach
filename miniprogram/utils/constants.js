@@ -1,6 +1,13 @@
-// 常量定义
-// const API_BASE_URL = 'http://127.0.0.1:8000';
-const API_BASE_URL = 'http://172.20.10.3:8000';
+// 常量定义（开发者工具默认连本机后端）
+const API_BASE_HOST = '127.0.0.1';
+const API_PORT = 8000;
+
+function getApiBaseUrl() {
+  return `http://${API_BASE_HOST}:${API_PORT}`;
+}
+
+// 兼容旧引用；请求时请优先用 getApiBaseUrl()
+const API_BASE_URL = getApiBaseUrl();
 
 // 8种动作配置
 const EXERCISE_CONFIG = {
@@ -153,6 +160,7 @@ function getScoreLevel(score) {
 }
 
 module.exports = {
+  getApiBaseUrl,
   API_BASE_URL,
   EXERCISE_CONFIG,
   KEYPOINT_INDEX,

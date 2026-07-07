@@ -55,10 +55,14 @@
       <text class="loading-text">正在同步训练分析与建议...</text>
     </view>
 
-    <!-- 3. 训练反馈（最重要） -->
-    <view class="card section-card" wx:if="{{displayFeedbackItems.length > 0}}">
+    <!-- 3. 训练反馈（与网页 Session Feedback 同源 /api/feedback） -->
+    <view class="card section-card loading-card" wx:if="{{feedbackLoading && displayFeedbackItems.length === 0}}">
+      <text class="loading-text">正在加载训练反馈...</text>
+    </view>
+
+    <view class="card section-card" wx:elif="{{displayFeedbackItems.length > 0}}">
       <view class="section-title-row">
-        <text class="section-title-text">需要注意</text>
+        <text class="section-title-text">训练反馈</text>
       </view>
       <view class="feedback-stats" wx:if="{{feedbackStats.critical || feedbackStats.warning || feedbackStats.minor || feedbackStats.positive}}">
         <view class="feedback-stat-chip critical" wx:if="{{feedbackStats.critical}}">严重 {{feedbackStats.critical}}</view>
@@ -73,7 +77,10 @@
           wx:key="index"
         >
           <text class="feedback-type-tag feedback-type-tag-{{item.tone}}">{{item.type}}</text>
-          <text class="feedback-problem">{{item.problem}}</text>
+          <view class="feedback-copy">
+            <text class="feedback-problem">{{item.problem}}</text>
+            <text class="feedback-suggestion" wx:if="{{item.suggestion}}">{{item.suggestion}}</text>
+          </view>
         </view>
       </view>
     </view>

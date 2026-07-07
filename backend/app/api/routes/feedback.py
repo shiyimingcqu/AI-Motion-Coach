@@ -31,6 +31,25 @@ def _fallback_feedback_items(sess: SessionORM) -> list[dict]:
     valid = sess.valid_count or 0
 
     if total <= 0:
+        meta = {}
+        if isinstance(sess.pose_replay_meta, dict):
+            meta = sess.pose_replay_meta
+        elif sess.pose_replay_meta:
+            try:
+                import json
+                meta = json.loads(sess.pose_replay_meta)
+            except Exception:
+                meta = {}
+        if meta.get("source") == "video_analysis" and meta.get("processed_frames", 0) > 0:
+            return [{
+                "id": f"fb-{sess.session_id}-video",
+                "session_id": sess.session_id,
+                "exercise": sess.exercise,
+                "issue": "未识别到完整动作循环",
+                "severity": "medium",
+                "suggestion": "视频已分析但未计次，请确认动作类型与视频一致，并尽量使用全身入镜的侧面视频",
+                "created_at": sess.created_at.isoformat(),
+            }]
         return [{
             "id": f"fb-{sess.session_id}-none",
             "session_id": sess.session_id,

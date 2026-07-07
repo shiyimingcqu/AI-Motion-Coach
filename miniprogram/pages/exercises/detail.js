@@ -75,6 +75,11 @@ Page({
     wx.navigateTo({ url: `/pages/training/training?exercise=${key}` });
   },
 
+  startVideoUpload() {
+    const key = this.data.exercise.key;
+    wx.navigateTo({ url: `/pages/video-upload/video-upload?exercise=${key}` });
+  },
+
   goBack() {
     wx.navigateBack();
   }

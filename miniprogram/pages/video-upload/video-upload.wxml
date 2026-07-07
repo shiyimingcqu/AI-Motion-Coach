@@ -1,0 +1,57 @@
+<view class="upload-page">
+  <view class="hero-card">
+    <view class="hero-icon">📹</view>
+    <view class="hero-title">上传视频分析</view>
+    <view class="hero-desc">上传已录制的训练视频，由服务端完成姿态检测与评分，结果与实时训练一致。</view>
+  </view>
+
+  <view class="card section-card">
+    <view class="section-label">选择动作</view>
+    <picker mode="selector" range="{{exerciseOptions}}" range-key="name" value="{{exerciseIndex}}" bindchange="onExerciseChange">
+      <view class="picker-row">
+        <text class="picker-value">{{exerciseName}}</text>
+        <text class="picker-arrow">›</text>
+      </view>
+    </picker>
+  </view>
+
+  <view class="card section-card">
+    <view class="section-label">训练视频</view>
+    <view class="video-box" wx:if="{{videoPath}}">
+      <video class="preview-video" src="{{videoPath}}" controls object-fit="contain"></video>
+      <view class="video-meta">
+        <text class="video-name">{{videoName}}</text>
+        <text class="video-duration" wx:if="{{videoDuration}}">约 {{videoDuration}} 秒</text>
+      </view>
+      <view class="video-actions">
+        <button class="btn btn-ghost btn-sm" bindtap="chooseVideo" disabled="{{analyzing}}">重新选择</button>
+        <button class="btn btn-ghost btn-sm danger" bindtap="clearVideo" disabled="{{analyzing}}">清除</button>
+      </view>
+    </view>
+    <view class="empty-video" wx:else bindtap="chooseVideo">
+      <view class="empty-icon">＋</view>
+      <view class="empty-title">从相册或拍摄选择视频</view>
+      <view class="empty-hint">建议人物全身入镜，时长 10–60 秒</view>
+    </view>
+  </view>
+
+  <view class="tips-card">
+    <view class="tips-title">拍摄建议</view>
+    <view class="tip-item">• 光线充足，背景尽量简洁</view>
+    <view class="tip-item">• 人物完整入镜，侧面或斜前方视角更佳</view>
+    <view class="tip-item">• 动作节奏稳定，避免画面剧烈晃动</view>
+  </view>
+
+  <view class="status-text">{{statusText}}</view>
+
+  <view class="footer">
+    <button
+      class="btn btn-primary btn-lg"
+      bindtap="startAnalysis"
+      loading="{{analyzing}}"
+      disabled="{{analyzing || !videoPath}}"
+    >
+      {{analyzing ? '分析中...' : '开始分析'}}
+    </button>
+  </view>
+</view>

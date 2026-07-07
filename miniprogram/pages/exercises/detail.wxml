@@ -69,8 +69,9 @@
     </view>
   </view>
 
-  <!-- 开始训练 -->
-  <view class="detail-footer">
+  <!-- 开始训练 / 上传视频 -->
+  <view class="detail-footer detail-footer-dual">
+    <button class="btn btn-outline btn-lg" bindtap="startVideoUpload">上传视频分析</button>
     <button class="btn btn-primary btn-lg" bindtap="startTraining">开始训练</button>
   </view>
 </view>

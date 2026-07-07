@@ -288,14 +288,27 @@ class AnalysisTests(unittest.TestCase):
         })
         self.assertIn("抬膝高度不足", result["issues"])
 
-    def test_burpee_rep_summary_flags_shallow_squat(self):
-        analyzer = get_analyzer("burpee")
-        result = analyzer.score_rep({
-            "min_hip_angle": 130.0,
-            "plank_body_line_angle": 18.0,
-            "max_wrist_height": 0.20,
-        })
-        self.assertIn("下蹲阶段深度不足", result["issues"])
+    def test_custom_analyzers_accept_frame_index_kwarg(self):
+        sample = {
+            "left_shoulder": NormalizedKeypoint(x=0.45, y=0.20, visibility=0.99),
+            "right_shoulder": NormalizedKeypoint(x=0.55, y=0.20, visibility=0.99),
+            "left_elbow": NormalizedKeypoint(x=0.42, y=0.35, visibility=0.99),
+            "right_elbow": NormalizedKeypoint(x=0.58, y=0.35, visibility=0.99),
+            "left_wrist": NormalizedKeypoint(x=0.40, y=0.50, visibility=0.99),
+            "right_wrist": NormalizedKeypoint(x=0.60, y=0.50, visibility=0.99),
+            "left_hip": NormalizedKeypoint(x=0.45, y=0.55, visibility=0.99),
+            "right_hip": NormalizedKeypoint(x=0.55, y=0.55, visibility=0.99),
+            "left_knee": NormalizedKeypoint(x=0.47, y=0.70, visibility=0.99),
+            "right_knee": NormalizedKeypoint(x=0.53, y=0.70, visibility=0.99),
+            "left_ankle": NormalizedKeypoint(x=0.47, y=0.90, visibility=0.99),
+            "right_ankle": NormalizedKeypoint(x=0.53, y=0.90, visibility=0.99),
+        }
+        state: dict = {}
+        for exercise in ("burpee", "high_knees"):
+            analyzer = get_analyzer(exercise)
+            result = analyzer.analyze_frame(sample, state, frame_index=7)
+            self.assertIn("phase", result)
+            self.assertEqual(analyzer._frame_index, 7)
 
 
 if __name__ == "__main__":

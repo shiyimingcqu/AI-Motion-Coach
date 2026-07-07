@@ -16,6 +16,52 @@ const SEVERITY_TONE = {
 };
 
 const POSITIVE_LABEL = '不错';
+const POSITIVE_SUGGESTION = '继续保持当前节奏，稳定发挥这一优势';
+
+const ISSUE_ASPECT_MAP = {
+  '下蹲深度不稳定': 'depth',
+  '下蹲深度整体偏浅': 'depth',
+  '下蹲深度整体偏深': 'depth',
+  '部分动作深度偏浅': 'depth',
+  '部分动作深度偏深': 'depth',
+  '底部躯干前倾明显': 'trunk',
+  '底部躯干前倾偏大': 'trunk',
+  '左右膝关节明显不对称': 'symmetry',
+  '左右膝关节略不对称': 'symmetry',
+  '下蹲速度偏快': 'tempo',
+  '整体节奏略快': 'tempo',
+  '下降深度不稳定': 'depth',
+  '下降幅度整体偏浅': 'depth',
+  '下降幅度不足': 'depth',
+  '身体直线控制不足': 'body_line',
+  '左右发力明显不均': 'symmetry',
+};
+
+const EXERCISE_ASPECTS = {
+  squat: {
+    depth: '下蹲深度整体可控，完成度不错',
+    trunk: '躯干稳定性良好，背部控制到位',
+    symmetry: '左右膝盖对称性较好',
+    tempo: '下蹲节奏比较均匀',
+  },
+  push_up: {
+    depth: '下降深度控制较稳定，能完成完整动作循环',
+    body_line: '身体直线保持较好，核心有参与',
+    symmetry: '左右发力较为均衡',
+    tempo: '动作节奏整体平稳',
+  },
+  jumping_jack: {
+    spread: '开合步幅基本到位',
+    arms: '手臂上举动作较完整',
+    sync: '手脚配合有一定协调性',
+    symmetry: '左右动作对称性尚可',
+  },
+  plank: {
+    body_line: '身体直线维持能力不错',
+    core: '核心参与感较好',
+    stability: '支撑稳定性在可控范围内',
+  },
+};
 
 function briefText(text, maxLen = 28) {
   if (!text) return '';
@@ -24,6 +70,15 @@ function briefText(text, maxLen = 28) {
   const candidate = firstPart || normalized;
   if (candidate.length <= maxLen) return candidate;
   return `${candidate.slice(0, maxLen)}…`;
+}
+
+function pickAverageScore(...candidates) {
+  const values = candidates
+    .map((item) => Math.round(Number(item)))
+    .filter((item) => Number.isFinite(item));
+  const positive = values.find((item) => item > 0);
+  if (positive != null) return positive;
+  return values.length ? values[0] : 0;
 }
 
 Page({
@@ -65,6 +120,8 @@ Page({
     aiAdvicePending: false,
     aiAdviceFailed: false,
     reportLoading: false,
+    feedbackLoading: false,
+    feedbackReady: false,
     hasBackendReport: false,
     resultData: null,
     recordSaved: false,
@@ -113,6 +170,7 @@ Page({
   applyLocalResult(data) {
     const exerciseKey = data.exercise_key || 'squat';
     const exerciseConfig = EXERCISE_CONFIG[exerciseKey] || {};
+    const exerciseName = exerciseConfig.name || '';
     const score = Math.round(data.average_score || 0);
     const level = getScoreLevel(score);
     const scoreVisual = this.buildScoreVisual(score);
@@ -126,6 +184,16 @@ Page({
     const radar = this.buildRadarData(score, data);
 
     const dimensionList = this.buildDimensionListFromRadar(radar);
+    const prefetchApiItems = data.feedback_summary
+      ? this.feedbackSummaryToApiItems(this.parseFeedbackSummary(data.feedback_summary), exerciseKey)
+      : [];
+    const prefetchDisplayItems = prefetchApiItems.length
+      ? this.buildDisplayFeedbackItems(prefetchApiItems, {
+        exerciseKey,
+        exerciseName,
+        time: '--:--',
+      })
+      : [];
 
     this.setData({
       exerciseConfig,
@@ -152,17 +220,21 @@ Page({
       }),
       savedSessionId: data.session_id || '',
       replayKey: data.replay_key || '',
-      displayFeedbackItems: [],
-      feedbackStats: { critical: 0, warning: 0, minor: 0, positive: 0 },
-      hasRealFeedback: false,
-      hasBackendReport: false,
+      displayFeedbackItems: prefetchDisplayItems,
+      feedbackStats: this.buildFeedbackStats(prefetchDisplayItems),
+      hasRealFeedback: prefetchDisplayItems.length > 0,
+      issues: [],
+      suggestions: realSuggestions,
+      nextSteps: this.buildNextSteps([], [], prefetchDisplayItems),
+      hasBackendReport: prefetchDisplayItems.length > 0,
+      feedbackReady: prefetchDisplayItems.length > 0,
+      feedbackLoading: Boolean(data.session_id) && prefetchDisplayItems.length === 0,
       reportLoading: Boolean(data.session_id),
       aiAdvice: '',
       aiAdvicePreview: '',
-      showAiAdvice: Boolean(data.session_id),
-      aiAdvicePending: Boolean(data.session_id),
+      showAiAdvice: true,
+      aiAdvicePending: false,
       aiAdviceFailed: false,
-      nextSteps: [],
       strengths: [],
       weaknesses: [],
       recommendations: [],
@@ -170,42 +242,116 @@ Page({
       showDimensionDetail: false,
     });
 
-    this.applyPrefetchFromSession(data);
+    if (data.feedback_summary && data.session_id) {
+      this.loadAiAdviceFromSession({
+        session_id: data.session_id,
+        feedback_summary: data.feedback_summary,
+      });
+    }
+
+    if (data.session_id) {
+      this.refreshSessionFeedback(data.session_id, null, exerciseKey);
+    }
   },
 
-  applyPrefetchFromSession(data) {
-    const summaryRaw = data.feedback_summary;
-    if (!summaryRaw) return;
+  feedbackSummaryToApiItems(summary, exerciseKey) {
+    if (!summary || typeof summary !== 'object') return [];
 
-    const summary = this.parseFeedbackSummary(summaryRaw);
-    const exerciseKey = data.exercise_key || 'squat';
+    const structured = summary.items || [];
+    if (structured.length > 0) {
+      return structured.map((entry, index) => ({
+        id: `summary-${index}`,
+        exercise: exerciseKey,
+        issue: entry.issue || '',
+        suggestion: entry.suggestion || '',
+        severity: entry.severity || 'warning',
+      }));
+    }
+
+    const issues = summary.issues || [];
+    const suggestions = summary.suggestions || [];
+    if (!issues.length) return [];
+
+    return issues.map((issue, index) => ({
+      id: `summary-${index}`,
+      exercise: exerciseKey,
+      issue: typeof issue === 'string' ? issue : (issue.issue || issue.title || ''),
+      suggestion: suggestions[index] || '',
+      severity: index === 0 ? 'high' : index === 1 ? 'medium' : 'low',
+    }));
+  },
+
+  getLocalFeedbackApiItems(exerciseKey, sessionRes) {
+    const summaryRaw = (sessionRes && sessionRes.feedback_summary)
+      || (this.data.resultData && this.data.resultData.feedback_summary);
+    if (!summaryRaw) return [];
+    return this.feedbackSummaryToApiItems(this.parseFeedbackSummary(summaryRaw), exerciseKey);
+  },
+
+  applyFeedbackFromApiItems(apiItems, options, preserveIfEmpty) {
+    const built = this.buildDisplayFeedbackItems(apiItems || [], options);
+    const shouldPreserve = preserveIfEmpty !== false;
+    const displayFeedbackItems = built.length > 0
+      ? built
+      : (shouldPreserve ? (this.data.displayFeedbackItems || []) : []);
+
+    this.setData({
+      displayFeedbackItems,
+      feedbackStats: this.buildFeedbackStats(displayFeedbackItems),
+      hasRealFeedback: displayFeedbackItems.length > 0,
+      nextSteps: this.buildNextSteps([], [], displayFeedbackItems),
+      feedbackReady: true,
+      issues: [],
+      suggestions: [],
+    });
+  },
+
+  async refreshSessionFeedback(sessionId, sessionRes, exerciseKeyHint) {
+    if (!sessionId) return;
+
+    const exerciseKey = exerciseKeyHint
+      || (sessionRes && sessionRes.exercise)
+      || (this.data.resultData && this.data.resultData.exercise_key)
+      || 'squat';
     const exerciseName = (EXERCISE_CONFIG[exerciseKey] && EXERCISE_CONFIG[exerciseKey].name) || exerciseKey;
-    const apiItems = this.normalizeSummaryItems(summary, exerciseKey);
+    const feedbackTime = sessionRes && sessionRes.created_at
+      ? String(sessionRes.created_at).slice(11, 19)
+      : '--:--';
 
-    if (apiItems.length > 0) {
-      const displayFeedbackItems = this.buildDisplayFeedbackItems(apiItems, {
-        exerciseName,
-        time: '--:--',
+    this.setData({ feedbackLoading: true });
+
+    let apiItems = [];
+    try {
+      const feedbackRes = await ApiClient.get('/api/feedback', {
+        session_id: sessionId,
+        limit: 50,
       });
-      this.setData({
-        displayFeedbackItems,
-        feedbackStats: this.buildFeedbackStats(displayFeedbackItems),
-        hasRealFeedback: true,
-        hasBackendReport: true,
-      });
+      apiItems = (feedbackRes && feedbackRes.items) || [];
+    } catch (e) {
+      console.warn('[Result] 加载 /api/feedback 失败:', e);
     }
 
-    const sessionId = data.session_id || '';
-    if (sessionId) {
-      this.loadAiAdviceFromSession({ session_id: sessionId, feedback_summary: summaryRaw });
+    if (!apiItems.length) {
+      apiItems = this.getLocalFeedbackApiItems(exerciseKey, sessionRes);
     }
+
+    this.applyFeedbackFromApiItems(apiItems, {
+      exerciseKey,
+      exerciseName,
+      time: feedbackTime,
+    });
+    this.setData({
+      feedbackLoading: false,
+      feedbackReady: true,
+      hasBackendReport: true,
+    });
   },
 
   async bootstrapReport(data) {
     if (this._bootstrapStarted) return;
     this._bootstrapStarted = true;
 
-    const hasPrefetch = this.data.hasBackendReport;
+    const hasPrefetch = this.data.displayFeedbackItems && this.data.displayFeedbackItems.length > 0;
     if (!hasPrefetch) {
       this.setData({ reportLoading: true });
     }
@@ -234,14 +380,11 @@ Page({
       if (sessionId) {
         await this.loadBackendReport(sessionId);
       } else {
-        this.setData({
-          aiAdvicePending: false,
-          aiAdviceFailed: true,
-          aiAdvice: '未获取到训练记录，无法生成 AI 建议。',
-        });
+        this.applyLocalFallbackReport('未获取到训练记录，将使用本次训练本地数据。');
       }
     } catch (e) {
       console.warn('[Result] 自动同步报告失败:', e);
+      this.applyLocalFallbackReport();
     } finally {
       this.setData({ reportLoading: false });
     }
@@ -293,37 +436,59 @@ Page({
   async loadBackendReport(sessionId) {
     if (!sessionId) return;
 
-    this.setData({ reportLoading: true, savedSessionId: sessionId });
+    this.setData({
+      reportLoading: true,
+      feedbackLoading: !(this.data.displayFeedbackItems && this.data.displayFeedbackItems.length),
+      savedSessionId: sessionId,
+    });
 
     try {
-      const [reportRes, feedbackRes, sessionRes] = await Promise.all([
-        ApiClient.get(`/api/reports/${sessionId}`).catch(() => null),
-        ApiClient.get('/api/feedback', { session_id: sessionId, limit: 50 }).catch(() => null),
+      const [sessionRes, reportRes] = await Promise.all([
         ApiClient.get(`/api/sessions/${sessionId}`).catch(() => null),
+        ApiClient.get(`/api/reports/${sessionId}`).catch(() => null),
       ]);
 
-      this.applyBackendReport(reportRes, feedbackRes, sessionRes);
+      await this.refreshSessionFeedback(sessionId, sessionRes);
+      this.applySessionStats(reportRes, sessionRes);
+
+      this.setData({ hasBackendReport: true });
+
+      if (sessionRes) {
+        this.loadAiAdviceFromSession(sessionRes);
+      } else if (!this.data.aiAdvice) {
+        this.fetchAiAdviceDirectly();
+      }
+      this.scheduleSharePoster();
     } catch (e) {
       console.warn('[Result] 加载后端报告失败:', e);
+      if (!this.data.displayFeedbackItems || this.data.displayFeedbackItems.length === 0) {
+        this.setData({ feedbackReady: true });
+      }
     } finally {
-      this.setData({ reportLoading: false });
+      this.setData({
+        reportLoading: false,
+        feedbackLoading: false,
+      });
     }
   },
 
-  applyBackendReport(reportRes, feedbackRes, sessionRes) {
-    const updates = { hasBackendReport: true };
+  applySessionStats(reportRes, sessionRes) {
+    const updates = {};
     const exerciseKey = (sessionRes && sessionRes.exercise)
       || (reportRes && reportRes.exercise)
       || (this.data.resultData && this.data.resultData.exercise_key)
       || 'squat';
     const exerciseName = (EXERCISE_CONFIG[exerciseKey] && EXERCISE_CONFIG[exerciseKey].name) || exerciseKey;
-    const feedbackTime = sessionRes && sessionRes.created_at
-      ? String(sessionRes.created_at).slice(11, 19)
-      : '--:--';
+    updates.exerciseName = exerciseName;
 
     if (reportRes) {
       const evaluation = reportRes.evaluation || {};
-      const score = Math.round(reportRes.average_score || this.data.averageScore || 0);
+      const score = pickAverageScore(
+        reportRes.average_score,
+        sessionRes && sessionRes.average_score,
+        this.data.averageScore,
+        this.data.resultData && this.data.resultData.average_score,
+      );
       const level = getScoreLevel(score);
 
       updates.averageScore = score;
@@ -340,9 +505,6 @@ Page({
       updates.scoreColor = scoreVisual.scoreColor;
       updates.stars = this.getStarList(updates.gradeLabel || level.label);
       updates.evaluationSummary = evaluation.summary || '';
-      updates.strengths = evaluation.strengths || [];
-      updates.weaknesses = evaluation.weaknesses || [];
-      updates.recommendations = evaluation.recommendations || [];
 
       const dimensionScores = evaluation.dimension_scores || {};
       const dimensionList = Object.keys(dimensionScores).map((label) => ({
@@ -355,66 +517,97 @@ Page({
         const radar = this.buildRadarFromDimensions(dimensionList);
         updates.radar = radar;
         updates.radarSVG = this.buildRadarSVG(radar);
+        updates.dimensionPreview = this.buildDimensionPreview(dimensionList);
       }
     }
 
-    let apiItems = (feedbackRes && feedbackRes.items) || [];
-    if (sessionRes && sessionRes.feedback_summary) {
-      const summaryItems = this.normalizeSummaryItems(
-        this.parseFeedbackSummary(sessionRes.feedback_summary),
+    if (sessionRes && sessionRes.average_score != null) {
+      updates.averageScore = pickAverageScore(
+        sessionRes.average_score,
+        updates.averageScore,
+        this.data.averageScore,
+        this.data.resultData && this.data.resultData.average_score,
+      );
+      const level = getScoreLevel(updates.averageScore);
+      updates.levelLabel = level.label;
+      updates.gradeLabel = updates.gradeLabel || level.label;
+      const scoreVisual = this.buildScoreVisual(updates.averageScore);
+      updates.scorePercent = scoreVisual.scorePercent;
+      updates.scoreColor = scoreVisual.scoreColor;
+      updates.stars = this.getStarList(updates.gradeLabel || level.label);
+    }
+
+    if (Object.keys(updates).length > 0) {
+      this.setData(updates);
+    }
+  },
+
+  applyBackendReport(reportRes, feedbackRes, sessionRes) {
+    this.applySessionStats(reportRes, sessionRes);
+    const sessionId = (sessionRes && sessionRes.session_id)
+      || this.data.savedSessionId
+      || (this.data.resultData && this.data.resultData.session_id)
+      || '';
+    const apiItems = (feedbackRes && feedbackRes.items) || [];
+    if (apiItems.length) {
+      const exerciseKey = (sessionRes && sessionRes.exercise)
+        || (this.data.resultData && this.data.resultData.exercise_key)
+        || 'squat';
+      const exerciseName = (EXERCISE_CONFIG[exerciseKey] && EXERCISE_CONFIG[exerciseKey].name) || exerciseKey;
+      const feedbackTime = sessionRes && sessionRes.created_at
+        ? String(sessionRes.created_at).slice(11, 19)
+        : '--:--';
+      this.applyFeedbackFromApiItems(apiItems, { exerciseKey, exerciseName, time: feedbackTime });
+    } else if (sessionId) {
+      this.refreshSessionFeedback(sessionId, sessionRes);
+    }
+    this.setData({ hasBackendReport: true, feedbackReady: true });
+  },
+
+  applyLocalFallbackReport(hint) {
+    const data = this.data.resultData || {};
+    if (hint) {
+      console.warn('[Result]', hint);
+    }
+
+    const exerciseKey = data.exercise_key || 'squat';
+    const exerciseName = (EXERCISE_CONFIG[exerciseKey] && EXERCISE_CONFIG[exerciseKey].name) || exerciseKey;
+
+    if (data.feedback_summary) {
+      const apiItems = this.feedbackSummaryToApiItems(
+        this.parseFeedbackSummary(data.feedback_summary),
         exerciseKey,
       );
-      if (summaryItems.length > 0) {
-        apiItems = summaryItems;
+      if (apiItems.length) {
+        this.applyFeedbackFromApiItems(apiItems, {
+          exerciseKey,
+          exerciseName,
+          time: '--:--',
+        });
       }
     }
 
-    const displayFeedbackItems = this.buildDisplayFeedbackItems(apiItems, {
-      exerciseName,
-      time: feedbackTime,
-    });
-
-    const weaknesses = updates.weaknesses != null ? updates.weaknesses : this.data.weaknesses;
-    const recommendations = updates.recommendations != null ? updates.recommendations : this.data.recommendations;
-    const mergedFeedbackItems = this.mergeEvaluationWeaknesses(
-      displayFeedbackItems,
-      weaknesses,
-      exerciseName,
-      feedbackTime,
-    );
-
-    updates.exerciseName = exerciseName;
-    updates.feedbackStats = this.buildFeedbackStats(mergedFeedbackItems);
-
-    if (mergedFeedbackItems.length > 0) {
-      updates.displayFeedbackItems = mergedFeedbackItems;
-      updates.feedbackItems = this.mapFeedbackItems(apiItems);
-      updates.hasRealFeedback = true;
-      updates.issues = [];
-      updates.suggestions = [];
+    if (data.feedback_summary && data.session_id) {
+      this.loadAiAdviceFromSession({
+        session_id: data.session_id,
+        feedback_summary: data.feedback_summary,
+      });
+    } else if (data.session_id) {
+      this.refreshSessionFeedback(data.session_id, null, exerciseKey);
     }
 
-    updates.nextSteps = this.buildNextSteps([], recommendations, mergedFeedbackItems);
-
-    if (updates.dimensionList && updates.dimensionList.length > 0) {
-      updates.dimensionPreview = this.buildDimensionPreview(updates.dimensionList);
-    } else if (this.data.dimensionList.length > 0) {
-      updates.dimensionPreview = this.buildDimensionPreview(this.data.dimensionList);
-    }
-
-    if (sessionRes) {
-      if (sessionRes.average_score != null) {
-        updates.averageScore = Math.round(sessionRes.average_score);
-      }
-    }
-
-    this.setData(updates, () => {
-      if (sessionRes) {
-        this.loadAiAdviceFromSession(sessionRes);
-      } else if (!this.data.aiAdvice) {
+    this.setData({
+      hasBackendReport: this.data.displayFeedbackItems.length > 0 || Boolean(data.session_id),
+      reportLoading: false,
+      feedbackLoading: false,
+      feedbackReady: true,
+      showAiAdvice: true,
+      aiAdvicePending: !this.data.aiAdvice,
+      aiAdviceFailed: false,
+    }, () => {
+      if (!this.data.aiAdvice) {
         this.fetchAiAdviceDirectly();
       }
-      this.scheduleSharePoster();
     });
   },
 
@@ -476,58 +669,52 @@ Page({
         .map((item) => String(item.problem || '').trim())
         .filter(Boolean),
     );
+    const suggestionSet = new Set(
+      (displayFeedbackItems || [])
+        .map((item) => String(item.suggestion || '').trim())
+        .filter(Boolean),
+    );
 
     const steps = [];
-    (recommendations || []).forEach((text) => {
-      const normalized = String(text || '').trim();
-      if (!normalized || issueSet.has(normalized)) return;
+    const addStep = (raw) => {
+      const normalized = String(raw || '').trim();
+      if (!normalized || issueSet.has(normalized) || suggestionSet.has(normalized)) return;
+      if (/错误动作次数偏多|有效动作占比仅/.test(normalized)) return;
+      issueSet.add(normalized);
       steps.push({ text: normalized, type: 'recommend' });
+    };
+
+    (displayFeedbackItems || []).forEach((item) => {
+      if (item.kind === 'error' && item.suggestion) {
+        addStep(item.suggestion);
+      }
     });
+    (recommendations || []).forEach(addStep);
 
     return steps.slice(0, 4);
-  },
-
-  mergeEvaluationWeaknesses(displayItems, weaknesses, exerciseName, time) {
-    const genericSkip = new Set([
-      '暂无明显问题，建议维持当前训练节奏',
-      '动作规范性有待提升',
-    ]);
-    const existing = new Set(
-      (displayItems || []).map((item) => String(item.problem || '').trim()).filter(Boolean),
-    );
-    const merged = [...(displayItems || [])];
-
-    (weaknesses || []).forEach((raw) => {
-      const text = briefText(raw, 28);
-      if (!text || genericSkip.has(String(raw).trim()) || genericSkip.has(text)) return;
-
-      let duplicated = existing.has(text);
-      if (!duplicated) {
-        existing.forEach((problem) => {
-          if (problem.includes(text) || text.includes(problem)) duplicated = true;
-        });
-      }
-      if (duplicated) return;
-
-      existing.add(text);
-      merged.push({
-        kind: 'error',
-        tone: 'warning',
-        exercise: exerciseName || '训练',
-        type: '警告',
-        problem: text,
-        time: time || '--:--',
-      });
-    });
-
-    return merged;
   },
 
   buildDimensionPreview(dimensionList) {
     return (dimensionList || []).slice(0, 3);
   },
 
+  buildStrengthMessages(exerciseKey, issues) {
+    const aspects = EXERCISE_ASPECTS[exerciseKey] || EXERCISE_ASPECTS.squat;
+    const flagged = new Set(
+      (issues || []).map((issue) => ISSUE_ASPECT_MAP[issue]).filter(Boolean),
+    );
+    const messages = Object.entries(aspects)
+      .filter(([key]) => !flagged.has(key))
+      .map(([, message]) => message);
+
+    if (messages.length === 0) {
+      return ['训练态度积极，愿意反复尝试并调整动作'];
+    }
+    return messages;
+  },
+
   buildDisplayFeedbackItems(items, options = {}) {
+    const exerciseKey = options.exerciseKey || 'squat';
     const exerciseName = options.exerciseName || '训练';
     const time = options.time || '--:--';
     const mapped = this.mapFeedbackItems(items);
@@ -536,18 +723,24 @@ Page({
 
     const positiveNotes = [];
     infoItems.forEach((item) => {
-      const note = briefText(item.suggestion || item.issue || '', 24);
+      const note = briefText(item.suggestion || item.issue || '', 40);
       if (note) positiveNotes.push(note);
     });
 
+    const errorProblems = errorItems.map((item) => item.issue).filter(Boolean);
+    this.buildStrengthMessages(exerciseKey, errorProblems).forEach((note) => {
+      positiveNotes.push(note);
+    });
+
     const displayItems = [];
-    [...new Set(positiveNotes)].forEach((note) => {
+    [...new Set(positiveNotes)].slice(0, 5).forEach((note) => {
       displayItems.push({
         kind: 'positive',
         tone: 'positive',
         exercise: exerciseName,
         type: POSITIVE_LABEL,
         problem: note,
+        suggestion: POSITIVE_SUGGESTION,
         time,
       });
     });
@@ -559,7 +752,8 @@ Page({
         tone,
         exercise: exerciseName,
         type: this.getSeverityTypeLabel(item.severity),
-        problem: briefText(item.issue, 28),
+        problem: briefText(item.issue, 40),
+        suggestion: briefText(item.suggestion, 48),
         time,
       });
     });

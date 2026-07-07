@@ -4,11 +4,12 @@ from app.services.task.task_service import task_service
 from app.services.video.video_analysis_service import video_analysis_service
 
 try:
-    from fastapi import APIRouter, Depends, File, Form, UploadFile
+    from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 except ModuleNotFoundError:
     APIRouter = Depends = None
     File = None
     Form = None
+    HTTPException = None
     UploadFile = None
 
 router = APIRouter(prefix="/videos", tags=["videos"]) if APIRouter else None
@@ -23,9 +24,12 @@ if router:
     ):
         source_uri = await local_storage.save_upload(file)
         user_id = current_user.id if current_user else None
-        analysis_result = video_analysis_service.analyze_video(
-            source_uri, exercise, user_id=user_id
-        )
+        try:
+            analysis_result = video_analysis_service.analyze_video(
+                source_uri, exercise, user_id=user_id
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         task = task_service.create_task(
             exercise=exercise,
             source_uri=source_uri,
