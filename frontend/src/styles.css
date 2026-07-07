@@ -3092,7 +3092,7 @@ body {
 
 .section-page-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 18px;
 }
@@ -6357,6 +6357,37 @@ html.theme-light .level-pill {
   transition: all 0.2s;
 }
 .icon-btn:hover {
+  background: #f1f5f9;
+  color: #5b8cff;
+  border-color: #5b8cff;
+}
+
+/* Back button */
+.back-button {
+  background: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  transition: all 0.2s;
+  margin-right: 12px;
+}
+.back-button:hover {
+  background: #f1f5f9;
+  color: #5b8cff;
+  border-color: #5b8cff;
+}
+
+html.theme-light .back-button {
+  border-color: #e2e8f0;
+  color: #64748b;
+}
+
+html.theme-light .back-button:hover {
   background: #f1f5f9;
   color: #5b8cff;
   border-color: #5b8cff;

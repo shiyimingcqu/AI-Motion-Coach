@@ -9,6 +9,7 @@ venv/
 node_modules/
 dist/
 .vite/
+.npm-cache/
 vite.config.ts.timestamp-*.mjs
 
 # IDE
@@ -63,4 +64,3 @@ logs/
 Thumbs.db
 
 db_stdout.txt
-".npm-cache/" 
