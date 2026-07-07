@@ -304,23 +304,14 @@
   border-radius: 14rpx;
 }
 
-.ai-preview {
-  padding: 14rpx 16rpx;
-  background: #f8fbff;
-  border-radius: 14rpx;
+.ai-toggle {
+  margin-top: 10rpx;
+  display: flex;
+  justify-content: flex-start;
 }
 
-.ai-preview-text {
-  display: block;
-  font-size: 24rpx;
-  line-height: 1.6;
-  color: var(--text-secondary);
-}
-
-.ai-preview-hint {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 20rpx;
+.ai-toggle-text {
+  font-size: 22rpx;
   color: var(--primary);
 }
 
@@ -538,6 +529,14 @@
   line-height: 1.8;
   color: var(--text-secondary);
   white-space: pre-wrap;
+}
+
+.ai-text-collapsed {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
 }
 
 /* Section 通用 */
@@ -831,6 +830,11 @@
 
 .share-send-btn,
 .share-save-btn {
+  width: 100%;
+  margin-top: 20rpx;
+}
+
+.share-random-btn {
   width: 100%;
   margin-top: 20rpx;
 }

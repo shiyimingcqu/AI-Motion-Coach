@@ -5,6 +5,14 @@ const { formatDuration, formatDate } = require('../../utils/util');
 
 const AI_ADVICE_POLL_INTERVAL_MS = 2000;
 const AI_ADVICE_POLL_TIMEOUT_MS = 90000;
+const SHARE_CARD_BACKGROUNDS = [
+  '/assets/cards/1.png',
+  '/assets/cards/2.png',
+  '/assets/cards/3.png',
+  '/assets/cards/4.png',
+  '/assets/cards/5.png',
+  '/assets/cards/6.png',
+];
 
 const SEVERITY_TONE = {
   high: 'critical',
@@ -130,6 +138,7 @@ Page({
     showSharePreview: false,
     sharePosterUrl: '',
     sharePosterLoading: false,
+    shareCardBgIndex: 0,
   },
 
   onLoad(options) {
@@ -155,6 +164,9 @@ Page({
     this._aiAdvicePollStartedAt = 0;
     this._bootstrapStarted = false;
     this._aiAdviceDirectStarted = false;
+    this.setData({
+      shareCardBgIndex: Math.floor(Math.random() * SHARE_CARD_BACKGROUNDS.length),
+    });
     this.applyLocalResult(data);
     this.bootstrapReport(data);
   },
@@ -1064,6 +1076,7 @@ Page({
   },
 
   toggleAiAdvice() {
+    if (!this.data.aiAdvice || this.data.aiAdvicePending) return;
     this.setData({ showAiAdvice: !this.data.showAiAdvice });
   },
 
@@ -1102,6 +1115,31 @@ Page({
 
   closeSharePreview() {
     this.setData({ showSharePreview: false });
+  },
+
+  randomizeShareCardBackground() {
+    if (this.data.sharePosterLoading) return;
+    const total = SHARE_CARD_BACKGROUNDS.length;
+    if (!total) return;
+    const current = Number(this.data.shareCardBgIndex || 0);
+    const offset = total > 1 ? (1 + Math.floor(Math.random() * (total - 1))) : 0;
+    const next = (current + offset) % total;
+
+    this.setData({ shareCardBgIndex: next, sharePosterLoading: true });
+    wx.showLoading({ title: '切换卡片样式...', mask: true });
+    this.generateSharePoster((url) => {
+      wx.hideLoading();
+      if (url) {
+        this.setData({
+          showSharePreview: true,
+          sharePosterUrl: url,
+          sharePosterLoading: false,
+        });
+      } else {
+        this.setData({ sharePosterLoading: false });
+        wx.showToast({ title: '切换失败，请重试', icon: 'none' });
+      }
+    });
   },
 
   saveSharePoster() {
@@ -1172,14 +1210,21 @@ Page({
     const validCount = this.data.validCount || 0;
     const durationText = this.data.durationText || '0:00';
     const finishedAt = (this.data.finishedAt || '').split(' ')[0] || '';
+    const bgPath = SHARE_CARD_BACKGROUNDS[this.data.shareCardBgIndex] || '';
 
     const ctx = wx.createCanvasContext('sharePoster', this);
 
-    ctx.setFillStyle(meta.bg);
-    ctx.fillRect(0, 0, width, height);
+    if (bgPath) {
+      ctx.drawImage(bgPath, 0, 0, width, height);
+    } else {
+      ctx.setFillStyle(meta.bg);
+      ctx.fillRect(0, 0, width, height);
+    }
 
-    ctx.setFillStyle(ringColor);
-    ctx.fillRect(0, 0, width, 120);
+    if (!bgPath) {
+      ctx.setFillStyle(ringColor);
+      ctx.fillRect(0, 0, width, 120);
+    }
 
     ctx.setFillStyle('rgba(255,255,255,0.18)');
     ctx.beginPath();
@@ -1189,7 +1234,15 @@ Page({
     ctx.arc(30, 100, 50, 0, 2 * Math.PI);
     ctx.fill();
 
-    this._fillRoundRect(ctx, 24, 28, width - 48, height - 56, 20, '#ffffff');
+    this._fillRoundRect(
+      ctx,
+      24,
+      28,
+      width - 48,
+      height - 56,
+      20,
+      bgPath ? 'rgba(255,255,255,0.68)' : '#ffffff',
+    );
 
     ctx.setFillStyle('#64748b');
     ctx.setFontSize(13);
