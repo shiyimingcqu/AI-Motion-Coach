@@ -1,275 +1,428 @@
 <template>
-  <div class="page admin-page">
+  <div class="page admin-page template-admin-page">
     <header class="page-header">
       <div>
-        <p class="eyebrow">Standard Videos</p>
-        <h1>标准视频管理</h1>
-        <p class="subtle">为用户提供可参考的标准动作视频，支持上传、启停和删除。</p>
+        <p class="eyebrow">Scoring Templates</p>
+        <h1>评分模板管理</h1>
+        <p class="subtle">为每个动作维护一个启用模板，小程序实时训练会按该模板计算单次动作相似度。</p>
       </div>
-      <button class="primary-button" type="button" @click="showUploadModal = true">+ 上传标准视频</button>
+      <button class="primary-button" type="button" @click="openUpload">上传模板视频</button>
     </header>
 
-    <!-- 上传弹窗 -->
-    <div v-if="showUploadModal" class="modal-overlay" @click.self="closeModal">
-      <div class="modal-card">
-        <h3 class="modal-title">上传标准视频</h3>
-        <div class="modal-form">
-          <label>
-            <span>标题 <em>*</em></span>
-            <input v-model="form.title" type="text" placeholder="如：深蹲标准正面示范" />
-          </label>
-          <label>
-            <span>动作</span>
-            <select v-model="form.exercise">
-              <option value="squat">深蹲</option>
-              <option value="push_up">俯卧撑</option>
-              <option value="plank">平板支撑</option>
-              <option value="lunge">弓步蹲</option>
-              <option value="jumping_jack">开合跳</option>
-              <option value="burpee">波比跳</option>
-              <option value="high_knees">高抬腿</option>
-            </select>
-          </label>
-          <label>
-            <span>视角</span>
-            <select v-model="form.camera_view">
-              <option value="front">正面</option>
-              <option value="side">侧面</option>
-            </select>
-          </label>
-          <label>
-            <span>描述（可选）</span>
-            <textarea v-model="form.description" rows="3" placeholder="简要说明这个标准视频的要点..."></textarea>
-          </label>
-          <label class="file-label">
-            <span>视频文件 <em>*</em></span>
-            <div class="file-drop" @click="fileInput?.click()">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
-              <span>{{ selectedFile ? selectedFile.name : '点击选择视频文件' }}</span>
-            </div>
-            <input ref="fileInput" type="file" accept="video/*" style="display:none" @change="onFileChange" />
-          </label>
-        </div>
-        <div class="modal-actions">
-          <button class="secondary-button" @click="closeModal" :disabled="uploading">取消</button>
-          <button class="primary-button" @click="submitUpload" :disabled="uploading || !form.title || !selectedFile">
-            {{ uploading ? '上传中...' : '确认上传' }}
-          </button>
-        </div>
-        <p v-if="!uploading && (!form.title || !selectedFile)" class="form-hint">
-          请先{{ !form.title ? '填写标题' : '' }}{{ !form.title && !selectedFile ? '并' : '' }}{{ !selectedFile ? '选择视频文件' : '' }}后再上传
-        </p>
-        <p v-if="uploadError" class="form-error">{{ uploadError }}</p>
+    <section class="template-toolbar panel">
+      <label>
+        <span>动作</span>
+        <select v-model="selectedExercise" @change="loadTemplates">
+          <option :value="ALL_EXERCISES">全部动作</option>
+          <option v-for="exercise in exercises" :key="exercise.key" :value="exercise.key">
+            {{ exercise.name }}
+          </option>
+        </select>
+      </label>
+      <div class="template-summary">
+        <strong>{{ summaryTitle }}</strong>
+        <span>{{ summaryDescription }}</span>
       </div>
-    </div>
+    </section>
 
-    <!-- 视频列表 -->
     <section class="admin-table panel">
       <div v-if="loading" class="admin-empty">加载中...</div>
-      <template v-else-if="videos.length">
-        <div class="admin-table-head admin-refvideo-grid">
-          <span>标题</span>
+      <template v-else-if="templates.length">
+        <div class="admin-table-head admin-template-grid">
+          <span>模板</span>
           <span>动作</span>
+          <span>来源</span>
           <span>视角</span>
-          <span>上传时间</span>
+          <span>帧数</span>
           <span>状态</span>
           <span>操作</span>
         </div>
-        <div v-for="v in videos" :key="v.id" class="admin-table-row admin-refvideo-grid">
+        <div v-for="template in templates" :key="`${template.action}:${template.template_id}`" class="admin-table-row admin-template-grid">
           <div>
-            <strong>{{ v.title }}</strong>
-            <small v-if="v.description" class="row-desc">{{ v.description }}</small>
+            <strong>{{ template.name }}</strong>
+            <small class="row-desc">{{ template.template_id }} · {{ template.version || "default" }}</small>
           </div>
-          <span>{{ exerciseName(v.exercise) }}</span>
-          <span>{{ v.camera_view === 'front' ? '正面' : '侧面' }}</span>
-          <span>{{ formatDate(v.created_at) }}</span>
-          <span class="status-pill" :class="v.is_active ? 'good' : 'idle'">
-            {{ v.is_active ? '启用' : '停用' }}
+          <span>{{ exerciseName(template.action) }}</span>
+          <span>{{ sourceName(template.source) }}</span>
+          <span>{{ viewName(template.view) }}</span>
+          <span>{{ template.valid_frames || 0 }}</span>
+          <span class="status-pill" :class="template.is_enabled ? 'good' : 'idle'">
+            {{ template.is_enabled ? "已启用" : "未启用" }}
           </span>
           <div class="admin-row-actions">
-            <button class="text-button" @click="toggleStatus(v)">{{ v.is_active ? '停用' : '启用' }}</button>
-            <button class="text-button danger" @click="deleteVideo(v)">删除</button>
+            <button
+              v-if="template.is_enabled"
+              class="text-button danger"
+              type="button"
+              @click="disableTemplate(template)"
+            >
+              取消启用
+            </button>
+            <button
+              v-else
+              class="text-button"
+              type="button"
+              @click="enableTemplate(template)"
+            >
+              启用
+            </button>
           </div>
         </div>
       </template>
-      <div v-else class="admin-empty">暂无标准视频，点击右上角上传</div>
+      <div v-else class="admin-empty">当前动作还没有评分模板，请上传一段完整标准动作视频。</div>
     </section>
+
+    <div v-if="showUploadModal" class="modal-overlay" @click.self="closeUpload">
+      <div class="modal-card">
+        <h3 class="modal-title">上传评分模板视频</h3>
+        <div class="modal-form">
+          <label>
+            <span>动作</span>
+            <select v-model="uploadForm.exercise">
+              <option v-for="exercise in exercises" :key="exercise.key" :value="exercise.key">
+                {{ exercise.name }}
+              </option>
+            </select>
+          </label>
+          <label>
+            <span>模板名称</span>
+            <input v-model="uploadForm.name" type="text" placeholder="例如：深蹲侧面标准模板" />
+          </label>
+          <label>
+            <span>视角</span>
+            <select v-model="uploadForm.view">
+              <option value="side">侧面</option>
+              <option value="front">正面</option>
+              <option value="diagonal">斜侧</option>
+            </select>
+          </label>
+          <label>
+            <span>版本</span>
+            <input v-model="uploadForm.version" type="text" placeholder="v1" />
+          </label>
+          <label class="file-label">
+            <span>视频文件</span>
+            <div class="file-drop" @click="fileInput?.click()">
+              <span>{{ selectedFile ? selectedFile.name : "点击选择视频文件" }}</span>
+            </div>
+            <input ref="fileInput" type="file" accept="video/*" hidden @change="onFileChange" />
+          </label>
+        </div>
+        <div class="modal-actions">
+          <button class="secondary-button" type="button" :disabled="uploading" @click="closeUpload">取消</button>
+          <button class="primary-button" type="button" :disabled="uploading || !selectedFile" @click="submitUpload">
+            {{ uploading ? "提取模板中..." : "上传并生成模板" }}
+          </button>
+        </div>
+        <p v-if="uploadError" class="form-error">{{ uploadError }}</p>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
-import { apiGet, apiDelete, apiPatch, apiUpload } from "@/api/client";
+import { apiDelete, apiGet, apiPost, apiUpload } from "@/api/client";
+import { getSimpleExercises, type ExerciseLibItem } from "@/api/exercises";
 
-interface RefVideo {
-  id: number;
-  title: string;
-  exercise: string;
-  camera_view: string;
-  description?: string;
-  file_uri: string;
-  is_active: boolean;
-  created_at: string;
-}
+type TemplateItem = {
+  template_id: string;
+  action: string;
+  name: string;
+  view: string;
+  version?: string;
+  valid_frames?: number;
+  source: string;
+  is_enabled?: boolean;
+};
 
-const videos = ref<RefVideo[]>([]);
-const loading = ref(true);
+const fallbackExercises: ExerciseLibItem[] = [
+  { key: "squat", name: "深蹲", description: "", supported_metrics: [] },
+  { key: "push_up", name: "俯卧撑", description: "", supported_metrics: [] },
+  { key: "plank", name: "平板支撑", description: "", supported_metrics: [] },
+  { key: "lunge", name: "弓步蹲", description: "", supported_metrics: [] },
+  { key: "jumping_jack", name: "开合跳", description: "", supported_metrics: [] },
+  { key: "burpee", name: "波比跳", description: "", supported_metrics: [] },
+  { key: "high_knees", name: "高抬腿", description: "", supported_metrics: [] },
+];
+
+const route = useRoute();
+const ALL_EXERCISES = "__all__";
+const exercises = ref<ExerciseLibItem[]>(fallbackExercises);
+const selectedExercise = ref(typeof route.query.exercise === "string" ? route.query.exercise : "squat");
+const templates = ref<TemplateItem[]>([]);
+const loading = ref(false);
 const showUploadModal = ref(false);
 const uploading = ref(false);
 const uploadError = ref("");
-const fileInput = ref<HTMLInputElement | null>(null);
 const selectedFile = ref<File | null>(null);
+const fileInput = ref<HTMLInputElement | null>(null);
 
-const route = useRoute();
-
-const form = ref({
-  title: "",
-  exercise: "squat",
-  camera_view: "front",
-  description: "",
+const uploadForm = ref({
+  exercise: selectedExercise.value,
+  name: "",
+  view: "side",
+  version: "v1",
 });
 
-async function loadVideos() {
+const activeTemplate = computed(() => templates.value.find((template) => template.is_enabled));
+const enabledTemplates = computed(() => templates.value.filter((template) => template.is_enabled));
+const summaryTitle = computed(() => {
+  if (selectedExercise.value === ALL_EXERCISES) {
+    return `全部动作模板：${templates.value.length} 个`;
+  }
+  return activeTemplate.value ? activeTemplate.value.name : "未启用模板";
+});
+const summaryDescription = computed(() => {
+  if (selectedExercise.value === ALL_EXERCISES) {
+    return `已启用 ${enabledTemplates.value.length} 个动作模板，未启用动作将继续使用规则评分兜底`;
+  }
+  return activeTemplate.value
+    ? `当前标准：${activeTemplate.value.template_id}`
+    : "未启用时将继续使用规则评分兜底";
+});
+
+async function loadExercises() {
+  try {
+    const response = await getSimpleExercises();
+    if (response.items?.length) {
+      exercises.value = response.items;
+    }
+  } catch {
+    exercises.value = fallbackExercises;
+  }
+}
+
+async function loadTemplates() {
   loading.value = true;
   try {
-    const data = await apiGet<{ items: RefVideo[] }>("/reference-videos/all");
-    videos.value = data.items || [];
-  } catch {
-    videos.value = [];
+    if (selectedExercise.value === ALL_EXERCISES) {
+      const responses = await Promise.all(
+        exercises.value.map((exercise) =>
+          apiGet<{ items: TemplateItem[] }>(`/exercises/${exercise.key}/templates`)
+        )
+      );
+      templates.value = responses.flatMap((response) => response.items || []);
+    } else {
+      const response = await apiGet<{ items: TemplateItem[] }>(`/exercises/${selectedExercise.value}/templates`);
+      templates.value = response.items || [];
+    }
+  } catch (err: any) {
+    templates.value = [];
+    uploadError.value = err?.message || "模板列表加载失败";
   } finally {
     loading.value = false;
   }
 }
 
-function onFileChange(e: Event) {
-  const input = e.target as HTMLInputElement;
-  selectedFile.value = input.files?.[0] ?? null;
+function openUpload() {
+  uploadError.value = "";
+  uploadForm.value.exercise = selectedExercise.value === ALL_EXERCISES
+    ? exercises.value[0]?.key || "squat"
+    : selectedExercise.value;
+  showUploadModal.value = true;
 }
 
-function closeModal() {
+function closeUpload() {
   showUploadModal.value = false;
   uploading.value = false;
   uploadError.value = "";
   selectedFile.value = null;
   if (fileInput.value) fileInput.value.value = "";
-  form.value = { title: "", exercise: "squat", camera_view: "front", description: "" };
+}
+
+function onFileChange(event: Event) {
+  const input = event.target as HTMLInputElement;
+  selectedFile.value = input.files?.[0] ?? null;
 }
 
 async function submitUpload() {
-  if (!form.value.title || !selectedFile.value) return;
+  if (!selectedFile.value) return;
   uploading.value = true;
   uploadError.value = "";
   try {
+    const shouldReturnToAll = selectedExercise.value === ALL_EXERCISES;
     const fd = new FormData();
-    fd.append("title", form.value.title);
-    fd.append("exercise", form.value.exercise);
-    fd.append("camera_view", form.value.camera_view);
-    fd.append("description", form.value.description);
     fd.append("file", selectedFile.value);
-    await apiUpload("/reference-videos", fd);
-    closeModal();
-    await loadVideos();
+    fd.append("name", uploadForm.value.name || `${exerciseName(uploadForm.value.exercise)}评分模板`);
+    fd.append("view", uploadForm.value.view);
+    fd.append("version", uploadForm.value.version || "v1");
+    await apiUpload(`/exercises/${uploadForm.value.exercise}/templates/from-video`, fd);
+    selectedExercise.value = shouldReturnToAll ? ALL_EXERCISES : uploadForm.value.exercise;
+    closeUpload();
+    await loadTemplates();
   } catch (err: any) {
-    uploadError.value = err?.message || "上传失败，请重试";
+    uploadError.value = err?.message || "上传失败，请检查视频是否能提取到有效关键点";
   } finally {
     uploading.value = false;
   }
 }
 
-async function toggleStatus(v: RefVideo) {
-  try {
-    await apiPatch(`/reference-videos/${v.id}`, {});
-    await loadVideos();
-  } catch (err: any) {
-    alert(err?.message || "操作失败，请检查后端是否正常");
-  }
+async function enableTemplate(template: TemplateItem) {
+  await apiPost("/admin/templates/active", {
+    action: template.action,
+    template_id: template.template_id,
+  });
+  await loadTemplates();
 }
 
-async function deleteVideo(v: RefVideo) {
-  if (!confirm(`确定要删除《${v.title}》吗？此操作不可撤销。`)) return;
-  try {
-    await apiDelete(`/reference-videos/${v.id}`);
-    await loadVideos();
-  } catch {}
+async function disableTemplate(template: TemplateItem) {
+  await apiDelete(`/admin/templates/active/${template.action}`);
+  await loadTemplates();
 }
 
 function exerciseName(key: string): string {
-  const map: Record<string, string> = {
-    squat: "深蹲", push_up: "俯卧撑", plank: "平板支撑", lunge: "弓步蹲",
-    jumping_jack: "开合跳", burpee: "波比跳", high_knees: "高抬腿",
-    mountain_climber: "登山跑", pull_up: "引体向上", dumbbell_curl: "哑铃弯举",
-  };
-  return map[key] || key;
+  return exercises.value.find((exercise) => exercise.key === key)?.name || key;
 }
 
-function formatDate(iso: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function sourceName(source: string): string {
+  return source === "builtin" ? "内置" : "上传";
 }
 
-onMounted(() => {
-  loadVideos();
-  // 如果从动作管理页跳转过来，自动打开上传弹窗并预选动作
-  const ex = route.query.exercise;
-  if (ex && typeof ex === "string") {
-    form.value.exercise = ex;
-    showUploadModal.value = true;
+function viewName(view: string): string {
+  const map: Record<string, string> = { side: "侧面", front: "正面", diagonal: "斜侧", default: "默认" };
+  return map[view] || view;
+}
+
+onMounted(async () => {
+  await loadExercises();
+  if (selectedExercise.value !== ALL_EXERCISES && !exercises.value.some((exercise) => exercise.key === selectedExercise.value)) {
+    selectedExercise.value = exercises.value[0]?.key || "squat";
+  }
+  await loadTemplates();
+  if (route.query.exercise) {
+    openUpload();
   }
 });
 </script>
 
 <style scoped>
-.admin-refvideo-grid {
+.template-admin-page {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1.2fr 80px 130px;
+  gap: 18px;
+}
+
+.template-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) 1fr;
+  gap: 18px;
+  align-items: end;
+  padding: 18px;
+}
+
+.template-toolbar label,
+.modal-form label {
+  display: grid;
+  gap: 8px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.template-toolbar select,
+.modal-form input,
+.modal-form select {
+  min-height: 40px;
+  border: 1px solid #d7deea;
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #fff;
+  color: #111827;
+  outline: none;
+}
+
+.template-summary {
+  display: grid;
+  gap: 4px;
+  color: #64748b;
+}
+
+.template-summary strong {
+  color: #0f172a;
+}
+
+.admin-template-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.7fr) 0.8fr 0.7fr 0.7fr 0.6fr 0.7fr 1fr;
   align-items: center;
   gap: 0 12px;
 }
+
 .row-desc {
   display: block;
+  margin-top: 3px;
+  color: #64748b;
   font-size: 12px;
-  color: var(--text-muted, #888);
-  margin-top: 2px;
 }
+
 .admin-empty {
-  padding: 40px;
+  padding: 42px;
   text-align: center;
-  color: var(--text-muted, #aaa);
+  color: #64748b;
 }
-/* Modal */
+
 .modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
-  display: flex; align-items: center; justify-content: center; z-index: 999;
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.42);
+  padding: 20px;
 }
+
 .modal-card {
-  background: #fff; border-radius: 16px; padding: 28px 32px; width: 480px; max-width: 95vw;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+  width: min(520px, 100%);
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
 }
-.modal-title { font-size: 18px; font-weight: 700; margin-bottom: 20px; }
-.modal-form { display: flex; flex-direction: column; gap: 14px; }
-.modal-form label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: #444; }
-.modal-form label em { color: #ef4444; font-style: normal; }
-.modal-form input, .modal-form select, .modal-form textarea {
-  border: 1px solid #d1d5db; border-radius: 8px; padding: 8px 12px;
-  font-size: 14px; color: #111; background: #fff; outline: none;
-  transition: border 0.2s;
+
+.modal-title {
+  margin: 0 0 18px;
+  font-size: 18px;
+  color: #0f172a;
 }
-.modal-form input:focus, .modal-form select:focus, .modal-form textarea:focus {
-  border-color: #3b82f6;
+
+.modal-form {
+  display: grid;
+  gap: 14px;
 }
+
 .file-drop {
-  display: flex; align-items: center; gap: 10px;
-  border: 1.5px dashed #c8d0da; border-radius: 8px; padding: 14px 16px;
-  cursor: pointer; background: #f9fafb; transition: border-color 0.2s;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  border: 1px dashed #9fb0c7;
+  border-radius: 8px;
+  padding: 0 14px;
+  background: #f8fafc;
+  cursor: pointer;
 }
-.file-drop:hover { border-color: #3b82f6; }
-.file-drop span { font-size: 13px; color: #555; }
-.modal-actions { display: flex; gap: 12px; justify-content: flex-end; margin-top: 20px; }
-.form-error { color: #ef4444; font-size: 13px; margin-top: 8px; }
-.form-hint { color: #f59e0b; font-size: 13px; margin-top: 8px; text-align: right; }
-.danger { color: #ef4444 !important; }
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.form-error {
+  margin: 12px 0 0;
+  color: #dc2626;
+  font-size: 13px;
+}
+
+.danger {
+  color: #dc2626 !important;
+}
+
+@media (max-width: 1000px) {
+  .template-toolbar,
+  .admin-template-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
 </style>

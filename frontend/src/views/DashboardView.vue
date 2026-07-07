@@ -26,7 +26,7 @@
             <span class="summary-user">{{ userName }} · {{ selectedReplayExerciseName }}</span>
             <span class="summary-score">评分 <strong>{{ displayScore }}</strong>/100</span>
             <span class="summary-change" :class="scoreChangeTone">对比 {{ scoreChangeText }}</span>
-            <button class="btn-outline" @click="router.push('/reference-videos')">
+            <button class="btn-outline" @click="openStandardTemplates">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="2" y="2" width="20" height="20" rx="3" /><polygon points="10,8 16,12 10,16" fill="currentColor" stroke="none" />
               </svg>
@@ -44,16 +44,33 @@
         <div ref="replayFullscreenRef" class="replay-fullscreen-shell">
         <div class="skel-area replay-stage">
           <div class="skel-grid"></div>
-          <PoseParticleViewer
-            v-model:progress="replayProgress"
-            :frames="selectedReplayFrames"
-            :playing="replayPlaying"
-            :speed="replaySpeed"
-            :background-image="selectedReplayBackgroundImage"
-            :highlight-instructions="currentHighlights"
-            @frame-change="onReplayFrameChange"
-            @body-part-clicked="on3DBodyPartClicked"
-          />
+          <div :class="['replay-viewer-zone', { comparing: comparisonActive }]">
+            <div class="replay-viewer-pane user-pane">
+              <span v-if="comparisonActive" class="compare-pane-label">用户数据</span>
+              <PoseParticleViewer
+                v-model:progress="replayProgress"
+                :frames="selectedReplayFrames"
+                :playing="replayPlaying"
+                :speed="replaySpeed"
+                :background-image="selectedReplayBackgroundImage"
+                :highlight-instructions="currentHighlights"
+                @frame-change="onReplayFrameChange"
+                @body-part-clicked="on3DBodyPartClicked"
+              />
+            </div>
+            <div v-if="comparisonActive" class="replay-viewer-pane standard-pane">
+              <span class="compare-pane-label">标准模板 · {{ activeComparisonTemplate?.name || '模板' }}</span>
+              <PoseParticleViewer
+                v-model:progress="replayProgress"
+                :frames="standardReplayFrames"
+                :playing="replayPlaying"
+                :speed="replaySpeed"
+                :background-image="selectedReplayBackgroundImage"
+                :highlight-instructions="[]"
+              />
+              <div v-if="standardReplayLoading" class="standard-loading">标准数字人加载中...</div>
+            </div>
+          </div>
           <div class="skel-stage-label">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10" />
@@ -93,6 +110,15 @@
             @click="showReplaySettings = !showReplaySettings"
           >
             <Settings :size="18" />
+          </button>
+
+          <button
+            v-if="comparisonActive"
+            class="replay-compare-close"
+            type="button"
+            @click="closeComparison"
+          >
+            关闭对比
           </button>
 
           <aside v-if="isReplayFullscreen && showReplaySettings" class="replay-settings-panel">
@@ -139,7 +165,7 @@
                 <span class="score-ring-grade good">{{ selectedReplayExerciseName }}</span>
                 <div class="score-ring-issues">
                   <span>回放帧数：</span>
-                  <strong>{{ selectedReplayFrames.length }} 帧</strong>
+                  <strong>{{ replayFrameCountText }}</strong>
                 </div>
               </div>
             </div>
@@ -164,7 +190,7 @@
           </div>
 
           <div class="play-controls">
-            <button class="play-btn-small" type="button" :disabled="selectedReplayFrames.length === 0" @click="replayPlaying = !replayPlaying">
+            <button class="play-btn-small" type="button" :disabled="!hasReplayPlaybackFrames" @click="replayPlaying = !replayPlaying">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                 <polygon v-if="!replayPlaying" points="8,5 19,12 8,19" />
                 <path v-else d="M7 5h4v14H7zM13 5h4v14h-4z" />
@@ -178,7 +204,7 @@
                 min="0"
                 max="1"
                 step="0.001"
-                :disabled="selectedReplayFrames.length === 0"
+                :disabled="!hasReplayPlaybackFrames"
               />
               <div class="tl-labels"><span>{{ replayCurrentTime }}</span><span>{{ replayDurationText }}</span></div>
             </div>
@@ -257,6 +283,7 @@
       </aside>
     </section>
 
+
     <section class="charts-row">
       <div class="chart-card">
         <header class="chart-card-header">
@@ -293,6 +320,46 @@
       <button class="ba-btn" @click="router.push('/export')">导出 PDF</button>
       <button class="ba-btn primary" @click="router.push('/export')">查看完整报告</button>
     </section>
+
+    <div v-if="showStandardTemplatesModal" class="standard-modal-overlay" @click.self="closeStandardTemplates">
+      <div class="standard-modal">
+        <header class="standard-modal-header">
+          <div>
+            <p class="eyebrow">Active Templates</p>
+            <h3>标准视频</h3>
+          </div>
+          <button type="button" class="standard-close" @click="closeStandardTemplates">×</button>
+        </header>
+        <div v-if="standardTemplatesLoading" class="standard-empty">正在加载已启用模板...</div>
+        <div v-else-if="standardTemplates.length === 0" class="standard-empty">
+          暂无已启用评分模板，请先在管理员端启用模板。
+        </div>
+        <div v-else class="standard-template-list">
+          <article v-for="template in standardTemplates" :key="template.template_id" class="standard-template-card">
+            <div>
+              <strong>{{ template.name }}</strong>
+              <span>{{ exerciseNameMap[template.action] || template.action }} · {{ viewName(template.view) }} · {{ template.valid_frames || 0 }} 帧</span>
+            </div>
+            <div class="standard-actions">
+              <button type="button" class="btn-outline" :disabled="!template.has_video" @click="openTemplateVideo(template)">
+                查看视频
+              </button>
+              <button type="button" class="btn-primary" :disabled="!template.has_pose_replay" @click="startTemplateComparison(template)">
+                3D 对比显示
+              </button>
+            </div>
+          </article>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="videoTemplate && templateVideoUrl" class="standard-modal-overlay" @click.self="closeTemplateVideo">
+      <div class="template-video-card">
+        <button type="button" class="standard-close video-close" @click="closeTemplateVideo">×</button>
+        <h3>{{ videoTemplate.name }}</h3>
+        <video class="template-video-player" :src="templateVideoUrl" controls autoplay loop playsinline />
+      </div>
+    </div>
   </div>
 </template>
 
@@ -362,6 +429,18 @@ type ReplayBackgroundOption = {
   image?: string;
 };
 
+type StandardTemplateItem = {
+  template_id: string;
+  action: string;
+  name: string;
+  view: string;
+  version?: string;
+  valid_frames?: number;
+  has_video: boolean;
+  has_pose_replay: boolean;
+  is_enabled?: boolean;
+};
+
 const router = useRouter();
 const route = useRoute();
 const authStore = useAuthStore();
@@ -397,6 +476,14 @@ const isReplayFullscreen = ref(false);
 const showReplaySettings = ref(false);
 const selectedReplayBackground = ref("none");
 const currentHighlights = ref<HighlightInstruction[]>([]);
+const showStandardTemplatesModal = ref(false);
+const standardTemplatesLoading = ref(false);
+const standardTemplates = ref<StandardTemplateItem[]>([]);
+const activeComparisonTemplate = ref<StandardTemplateItem | null>(null);
+const standardReplayFrames = ref<PoseReplayFrame[]>([]);
+const standardReplayLoading = ref(false);
+const videoTemplate = ref<StandardTemplateItem | null>(null);
+const templateVideoUrl = ref("");
 
 const replayBackgroundOptions: ReplayBackgroundOption[] = [
   { label: "默认", value: "none" },
@@ -656,12 +743,18 @@ const issueSummary = computed(() => {
 const exerciseNameMap: Record<string, string> = {
   squat: "深蹲",
   push_up: "俯卧撑",
+  pushup: "俯卧撑",
   jumping_jack: "开合跳",
   plank: "平板支撑",
   lunge: "弓步蹲",
   burpee: "波比跳",
   high_knees: "高抬腿",
   glute_bridge: "臀桥",
+  mountain_climber: "登山跑",
+  pull_up: "引体向上",
+  dumbbell_curl: "哑铃弯举",
+  dumbbell_press: "哑铃推举",
+  russian_twist: "俄罗斯转体",
 };
 
 const selectedReplayExerciseName = computed(() => {
@@ -671,6 +764,12 @@ const selectedReplayExerciseName = computed(() => {
 
 const selectedReplayScore = computed(() => {
   return selectedReplay.value ? Math.round(selectedReplay.value.average_score || 0) : scoreValueForRing.value;
+});
+const comparisonActive = computed(() => Boolean(activeComparisonTemplate.value && standardReplayFrames.value.length > 0));
+const hasReplayPlaybackFrames = computed(() => selectedReplayFrames.value.length > 0 || standardReplayFrames.value.length > 0);
+const replayFrameCountText = computed(() => {
+  if (!comparisonActive.value) return `${selectedReplayFrames.value.length} 帧`;
+  return `用户 ${selectedReplayFrames.value.length} / 标准 ${standardReplayFrames.value.length} 帧`;
 });
 
 const repFilters = computed<Array<{ rep_index: number }>>(() => {
@@ -775,13 +874,16 @@ function resolveRepFrameRange(repIndex: number) {
 }
 
 const replayDurationMs = computed(() => {
-  return Math.max(0, selectedReplayFrames.value[selectedReplayFrames.value.length - 1]?.timestamp_ms || 0);
+  const userDuration = selectedReplayFrames.value[selectedReplayFrames.value.length - 1]?.timestamp_ms || 0;
+  const standardDuration = standardReplayFrames.value[standardReplayFrames.value.length - 1]?.timestamp_ms || 0;
+  return Math.max(0, userDuration, standardDuration);
 });
 
 const replayCurrentTime = computed(() => formatReplayTime(replayProgress.value * replayDurationMs.value));
 const replayDurationText = computed(() => formatReplayTime(replayDurationMs.value));
 const replayStageLabel = computed(() => {
   if (replayLoadError.value) return replayLoadError.value;
+  if (comparisonActive.value) return `对比模式 · ${activeComparisonTemplate.value?.name || "标准模板"} · ${replayCurrentTime.value} / ${replayDurationText.value}`;
   if (!selectedReplaySessionId.value) return "请选择一次保存的运动";
   if (selectedReplayFrames.value.length === 0) return "该记录暂无 3D 回放数据";
   return `${selectedReplayExerciseName.value} · ${replayCurrentTime.value} / ${replayDurationText.value}`;
@@ -1067,6 +1169,97 @@ async function loadSelectedReplay() {
     console.warn("Replay load failed:", error);
     replayLoadError.value = "回放数据加载失败";
   }
+}
+
+function apiBaseUrl() {
+  return (import.meta.env.VITE_API_BASE ?? "/api").replace(/\/$/, "");
+}
+
+function authHeaders(): Record<string, string> {
+  return authStore.token ? { Authorization: `Bearer ${authStore.token}` } : {};
+}
+
+function viewName(view: string) {
+  const map: Record<string, string> = { side: "侧面", front: "正面", diagonal: "斜侧", default: "默认" };
+  return map[view] || view;
+}
+
+async function openStandardTemplates() {
+  showStandardTemplatesModal.value = true;
+  await loadStandardTemplates();
+}
+
+function closeStandardTemplates() {
+  showStandardTemplatesModal.value = false;
+}
+
+async function loadStandardTemplates() {
+  standardTemplatesLoading.value = true;
+  try {
+    const actions = Object.keys(exerciseNameMap);
+    const responses = await Promise.all(
+      actions.map((action) =>
+        apiGet<{ template: StandardTemplateItem | null }>(`/exercises/${action}/templates/active`)
+          .catch(() => ({ template: null }))
+      )
+    );
+    standardTemplates.value = responses
+      .map((response) => response.template)
+      .filter((template): template is StandardTemplateItem => Boolean(template));
+  } finally {
+    standardTemplatesLoading.value = false;
+  }
+}
+
+async function openTemplateVideo(template: StandardTemplateItem) {
+  if (!template.has_video) return;
+  closeTemplateVideo();
+  videoTemplate.value = template;
+  try {
+    const response = await fetch(`${apiBaseUrl()}/templates/${template.template_id}/video`, {
+      headers: authHeaders(),
+    });
+    if (!response.ok) throw new Error("template video fetch failed");
+    const blob = await response.blob();
+    templateVideoUrl.value = URL.createObjectURL(blob);
+  } catch (error) {
+    console.warn("Template video load failed:", error);
+    videoTemplate.value = null;
+    templateVideoUrl.value = "";
+  }
+}
+
+function closeTemplateVideo() {
+  if (templateVideoUrl.value.startsWith("blob:")) {
+    URL.revokeObjectURL(templateVideoUrl.value);
+  }
+  templateVideoUrl.value = "";
+  videoTemplate.value = null;
+}
+
+async function startTemplateComparison(template: StandardTemplateItem) {
+  if (!template.has_pose_replay) return;
+  standardReplayLoading.value = true;
+  activeComparisonTemplate.value = template;
+  showStandardTemplatesModal.value = false;
+  replayProgress.value = 0;
+  try {
+    const response = await apiGet<{ has_replay: boolean; frames: PoseReplayFrame[] }>(`/templates/${template.template_id}/replay`);
+    standardReplayFrames.value = response.has_replay ? normalizeReplayFrames(response.frames || []) : [];
+    replayPlaying.value = standardReplayFrames.value.length > 0 || selectedReplayFrames.value.length > 0;
+  } catch (error) {
+    console.warn("Template replay load failed:", error);
+    standardReplayFrames.value = [];
+    activeComparisonTemplate.value = null;
+  } finally {
+    standardReplayLoading.value = false;
+  }
+}
+
+function closeComparison() {
+  activeComparisonTemplate.value = null;
+  standardReplayFrames.value = [];
+  standardReplayLoading.value = false;
 }
 
 function encodeFilePath(path: string) {
@@ -1368,6 +1561,7 @@ onBeforeUnmount(() => {
   if (latestVideoUrl.value && latestVideoUrl.value.startsWith("blob:")) {
     URL.revokeObjectURL(latestVideoUrl.value);
   }
+  closeTemplateVideo();
 });
 </script>
 
@@ -1828,6 +2022,54 @@ onBeforeUnmount(() => {
     linear-gradient(180deg, #000 0%, #01040a 54%, #020710 100%);
 }
 
+.replay-viewer-zone {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+.replay-viewer-zone.comparing {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.replay-viewer-pane {
+  position: relative;
+  min-width: 0;
+  min-height: 100%;
+}
+
+.replay-viewer-zone.comparing .user-pane {
+  border-right: 1px solid rgba(96, 165, 250, 0.18);
+}
+
+.compare-pane-label {
+  position: absolute;
+  z-index: 6;
+  left: 14px;
+  bottom: 14px;
+  padding: 4px 10px;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  border-radius: 8px;
+  background: rgba(8, 13, 26, 0.72);
+  color: #dbeafe;
+  font-size: 12px;
+  font-weight: 800;
+  backdrop-filter: blur(10px);
+}
+
+.standard-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: grid;
+  place-items: center;
+  background: rgba(1, 4, 10, 0.46);
+  color: #dbeafe;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .replay-stage .skel-layout {
   display: none;
 }
@@ -1991,6 +2233,21 @@ onBeforeUnmount(() => {
   border-color: rgba(147, 197, 253, 0.48);
   background: rgba(15, 23, 42, 0.9);
   color: #ffffff;
+}
+
+.replay-compare-close {
+  position: absolute;
+  right: 64px;
+  bottom: 16px;
+  z-index: 8;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  border-radius: 8px;
+  background: rgba(8, 13, 26, 0.72);
+  color: #dbeafe;
+  font-weight: 800;
+  backdrop-filter: blur(10px);
 }
 
 .replay-fullscreen-shell:fullscreen .replay-fullscreen-button {
@@ -2623,6 +2880,124 @@ onBeforeUnmount(() => {
   font-size: 12px;
   line-height: 1.5;
   color: #475569;
+}
+
+.standard-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(15, 23, 42, 0.46);
+  backdrop-filter: blur(8px);
+}
+
+.standard-modal {
+  width: min(760px, 100%);
+  max-height: min(680px, calc(100vh - 44px));
+  overflow: auto;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.26);
+}
+
+.standard-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px 20px 12px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.standard-modal-header h3,
+.template-video-card h3 {
+  margin: 0;
+  color: #0f172a;
+}
+
+.standard-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #dbe4ef;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.standard-empty {
+  padding: 34px 20px;
+  color: #64748b;
+  text-align: center;
+}
+
+.standard-template-list {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.standard-template-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.standard-template-card strong,
+.standard-template-card span {
+  display: block;
+}
+
+.standard-template-card span {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.standard-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.standard-actions button:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.template-video-card {
+  position: relative;
+  width: min(880px, 100%);
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.26);
+}
+
+.video-close {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+}
+
+.template-video-player {
+  width: 100%;
+  max-height: min(66vh, 620px);
+  border-radius: 8px;
+  background: #020617;
 }
 
 .right-col .section-card:last-child > div:last-child {

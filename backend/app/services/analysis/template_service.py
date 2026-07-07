@@ -134,11 +134,13 @@ class TemplateService:
             if active_id:
                 template_id = active_id
 
+        selected_template_id = template_id
         template = (
             self.load_template_by_id(template_id)
             if template_id
             else self.load_template(action)
         )
+        selected_template_id = selected_template_id or template.get("_template_id")
         weights = template["weights"]
         tmpl_seq = template["template_sequence"]
         thresholds = template["thresholds"]
@@ -184,6 +186,8 @@ class TemplateService:
         return {
             "score": total_score,
             "level": level,
+            "template_id": selected_template_id,
+            "fair_threshold": thresholds.get("fair", 60),
             "detail_scores": detail_scores,
             "differences": differences,
         }
