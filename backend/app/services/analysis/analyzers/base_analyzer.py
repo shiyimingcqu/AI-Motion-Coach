@@ -5,6 +5,7 @@ import time
 
 from app.services.analysis.angle_calculator import calculate_angle
 from app.services.analysis.models import NormalizedKeypoint
+from app.services.analysis.template_service import TemplateService, get_active_template_id
 
 Keypoints = dict[str, NormalizedKeypoint]
 
@@ -49,6 +50,7 @@ class BaseExerciseAnalyzer:
         self._rep_standing_frame: int = 0
         self.rep_segments: list[dict] = []
         self.rep_nodes: list[dict] = []
+        self.template_service = TemplateService()
 
     def reset(self):
         """Reset all internal state for a new training session."""
@@ -109,6 +111,31 @@ class BaseExerciseAnalyzer:
         """Score a completed rep using summarized features."""
         return self.score_frame(summary, self.rep_summary_phase())
 
+    def score_rep_by_active_template(self, samples: list[dict[str, float]]) -> dict | None:
+        """Return a template score for one completed rep when an active template exists."""
+        active_template_id = get_active_template_id(self.exercise_type)
+        if not active_template_id or not samples:
+            return None
+        try:
+            template_result = self.template_service.score_by_template(
+                self.exercise_type,
+                samples,
+                active_template_id,
+            )
+        except (FileNotFoundError, ValueError):
+            return None
+        fair_threshold = float(template_result.get("fair_threshold", 60) or 60)
+        return {
+            "score": template_result.get("score", 0),
+            "score_source": "template",
+            "template_id": template_result.get("template_id") or active_template_id,
+            "template_detail_scores": template_result.get("detail_scores", {}),
+            "template_differences": template_result.get("differences", {}),
+            "template_level": template_result.get("level"),
+            "fair_threshold": fair_threshold,
+            "is_valid": float(template_result.get("score", 0) or 0) >= fair_threshold,
+        }
+
     def get_session_issue_counts(self) -> Counter[str]:
         return self.session_issue_counts
 
@@ -164,6 +191,8 @@ class BaseExerciseAnalyzer:
         frame_issues: list[str] = []
         frame_feedback: list[str] = []
         frame_score = score_result["score"]
+        score_source = "rule"
+        template_score_payload: dict | None = None
 
         # Rep segment tracking
         if phase == "standing":
@@ -189,7 +218,20 @@ class BaseExerciseAnalyzer:
                 "issues": [],
                 "feedback": [],
             }
-            self._last_down_was_valid = len(rep_result.get("issues", [])) == 0
+            template_score_payload = self.score_rep_by_active_template(self._rep_samples)
+            if template_score_payload is not None:
+                rep_result = {
+                    **rep_result,
+                    "score": template_score_payload["score"],
+                    "score_source": "template",
+                    "template_id": template_score_payload.get("template_id"),
+                    "template_detail_scores": template_score_payload.get("template_detail_scores", {}),
+                    "template_differences": template_score_payload.get("template_differences", {}),
+                }
+                self._last_down_was_valid = bool(template_score_payload.get("is_valid"))
+                score_source = "template"
+            else:
+                self._last_down_was_valid = len(rep_result.get("issues", [])) == 0
             frame_issues = rep_result.get("issues", [])
             frame_feedback = rep_result.get("feedback", [])
             frame_score = rep_result.get("score", frame_score)
@@ -252,6 +294,10 @@ class BaseExerciseAnalyzer:
             "valid_count": self.valid_count,
             "features": smoothed,
             "score": frame_score,
+            "score_source": score_source,
+            "template_id": template_score_payload.get("template_id") if template_score_payload else None,
+            "template_detail_scores": template_score_payload.get("template_detail_scores", {}) if template_score_payload else {},
+            "template_differences": template_score_payload.get("template_differences", {}) if template_score_payload else {},
             "issues": frame_issues,
             "feedback": frame_feedback,
             "detail_scores": score_result.get("detail_scores", {}),

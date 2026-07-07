@@ -73,6 +73,7 @@ class TemplateBuilderService:
     def build_from_video(
         self, video_path: str, action: str,
         view: str = "side", name: Optional[str] = None, version: str = "v1",
+        video_uri: str | None = None,
     ) -> dict:
         if action not in ANALYZER_CLASSES:
             raise ValueError(
@@ -90,16 +91,21 @@ class TemplateBuilderService:
             processed_frames=result["processed_frames"],
             valid_frames=result["valid_frames"],
             features=result["features"],
+            pose_replay_frames=result["pose_replay_frames"],
+            video_uri=video_uri,
         )
 
         template_path = self._save_template(template, action, view, version)
+        template_id = template_path.stem
 
         return {
-            "template_id": f"{action}_{view}_{version}",
+            "template_id": template_id,
             "name": template_name, "action": action,
             "view": view, "version": version,
             "processed_frames": result["processed_frames"],
             "valid_frames": result["valid_frames"],
+            "has_video": bool(video_uri),
+            "has_pose_replay": bool(result["pose_replay_frames"]),
             "template_path": str(template_path).replace("\\", "/"),
             "curves_count": {key: len(values) for key, values in template["template_sequence"].items()},
         }
@@ -117,6 +123,7 @@ class TemplateBuilderService:
         analyzer = get_analyzer(action)
         feature_keys = get_core_feature_keys(action)
         features = {feature_key: [] for feature_key in feature_keys}
+        pose_replay_frames: list[dict] = []
 
         processed_frames = 0
         valid_frames = 0
@@ -130,7 +137,7 @@ class TemplateBuilderService:
 
                 processed_frames += 1
                 timestamp_ms = int(frame_index * 1000 / fps)
-                keypoints = self._extract_keypoints_from_frame(frame, pose, timestamp_ms)
+                keypoints, replay_landmarks = self._extract_keypoints_from_frame(frame, pose, timestamp_ms)
                 frame_index += 1
 
                 if not keypoints:
@@ -146,40 +153,61 @@ class TemplateBuilderService:
 
                 for feature_key in feature_keys:
                     features[feature_key].append(metrics[feature_key])
+                if replay_landmarks:
+                    pose_replay_frames.append({
+                        "timestamp_ms": timestamp_ms,
+                        "landmarks": replay_landmarks,
+                    })
                 valid_frames += 1
         finally:
             capture.release()
 
-        return {"processed_frames": processed_frames, "valid_frames": valid_frames, "features": features}
+        return {
+            "processed_frames": processed_frames,
+            "valid_frames": valid_frames,
+            "features": features,
+            "pose_replay_frames": pose_replay_frames,
+        }
 
     @staticmethod
     def _extract_keypoints_from_frame(frame, pose, timestamp_ms: int) -> dict:
         if pose is None:
-            return {}
+            return {}, []
 
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         result = pose.detect_for_video(mp_image, timestamp_ms)
 
         if not result.pose_landmarks:
-            return {}
+            return {}, []
 
         landmarks = result.pose_landmarks[0]
         keypoints = {}
+        replay_landmarks = []
         for index, name in enumerate(_LANDMARK_NAMES):
             if index >= len(landmarks):
                 break
             lm = landmarks[index]
             keypoints[name] = NormalizedKeypoint(x=lm.x, y=lm.y, visibility=lm.visibility)
-        return keypoints
+            replay_landmarks.append({
+                "x": float(lm.x),
+                "y": float(lm.y),
+                "z": float(getattr(lm, "z", 0.0) or 0.0),
+                "visibility": float(getattr(lm, "visibility", 1.0) or 0.0),
+            })
+        return keypoints, replay_landmarks
 
     def _build_template(
         self, action: str, name: str, view: str, version: str,
         processed_frames: int, valid_frames: int, features: dict,
+        pose_replay_frames: list[dict] | None = None,
+        video_uri: str | None = None,
     ) -> dict:
         return {
             "action": action, "name": name, "view": view, "version": version,
             "source": {"type": "video", "processed_frames": processed_frames, "valid_frames": valid_frames},
+            "video_uri": video_uri,
+            "pose_replay_frames": pose_replay_frames or [],
             "weights": build_default_weights(action),
             "template_sequence": features,
             "thresholds": {"excellent": 90, "good": 75, "fair": 60},
@@ -212,6 +240,8 @@ class TemplateBuilderService:
                         "view": template.get("view") or "default",
                         "version": template.get("version"),
                         "valid_frames": template.get("source", {}).get("valid_frames", 0),
+                        "has_video": bool(template.get("video_uri") and Path(template.get("video_uri")).exists()),
+                        "has_pose_replay": bool(template.get("pose_replay_frames")),
                         "source": source,
                     })
             except Exception:
