@@ -83,7 +83,7 @@
             </div>
           </header>
 
-          <main class="content">
+          <main :class="['content', { 'dashboard-content': route.path === '/' }]">
             <RouterView />
           </main>
         </div>

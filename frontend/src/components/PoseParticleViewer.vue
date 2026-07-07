@@ -76,6 +76,11 @@ const BODY_BONES: BodyBone[] = [
   { start: 11, end: 12, radius: 0.12, particleCount: 320 },
   { start: 23, end: 24, radius: 0.13, particleCount: 320 },
   { start: -2, end: -2, radius: 0, particleCount: 1500 },
+  // Foot bones (ankle → heel → toe)
+  { start: 27, end: 29, radius: 0.06, particleCount: 140 },
+  { start: 29, end: 31, radius: 0.06, particleCount: 140 },
+  { start: 28, end: 30, radius: 0.06, particleCount: 140 },
+  { start: 30, end: 32, radius: 0.06, particleCount: 140 },
 ];
 
 const SKELETON_BONES: Array<[number, number]> = [
@@ -83,6 +88,8 @@ const SKELETON_BONES: Array<[number, number]> = [
   [11, 23], [12, 24], [23, 24],
   [23, 25], [25, 27], [24, 26], [26, 28],
   [27, 31], [28, 32],
+  [29, 31], [30, 32],   // foot forward: heel → toe
+  [27, 29], [28, 30],   // ankle → heel
 ];
 
 const RIB_COUNT = 6;
@@ -433,6 +440,14 @@ function updatePose(frame: PoseReplayFrame | null) {
   const skeletonGlowBuffer = lineGlowPositions;
   const points = frame.landmarks.map(convertLandmark);
 
+  // Normalize Z: center pelvis at z=0, no extra scaling (MediaPipe z is already in scene units)
+  const hipMidZ = getMidpointZ(points, frame.landmarks, 23, 24);
+  if (hipMidZ !== null) {
+    for (const p of points) {
+      if (p) p.z -= hipMidZ;
+    }
+  }
+
   // One Euro Filter — 静止时强平滑，快速运动时低延迟
   const now = performance.now();
   const dt = _replayPrevTime > 0 ? Math.min((now - _replayPrevTime) / 1000, 0.05) : 0.016;
@@ -532,6 +547,7 @@ function updatePose(frame: PoseReplayFrame | null) {
     else { writePoint(skeletonBuffer, offset, points[from]); writePoint(skeletonGlowBuffer, offset, points[from]); writePoint(skeletonBuffer, offset + 3, points[to]); writePoint(skeletonGlowBuffer, offset + 3, points[to]); }
   });
 
+  paintParticleColors();
   updateDepthParticleColors(bodyBuffer, points, frame.landmarks);
   applyHighlightToParticles();
   updateHighlightOverlay();
@@ -540,13 +556,19 @@ function updatePose(frame: PoseReplayFrame | null) {
 
 function convertLandmark(point: PoseReplayLandmark): THREE.Vector3 {
   const scale = 3.2;
-  return new THREE.Vector3((point.x - 0.5) * scale, -(point.y - 0.5) * scale - 5, point.z || 0);
+  return new THREE.Vector3((point.x - 0.5) * scale, -(point.y - 0.5) * scale - 5, (point.z || 0));
 }
 
 function getMidpoint(points: THREE.Vector3[], landmarks: PoseReplayLandmark[], idxA: number, idxB: number): THREE.Vector3 | null {
   const la = landmarks[idxA]; const lb = landmarks[idxB];
   if (!la || !lb || (la.visibility ?? 1) < 0.35 || (lb.visibility ?? 1) < 0.35) return null;
   return new THREE.Vector3().addVectors(points[idxA], points[idxB]).multiplyScalar(0.5);
+}
+
+function getMidpointZ(points: THREE.Vector3[], landmarks: PoseReplayLandmark[], idxA: number, idxB: number): number | null {
+  const la = landmarks[idxA]; const lb = landmarks[idxB];
+  if (!la || !lb || (la.visibility ?? 1) < 0.35 || (lb.visibility ?? 1) < 0.35) return null;
+  return (points[idxA].z + points[idxB].z) / 2;
 }
 
 function calculateParticlePosition(start: THREE.Vector3, end: THREE.Vector3, t: number, angle: number, radius: number) {
@@ -794,6 +816,7 @@ function setupClickDetection() {
 
 function onCanvasClick(event: MouseEvent) {
   if (!renderer || !camera || !hasFrames.value || !linePositions) return;
+  if (event.detail > 1) return;
   const rect = renderer.domElement.getBoundingClientRect();
   const clickX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
   const clickY = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -803,7 +826,7 @@ function onCanvasClick(event: MouseEvent) {
   const viewMatrix = camera.matrixWorldInverse;
   const mvp = projMatrix.multiply(viewMatrix);
 
-  let closestDist = 0.08; // threshold in NDC
+  let closestDist = 0.025; // threshold in NDC
   let closestBone: [number, number] | null = null;
 
   for (let i = 0; i < SKELETON_BONES.length; i++) {
@@ -849,7 +872,9 @@ watch(() => props.progress, (value) => { if (!props.playing) { playbackMs = valu
 watch(() => props.backgroundImage, (imageUrl) => { updateSceneBackground(imageUrl || ""); });
 watch(() => props.highlightInstructions, () => {
   if (hasFrames.value) {
-    applyHighlightToParticles();
+    updatePose(getFrameAt(playbackMs));
+  } else {
+    paintParticleColors();
     updateHighlightOverlay();
   }
 }, { deep: true });

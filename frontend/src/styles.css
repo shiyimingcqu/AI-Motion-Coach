@@ -357,6 +357,10 @@ button {
   min-width: 0;
 }
 
+.content.dashboard-content {
+  padding: 4px 28px 20px;
+}
+
 .standalone-content {
   min-height: 100vh;
   padding: 28px;
