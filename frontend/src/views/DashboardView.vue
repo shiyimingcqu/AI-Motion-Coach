@@ -257,10 +257,6 @@
       </aside>
     </section>
 
-<<<<<<< HEAD
-  </div>
-</template>
-=======
     <section class="charts-row">
       <div class="chart-card">
         <header class="chart-card-header">
@@ -299,7 +295,6 @@
     </section>
   </div>
 </template>
->>>>>>> origin/main
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";

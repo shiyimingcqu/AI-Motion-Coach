@@ -1,6 +1,9 @@
 <template>
   <div class="settings-page">
     <header class="section-page-header">
+      <button class="back-button" type="button" @click="$router.back()">
+        <ArrowLeft :size="20" />
+      </button>
       <div>
         <h1>{{ $t("settings.title") }}</h1>
         <p>{{ $t("settings.description") }}</p>
@@ -102,6 +105,7 @@
             {{ $t("settings.data.autoBackup") }}
           </label>
         </article>
+
       </div>
 
       <aside class="settings-side">
@@ -111,6 +115,16 @@
           <select v-model="currentLocale" @change="switchLanguage">
             <option value="en-US">{{ $t("common.english") }}</option>
             <option value="zh-CN">{{ $t("common.chinese") }}</option>
+          </select>
+        </article>
+
+        <!-- 外观设置 -->
+        <article class="settings-side-card orange-side-card">
+          <span class="side-icon orange-solid"><Sun :size="26" /></span>
+          <h2>主题模式</h2>
+          <select :value="settings.theme" @change="settings.theme = $event.target.value">
+            <option value="light">浅色模式</option>
+            <option value="dark">深色模式</option>
           </select>
         </article>
 
@@ -137,14 +151,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { Bell, Database, Globe2, Lock, Shield, User } from "lucide-vue-next";
+import { ArrowLeft, Bell, Database, Globe2, Lock, Shield, Sun, User } from "lucide-vue-next";
 import StateDisplay from "@/components/StateDisplay.vue";
 import { useAuthStore } from "@/stores/auth";
+import { useSettingsStore } from "@/stores/settings";
+import { storeToRefs } from "pinia";
 import { getPersonalReport } from "@/api/reports";
 import { updateProfile, changePassword as apiChangePassword } from "@/api/users";
 
 const { t, locale } = useI18n();
 const authStore = useAuthStore();
+const settingsStore = useSettingsStore();
+const { settings } = storeToRefs(settingsStore);
 
 const notificationKeys = ["trainingReminders", "achievementAlerts", "errorNotifications", "weeklyReports"];
 
