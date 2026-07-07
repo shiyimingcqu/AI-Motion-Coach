@@ -320,6 +320,127 @@ function isVisible(landmark?: NormalizedLandmark) {
   return Boolean(landmark && (landmark.visibility ?? 1) >= 0.45);
 }
 
+export type PoseHighlightPart = {
+  landmark_indices: number[];
+  severity?: string;
+};
+
+function partColor(severity?: string) {
+  if (severity === "success") {
+    return {
+      stroke: "rgba(52, 211, 153, 0.95)",
+      fill: "#34d399",
+      ring: "#a7f3d0",
+      glow: "rgba(52, 211, 153, 0.45)",
+      heat: "#10b981",
+    };
+  }
+  return {
+    stroke: "rgba(249, 115, 22, 0.95)",
+    fill: "#f97316",
+    ring: "#fed7aa",
+    glow: "rgba(239, 68, 68, 0.42)",
+    heat: "#ef4444",
+  };
+}
+
+function drawHeatmapGlow(
+  context: CanvasRenderingContext2D,
+  mapped: Array<{ x: number; y: number }>,
+  highlightMap: Map<number, string>,
+) {
+  for (const [index, severity] of highlightMap.entries()) {
+    const point = mapped[index];
+    if (!point) continue;
+    const colors = partColor(severity);
+    const radius = severity === "success" ? 26 : 30;
+    const glow = context.createRadialGradient(point.x, point.y, 2, point.x, point.y, radius);
+    glow.addColorStop(0, colors.glow);
+    glow.addColorStop(1, "rgba(0,0,0,0)");
+    context.fillStyle = glow;
+    context.beginPath();
+    context.arc(point.x, point.y, radius, 0, Math.PI * 2);
+    context.fill();
+  }
+}
+
+export function drawPoseWithErrorHighlights(
+  canvas: HTMLCanvasElement,
+  landmarks: PoseReplayLandmark[] | null,
+  errorParts: PoseHighlightPart[] = [],
+) {
+  const context = canvas.getContext("2d");
+  if (!context) return;
+
+  syncCanvasSize(canvas);
+  context.clearRect(0, 0, canvas.width, canvas.height);
+
+  const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
+  gradient.addColorStop(0, "#0f172a");
+  gradient.addColorStop(1, "#1e293b");
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (!landmarks || landmarks.length < 11) {
+    drawPoseMessage(canvas, context, "暂无姿态画面，完成实时检测或视频分析后将自动截取");
+    return;
+  }
+
+  const highlightMap = new Map<number, string>();
+  for (const part of errorParts) {
+    for (const index of part.landmark_indices) {
+      highlightMap.set(index, part.severity || "error");
+    }
+  }
+
+  const displayRect = { x: 0, y: 0, width: canvas.clientWidth || canvas.width, height: canvas.clientHeight || canvas.height };
+  const mapped = landmarks.map((landmark) => mapLandmarkToCanvas(landmark as NormalizedLandmark, displayRect));
+
+  if (highlightMap.size > 0) {
+    drawHeatmapGlow(context, mapped, highlightMap);
+  }
+
+  context.lineCap = "round";
+  context.lineJoin = "round";
+
+  for (const [from, to] of BODY_CONNECTIONS) {
+    const start = landmarks[from];
+    const end = landmarks[to];
+    if (!start || !end || (start.visibility ?? 1) < 0.35 || (end.visibility ?? 1) < 0.35) continue;
+
+    const startPoint = mapped[from];
+    const endPoint = mapped[to];
+    const fromSeverity = highlightMap.get(from);
+    const toSeverity = highlightMap.get(to);
+    const isHighlighted = Boolean(fromSeverity || toSeverity);
+    const severity = fromSeverity === "success" || toSeverity === "success" ? "success" : "error";
+    const colors = isHighlighted ? partColor(severity) : null;
+
+    context.beginPath();
+    context.moveTo(startPoint.x, startPoint.y);
+    context.lineTo(endPoint.x, endPoint.y);
+    context.strokeStyle = colors ? colors.stroke : "rgba(100, 116, 139, 0.5)";
+    context.lineWidth = isHighlighted ? 7 : 3.5;
+    context.stroke();
+  }
+
+  landmarks.forEach((landmark, index) => {
+    if ((landmark.visibility ?? 1) < 0.35) return;
+    const { x, y } = mapped[index];
+    const severity = highlightMap.get(index);
+    const colors = severity ? partColor(severity) : null;
+    context.beginPath();
+    context.arc(x, y, severity ? 9 : 4.5, 0, Math.PI * 2);
+    context.fillStyle = colors ? colors.fill : "#64748b";
+    context.fill();
+    context.strokeStyle = colors ? colors.ring : "#334155";
+    context.lineWidth = severity ? 2.5 : 1.5;
+    context.stroke();
+  });
+
+  return mapped;
+}
+
 export function drawPoseFromKeypoints(
   canvas: HTMLCanvasElement,
   keypoints: BackendKeypoints | null,

@@ -107,6 +107,64 @@ export interface ReportQuery {
   exercise?: string;
 }
 
+export interface ErrorFrameBodyPart {
+  id: string;
+  label: string;
+  landmark_indices: number[];
+  evaluation: string;
+  severity: string;
+}
+
+export interface SessionPoseSlot {
+  session_id: string;
+  exercise: string;
+  exercise_name: string;
+  average_score: number;
+  captured_at: string;
+  frame_mid: ErrorFrameItem | null;
+  frame_low: ErrorFrameItem | null;
+  frame_any: ErrorFrameItem | null;
+}
+
+export interface ErrorFrameItem {
+  session_id: string;
+  exercise: string;
+  exercise_name: string;
+  date: string;
+  captured_at?: string;
+  frame_type?: "error" | "highlight";
+  score: number;
+  timestamp_ms: number;
+  errors: string[];
+  praise?: string;
+  landmarks: Array<{ x: number; y: number; z: number; visibility?: number }> | null;
+  body_parts: ErrorFrameBodyPart[];
+  source: string;
+  has_skeleton?: boolean;
+  in_threshold_band?: boolean;
+  blank_reason?: string;
+}
+
+export interface ErrorFramesResponse {
+  items: ErrorFrameItem[];
+  session_slots: SessionPoseSlot[];
+  highlights: ErrorFrameItem[];
+  grouped_by_threshold: Record<string, ErrorFrameItem[]>;
+  thresholds: number[];
+  latest_session_id: string | null;
+  total: number;
+  highlight_total?: number;
+}
+
+export function getErrorFrames(params?: ReportQuery) {
+  const query = new URLSearchParams();
+  if (params?.date_from) query.set("date_from", params.date_from);
+  if (params?.date_to) query.set("date_to", params.date_to);
+  if (params?.exercise) query.set("exercise", params.exercise);
+  const qs = query.toString();
+  return apiGet<ErrorFramesResponse>(`/reports/error-frames${qs ? `?${qs}` : ""}`);
+}
+
 export function getReports(params?: ReportQuery) {
   const query = new URLSearchParams();
   if (params?.date_from) query.set("date_from", params.date_from);
@@ -182,6 +240,10 @@ export function downloadReport(blob: Blob, format: "pdf" | "csv") {
   downloadBlob(blob, `fitness_assessment_report_${dateStr}.${ext}`);
 }
 
-export function downloadSessionReport(blob: Blob, sessionId: string) {
-  downloadBlob(blob, `training_report_${sessionId.slice(0, 8)}.pdf`);
+export function downloadSessionReport(blob: Blob, sessionId: string, title?: string) {
+  const safeTitle = (title || "training_report")
+    .replace(/[\\/:*?"<>|]/g, "")
+    .replace(/\s+/g, "_")
+    .slice(0, 40);
+  downloadBlob(blob, `${safeTitle}_${sessionId.slice(0, 8)}.pdf`);
 }

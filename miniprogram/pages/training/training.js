@@ -359,6 +359,11 @@ Page({
 
       case 'summary':
         console.log('[WS] 训练总结:', data);
+        if (this._finishTimer) {
+          clearTimeout(this._finishTimer);
+          this._finishTimer = null;
+        }
+        this._finishNavigated = true;
         this.onTrainingFinished(data.session || data);
         break;
     }
@@ -1090,15 +1095,20 @@ Page({
 
   _doFinish() {
     this.setData({ state: 'finished' });
+    this._finishNavigated = false;
     this.sendWS({ type: 'finish' });
 
-    // The WS will respond with 'summary' → onTrainingFinished(session).
-    // Timeout as safety net — only fires if WS never responds.
-    setTimeout(() => {
-      if (!this._trainingFinishedCalled && this.data.state === 'finished') {
+    if (this._finishTimer) {
+      clearTimeout(this._finishTimer);
+    }
+
+    // 不等 AI 生成，只等后端保存 session 并返回 summary
+    this._finishTimer = setTimeout(() => {
+      if (this.data.state === 'finished' && !this._finishNavigated) {
+        this._finishNavigated = true;
         this.onTrainingFinished(null);
       }
-    }, 3000);
+    }, 5000);
   },
 
   // ========== 调试功能 ==========
@@ -1491,6 +1501,7 @@ Page({
       error_count: (session && session.error_count) || this.data.errorCount,
       average_score: (session && session.average_score) || avgScore,
       session_id: (session && session.session_id) || '',
+      feedback_summary: (session && session.feedback_summary) || '',
       issues: allErrors,
       suggestions: allFeedbacks,
     };
@@ -1507,10 +1518,21 @@ Page({
       }
     }
 
+    const resultKey = `training_result_${Date.now()}`;
+    try {
+      wx.setStorageSync(resultKey, resultData);
+    } catch (e) {
+      console.warn('[Result] 缓存训练结果失败:', e);
+    }
+
     this.cleanup();
 
+    const navigateUrl = resultKey
+      ? `/pages/result/result?key=${encodeURIComponent(resultKey)}`
+      : `/pages/result/result?data=${encodeURIComponent(JSON.stringify(resultData))}`;
+
     wx.redirectTo({
-      url: `/pages/result/result?data=${encodeURIComponent(JSON.stringify(resultData))}`,
+      url: navigateUrl,
       fail: () => {
         wx.navigateBack();
       }

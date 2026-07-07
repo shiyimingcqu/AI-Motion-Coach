@@ -2,13 +2,14 @@ import { onBeforeUnmount, ref, type Ref } from "vue";
 import { useRouter } from "vue-router";
 
 import { apiWebSocketUrl } from "../api/client";
-import { createSession, getSessions, type SessionRecord } from "../api/sessions";
+import { createSession, getSessions, type SessionRecord, type PoseReplayFrame } from "../api/sessions";
 import {
   clearPoseCanvas,
   createPoseLandmarker,
   detectPose,
   drawPose,
   toBackendKeypoints,
+  toReplayLandmarks,
 } from "../services/poseLandmarker";
 import { useAuthStore } from "../stores/auth";
 import { useTrainingStore } from "../stores/training";
@@ -51,6 +52,7 @@ export function useRealtimeVideoTest(options: {
   let videoTestUrl = "";
   let lastSentAt = 0;
   let trainingStartedAt: number | null = null;
+  let poseReplayFrames: PoseReplayFrame[] = [];
   let finishRecoveryInFlight = false;
 
   function clearFinishTimeout() {
@@ -96,6 +98,16 @@ export function useRealtimeVideoTest(options: {
       : 0;
     const totalCount = Number(store.count ?? 0);
     const validCount = Number(store.validCount ?? 0);
+    const averageScore = Number(store.score ?? 0);
+    const errorSnapshots = averageScore < 80 && poseReplayFrames.length
+      ? [{
+          timestamp_ms: poseReplayFrames[Math.floor(poseReplayFrames.length / 2)]?.timestamp_ms ?? 0,
+          score: averageScore,
+          landmarks: poseReplayFrames[Math.floor(poseReplayFrames.length / 2)]?.landmarks ?? [],
+          errors: [`本次训练平均分 ${averageScore} 分低于 80 分阈值`],
+          capture_type: "client_summary",
+        }]
+      : [];
 
     return {
       exercise: options.exercise.value,
@@ -103,7 +115,15 @@ export function useRealtimeVideoTest(options: {
       total_count: totalCount,
       valid_count: validCount,
       error_count: Math.max(0, totalCount - validCount),
-      average_score: Number(store.score ?? 0),
+      average_score: averageScore,
+      pose_replay: poseReplayFrames,
+      pose_replay_meta: {
+        schema_version: 1,
+        source: "web_realtime",
+        sample_interval_ms: SEND_INTERVAL_MS,
+        frame_count: poseReplayFrames.length,
+        error_snapshots: errorSnapshots,
+      },
     };
   }
 
@@ -321,11 +341,22 @@ export function useRealtimeVideoTest(options: {
       poseStatus.value = "";
       if (timestamp - lastSentAt >= SEND_INTERVAL_MS) {
         lastSentAt = timestamp;
+        const replayLandmarks = toReplayLandmarks(landmarks);
+        const replayFrame = {
+          timestamp_ms: trainingStartedAt ? Date.now() - trainingStartedAt : poseReplayFrames.length * SEND_INTERVAL_MS,
+          landmarks: replayLandmarks,
+        };
+        poseReplayFrames.push(replayFrame);
+        if (poseReplayFrames.length > 1800) {
+          poseReplayFrames = poseReplayFrames.slice(-1800);
+        }
         socket.send(JSON.stringify({
           type: "frame",
           exercise: options.exercise.value,
           timestamp: Date.now(),
+          timestamp_ms: replayFrame.timestamp_ms,
           keypoints: toBackendKeypoints(landmarks),
+          replay_keypoints: replayLandmarks,
         }));
       }
     }

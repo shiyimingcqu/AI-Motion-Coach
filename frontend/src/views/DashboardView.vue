@@ -257,8 +257,49 @@
       </aside>
     </section>
 
+<<<<<<< HEAD
   </div>
 </template>
+=======
+    <section class="charts-row">
+      <div class="chart-card">
+        <header class="chart-card-header">
+          <h3>评分趋势</h3>
+          <span class="chart-pill up">近 7 天 · {{ scoreValueForRing }}</span>
+        </header>
+        <div ref="trendChartRef" class="chart-body"></div>
+      </div>
+
+      <div class="chart-card">
+        <header class="chart-card-header">
+          <h3>能力雷达图</h3>
+          <span class="chart-pill">短板：关节活动度</span>
+        </header>
+        <div ref="radarChartRef" class="chart-body"></div>
+        <div class="chart-footer">
+          <span class="cf-badge good">优势：动作流畅度 {{ sideMetrics[0]?.value ?? 0 }}</span>
+          <span class="cf-badge warn">短板：关节活动度 {{ sideMetrics[2]?.value ?? 0 }}</span>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <header class="chart-card-header">
+          <h3>左右对称性</h3>
+          <span class="chart-pill">左右对比</span>
+        </header>
+        <div ref="symmetryChartRef" class="chart-body"></div>
+      </div>
+    </section>
+
+    <section class="bottom-actions">
+      <button class="ba-btn">重新评估</button>
+      <button class="ba-btn">生成纠正计划</button>
+      <button class="ba-btn" @click="router.push('/export')">导出 PDF</button>
+      <button class="ba-btn primary" @click="router.push('/export')">查看完整报告</button>
+    </section>
+  </div>
+</template>
+>>>>>>> origin/main
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";

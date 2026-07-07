@@ -106,6 +106,7 @@ class VideoAnalysisService:
             processed_frames=len(frame_results),
             persist_session=persist_session,
             user_id=user_id,
+            frame_results=frame_results,
         )
         formatted_feedback = {
             "errors": analysis["issues"],
@@ -206,13 +207,27 @@ class VideoAnalysisService:
         processed_frames: int,
         persist_session: bool,
         user_id: int | None = None,
+        frame_results: list | None = None,
     ) -> dict:
+        from app.services.report.error_frame_service import (
+            extract_video_error_snapshots,
+            extract_video_highlight_snapshots,
+        )
+
         session_summary = analyzer.get_session_summary()
         unified_feedback = analyzer.get_unified_feedback()
         formatted_feedback = unified_feedback_service.format_for_ai(unified_feedback)
         session_id: str | None = None
 
         if persist_session and session_summary["total_count"] > 0:
+            error_snapshots = extract_video_error_snapshots(
+                frame_results or [],
+                float(session_summary["average_score"]),
+            )
+            highlight_snapshots = extract_video_highlight_snapshots(
+                frame_results or [],
+                float(session_summary["average_score"]),
+            )
             session = session_service.create_session(
                 exercise=session_summary["exercise"],
                 duration_seconds=session_summary["duration_seconds"],
@@ -221,6 +236,11 @@ class VideoAnalysisService:
                 error_count=session_summary["error_count"],
                 average_score=session_summary["average_score"],
                 user_id=user_id,
+                pose_replay_meta={
+                    "source": "video_analysis",
+                    "error_snapshots": error_snapshots,
+                    "highlight_snapshots": highlight_snapshots,
+                },
             )
             session_id = session.session_id
             try:

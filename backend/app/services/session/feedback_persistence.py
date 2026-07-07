@@ -71,13 +71,24 @@ def schedule_background_ai_advice(
             data.pop("ai_advice_pending", None)
             if not data.get("ai_advice"):
                 data["ai_advice_status"] = "failed"
+            else:
+                print(f"Background AI advice saved for session {session_id}: {len(data['ai_advice'])} chars")
         except Exception as exc:
             print(f"Background AI advice failed for session {session_id}: {exc}")
             data.pop("ai_advice_pending", None)
             data["ai_advice_status"] = "failed"
         _persist_feedback_summary(session_id, data)
 
-    threading.Thread(target=_run, daemon=True).start()
+    threading.Thread(target=_run, daemon=True, name=f"ai-advice-{session_id[:8]}").start()
+
+
+def load_session_orm(session_id: str) -> SessionORM | None:
+    """从数据库重新加载 session（含最新 feedback_summary）。"""
+    db = SessionLocal()
+    try:
+        return db.query(SessionORM).filter(SessionORM.session_id == session_id).first()
+    finally:
+        db.close()
 
 
 def save_session_feedback_summary(
@@ -92,6 +103,8 @@ def save_session_feedback_summary(
 
     if generate_ai and exercise:
         data = attach_ai_advice(data, exercise)
+        if not data.get("ai_advice"):
+            data["ai_advice_status"] = "failed"
     elif generate_ai_async and exercise:
         data["ai_advice_pending"] = True
 

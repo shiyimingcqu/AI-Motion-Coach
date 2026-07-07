@@ -14,6 +14,19 @@ except ModuleNotFoundError:
 router = APIRouter(prefix="/sessions", tags=["sessions"]) if APIRouter else None
 
 
+def _can_access_session(session: SessionORM, current_user) -> bool:
+    if not current_user or current_user.role == "admin":
+        return True
+    if session.user_id is None:
+        return True
+    return session.user_id == current_user.id
+
+
+def _deny_session_access(session: SessionORM, current_user) -> None:
+    if not _can_access_session(session, current_user):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+
 if router and BaseModel:
     class CreateSessionRequest(BaseModel):
         exercise: str
@@ -50,7 +63,10 @@ if router:
             user_id = current_user.id if current_user else None
 
             if user_id and current_user.role != "admin":
-                query = query.filter(SessionORM.user_id == user_id)
+                from sqlalchemy import or_
+                query = query.filter(
+                    or_(SessionORM.user_id == user_id, SessionORM.user_id.is_(None))
+                )
 
             if exercise:
                 query = query.filter(SessionORM.exercise == exercise)
@@ -78,8 +94,21 @@ if router:
         session = session_service.get_session(session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Session not found")
-        if current_user and current_user.role != "admin" and session.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Access denied")
+        _deny_session_access(session, current_user)
+
+        if current_user and session.user_id is None:
+            from app.db.session import SessionLocal
+            db = SessionLocal()
+            try:
+                sess = db.query(SessionORM).filter(SessionORM.session_id == session_id).first()
+                if sess and sess.user_id is None:
+                    sess.user_id = current_user.id
+                    db.commit()
+                    db.refresh(sess)
+                    session = sess
+            finally:
+                db.close()
+
         return session.to_dict()
 
     @router.get("/{session_id}/replay")
@@ -90,8 +119,7 @@ if router:
         session = session_service.get_session(session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Session not found")
-        if current_user and current_user.role != "admin" and session.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Access denied")
+        _deny_session_access(session, current_user)
         replay = session_service.get_session_replay(session_id)
         if replay is None:
             raise HTTPException(status_code=404, detail="Session not found")
@@ -115,38 +143,37 @@ if router:
             pose_replay_meta=body.pose_replay_meta,
         )
 
-        if body.issues or body.suggestions:
-            from app.db.session import SessionLocal
-            from app.services.session.feedback_persistence import (
-                build_feedback_data,
-                save_session_feedback_summary,
-            )
+        from app.db.session import SessionLocal
+        from app.services.session.feedback_persistence import (
+            build_feedback_data,
+            save_session_feedback_summary,
+        )
 
-            formatted = {
-                "errors": body.issues or [],
-                "feedbacks": body.suggestions or [],
-                "metrics": {},
-                "score": body.average_score,
-                "level": "unknown",
-            }
-            unified = {"items": []}
-            feedback_data = build_feedback_data(unified, formatted)
-            save_session_feedback_summary(
-                session.session_id,
-                feedback_data,
-                generate_ai_async=True,
-                exercise=body.exercise,
-            )
-            db = SessionLocal()
-            try:
-                sess = db.query(SessionORM).filter(
-                    SessionORM.session_id == session.session_id
-                ).first()
-                if sess:
-                    db.refresh(sess)
-                    session = sess
-            finally:
-                db.close()
+        formatted = {
+            "errors": body.issues or [],
+            "feedbacks": body.suggestions or [],
+            "metrics": {},
+            "score": body.average_score,
+            "level": "unknown",
+        }
+        unified = {"items": []}
+        feedback_data = build_feedback_data(unified, formatted)
+        save_session_feedback_summary(
+            session.session_id,
+            feedback_data,
+            generate_ai_async=True,
+            exercise=body.exercise,
+        )
+        db = SessionLocal()
+        try:
+            sess = db.query(SessionORM).filter(
+                SessionORM.session_id == session.session_id
+            ).first()
+            if sess:
+                db.refresh(sess)
+                session = sess
+        finally:
+            db.close()
 
         return session.to_dict()
 
@@ -158,8 +185,7 @@ if router:
         session = session_service.get_session(session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Session not found")
-        if current_user and current_user.role != "admin" and session.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Access denied")
+        _deny_session_access(session, current_user)
         deleted = session_service.delete_session(session_id)
         return {"message": "Session deleted", "session_id": session_id}
 
@@ -172,8 +198,7 @@ if router:
         session = session_service.get_session(session_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Session not found")
-        if current_user and current_user.role != "admin" and session.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="Access denied")
+        _deny_session_access(session, current_user)
 
         pose_replay = body.get("pose_replay")
         pose_replay_meta = body.get("pose_replay_meta")

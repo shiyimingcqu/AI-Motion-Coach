@@ -468,6 +468,21 @@ th {{ background: #f1f5f9; }}
             exercise=exercise,
         )
 
+    def export_session_pdf(self, session: SessionORM, username: str = "学员") -> bytes:
+        from app.services.report.pdf_report_service import pdf_report_builder
+
+        summary = self._aggregate_personal_data([session])
+        date_str = session.created_at.strftime("%Y-%m-%d") if session.created_at else None
+        return pdf_report_builder.build(
+            summary,
+            [session],
+            username=username,
+            date_from=date_str,
+            date_to=date_str,
+            exercise=session.exercise,
+            single_session=True,
+        )
+
     def class_summary(self) -> dict:
         return self.personal_summary(user_id=None)
 

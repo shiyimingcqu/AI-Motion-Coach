@@ -317,6 +317,8 @@ class PdfReportBuilder:
         date_from: str | None = None,
         date_to: str | None = None,
         exercise: str | None = None,
+        *,
+        single_session: bool = False,
     ) -> bytes:
         from fpdf import FPDF
 
@@ -335,11 +337,12 @@ class PdfReportBuilder:
         filter_label = self._filter_label(date_from, date_to, exercise)
 
         try:
-            self._cover_page(pdf, font_name, username, summary, filter_label)
-            self._summary_page(pdf, font_name, username, summary, filter_label)
-            self._analysis_and_charts_page(pdf, font_name, summary, sessions, chart_images, temp_files)
-            self._quality_analysis_page(pdf, font_name, summary, chart_images, temp_files)
-            self._training_records_and_evaluation(pdf, font_name, sessions, summary)
+            self._cover_page(pdf, font_name, username, summary, filter_label, single_session=single_session)
+            self._summary_page(pdf, font_name, username, summary, filter_label, single_session=single_session)
+            if not single_session:
+                self._analysis_and_charts_page(pdf, font_name, summary, sessions, chart_images, temp_files)
+            self._quality_analysis_page(pdf, font_name, summary, chart_images, temp_files, single_session=single_session)
+            self._training_records_and_evaluation(pdf, font_name, sessions, summary, single_session=single_session)
 
             return bytes(pdf.output())
         finally:
@@ -452,7 +455,7 @@ class PdfReportBuilder:
             pdf.add_page()
             self._reset_x(pdf)
 
-    def _cover_page(self, pdf, font_name: str, username: str, summary: dict, filter_label: str):
+    def _cover_page(self, pdf, font_name: str, username: str, summary: dict, filter_label: str, *, single_session: bool = False):
         pdf.add_page()
         pdf.set_fill_color(255, 255, 255)
         pdf.rect(0, 0, 210, 297, "F")
@@ -467,11 +470,12 @@ class PdfReportBuilder:
         pdf.set_text_color(30, 64, 175)
         self._set_font(pdf, font_name, 26, "B")
         pdf.set_y(48)
-        pdf.cell(0, 14, "运动姿态综合评估报告", ln=True, align="C")
+        pdf.cell(0, 14, "单次训练评估报告" if single_session else "运动姿态综合评估报告", ln=True, align="C")
 
         self._set_font(pdf, font_name, 11)
         pdf.set_text_color(100, 116, 139)
-        pdf.cell(0, 8, "Comprehensive Fitness Assessment Report", ln=True, align="C")
+        subtitle = "Single Training Assessment Report" if single_session else "Comprehensive Fitness Assessment Report"
+        pdf.cell(0, 8, subtitle, ln=True, align="C")
         pdf.ln(12)
 
         info_items = [
@@ -514,10 +518,11 @@ class PdfReportBuilder:
             10,
         )
 
-    def _summary_page(self, pdf, font_name: str, username: str, summary: dict, filter_label: str):
+    def _summary_page(self, pdf, font_name: str, username: str, summary: dict, filter_label: str, *, single_session: bool = False):
         pdf.add_page()
         pdf.set_text_color(15, 23, 42)
-        self._section_title(pdf, font_name, "一、训练概览")
+        title = "一、本次训练概览" if single_session else "一、训练概览"
+        self._section_title(pdf, font_name, title)
         self._set_font(pdf, font_name, 10)
         self._multi(pdf, font_name, f"数据范围：{filter_label}", 10)
         pdf.ln(4)
@@ -697,6 +702,8 @@ class PdfReportBuilder:
         summary: dict,
         chart_images: dict,
         temp_files: list,
+        *,
+        single_session: bool = False,
     ):
         radar = summary.get("charts", {}).get("quality_radar", {})
         per_exercise = summary.get("charts", {}).get("per_exercise_radar", {})
@@ -704,7 +711,8 @@ class PdfReportBuilder:
             return
 
         pdf.add_page()
-        self._section_title(pdf, font_name, "三、动作质量深度分析")
+        title = "二、动作质量分析" if single_session else "三、动作质量深度分析"
+        self._section_title(pdf, font_name, title)
         self._paragraph(pdf, font_name, _quality_overall_narrative(summary), 10)
         pdf.ln(3)
 
@@ -719,7 +727,7 @@ class PdfReportBuilder:
             )
 
         breakdown = summary.get("exercise_breakdown") or []
-        if breakdown:
+        if breakdown and not single_session:
             self._subsection_title(pdf, font_name, "分动作质量评述")
             for item in breakdown[:6]:
                 name = item.get("name", "")
@@ -739,7 +747,7 @@ class PdfReportBuilder:
                 self._paragraph(pdf, font_name, text, 9)
 
         per_keys = [k for k in chart_images if k.startswith("radar_")][:4]
-        if per_keys:
+        if per_keys and not single_session:
             self._subsection_title(pdf, font_name, "分动作质量雷达")
             self._paragraph(
                 pdf, font_name,
@@ -764,23 +772,25 @@ class PdfReportBuilder:
                     img_width=105,
                 )
 
-    def _training_records_and_evaluation(self, pdf, font_name: str, sessions: list, summary: dict):
+    def _training_records_and_evaluation(self, pdf, font_name: str, sessions: list, summary: dict, *, single_session: bool = False):
         if not sessions:
             return
 
         pdf.add_page()
-        self._section_title(pdf, font_name, "四、训练记录与评估纠错明细")
-        self._paragraph(
-            pdf, font_name,
-            "下表汇总筛选范围内的训练记录；每条记录后附分项评估、纠错建议与 AI 指导，排版已自动换行。",
-            10,
+        title = "三、评估与纠错明细" if single_session else "四、训练记录与评估纠错明细"
+        self._section_title(pdf, font_name, title)
+        intro = (
+            "以下为本次训练的评估摘要、维度评分、纠错建议与 AI 指导。"
+            if single_session
+            else "下表汇总筛选范围内的训练记录；每条记录后附分项评估、纠错建议与 AI 指导，排版已自动换行。"
         )
+        self._paragraph(pdf, font_name, intro, 10)
         pdf.ln(3)
 
         fb = summary.get("feedback_summary") or {}
         weaknesses = fb.get("weaknesses") or []
         recommendations = fb.get("recommendations") or []
-        if weaknesses or recommendations:
+        if (weaknesses or recommendations) and not single_session:
             self._set_font(pdf, font_name, 10, "B")
             self._paragraph(pdf, font_name, "整体薄弱点与训练建议（汇总）", 10)
             self._bullet_list(pdf, font_name, "常见薄弱点：", weaknesses[:6], size=9)
@@ -789,37 +799,40 @@ class PdfReportBuilder:
 
         record_widths = [22, 20, 12, 12, 14, 14, 12, 16]
         record_headers = ["日期", "动作", "总次", "有效", "评分", "等级", "错误", "卡路里"]
-        self._table_row(pdf, font_name, record_widths, record_headers, header=True, size=8)
+        if not single_session:
+            self._table_row(pdf, font_name, record_widths, record_headers, header=True, size=8)
 
-        for session in sessions[:20]:
-            evaluation = self._session_evaluation(session)
-            kcal = round(
-                calculate_calories(session.exercise, session.duration_seconds, session.total_count),
-                1,
-            )
-            date_str = session.created_at.strftime("%m-%d %H:%M") if session.created_at else "-"
-            name = evaluation.get("exercise_name") or get_exercise_display_name(session.exercise)
-            self._table_row(
-                pdf, font_name, record_widths,
-                [
-                    date_str,
-                    name,
-                    str(session.total_count),
-                    str(session.valid_count),
-                    str(int(session.average_score)),
-                    evaluation.get("grade_label", "-"),
-                    str(session.error_count),
-                    str(kcal),
-                ],
-                size=8,
-            )
+            for session in sessions[:20]:
+                evaluation = self._session_evaluation(session)
+                kcal = round(
+                    calculate_calories(session.exercise, session.duration_seconds, session.total_count),
+                    1,
+                )
+                date_str = session.created_at.strftime("%m-%d %H:%M") if session.created_at else "-"
+                name = evaluation.get("exercise_name") or get_exercise_display_name(session.exercise)
+                self._table_row(
+                    pdf, font_name, record_widths,
+                    [
+                        date_str,
+                        name,
+                        str(session.total_count),
+                        str(session.valid_count),
+                        str(int(session.average_score)),
+                        evaluation.get("grade_label", "-"),
+                        str(session.error_count),
+                        str(kcal),
+                    ],
+                    size=8,
+                )
 
-        pdf.ln(4)
+            pdf.ln(4)
         self._set_font(pdf, font_name, 11, "B")
-        self._paragraph(pdf, font_name, "分项评估与纠错建议", 11)
+        section_label = "本次评估与纠错建议" if single_session else "分项评估与纠错建议"
+        self._paragraph(pdf, font_name, section_label, 11)
         pdf.ln(2)
 
-        for session in sessions[:15]:
+        session_limit = 1 if single_session else 15
+        for session in sessions[:session_limit]:
             evaluation = self._session_evaluation(session)
             feedback = build_session_feedback_view(session)
             name = evaluation.get("exercise_name") or get_exercise_display_name(session.exercise)

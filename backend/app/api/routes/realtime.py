@@ -273,6 +273,11 @@ if router:
         running = False
         saved_session = None
         replay_frames: list[dict] = []
+        error_snapshots: list[dict] = []
+        last_frame_score = 100.0
+        last_error_capture_ms = -100000
+        ERROR_CAPTURE_THRESHOLD = 80
+        ERROR_CAPTURE_COOLDOWN_MS = 2500
 
         def save_session_once():
             nonlocal saved_session
@@ -282,6 +287,54 @@ if router:
             summary = analyzer.get_session_summary()
             if summary["total_count"] <= 0 and not replay_frames:
                 return None
+
+            avg_score = float(summary["average_score"])
+            if replay_frames and avg_score < ERROR_CAPTURE_THRESHOLD:
+                has_landmark_snap = any(s.get("landmarks") for s in error_snapshots)
+                pick_frame = (
+                    min(
+                        replay_frames,
+                        key=lambda f: float(
+                            next(
+                                (s.get("score") for s in error_snapshots if s.get("timestamp_ms") == f.get("timestamp_ms")),
+                                avg_score,
+                            )
+                        ),
+                    )
+                    if error_snapshots
+                    else replay_frames[len(replay_frames) // 2]
+                )
+                lm = pick_frame.get("landmarks") if isinstance(pick_frame, dict) else None
+                ts = int(pick_frame.get("timestamp_ms", 0)) if isinstance(pick_frame, dict) else 0
+                if lm and not has_landmark_snap:
+                    error_snapshots.append({
+                        "timestamp_ms": ts,
+                        "score": avg_score,
+                        "landmarks": lm,
+                        "errors": ["本次训练平均分低于阈值，建议对照反馈重点改进"],
+                        "capture_type": "session_summary",
+                    })
+                elif lm and not any(s.get("capture_type") == "session_summary" for s in error_snapshots):
+                    error_snapshots.append({
+                        "timestamp_ms": ts,
+                        "score": avg_score,
+                        "landmarks": lm,
+                        "errors": ["本次训练平均分低于阈值，建议对照反馈重点改进"],
+                        "capture_type": "session_summary",
+                    })
+
+            replay_meta = {
+                "source": "web_realtime",
+                "sample_interval_ms": 100,
+                "frame_count": len(replay_frames),
+                "error_snapshots": error_snapshots[:30],
+            }
+            from app.services.report.error_frame_service import ensure_meta_error_snapshots
+            replay_meta = ensure_meta_error_snapshots(
+                replay_meta,
+                replay_frames,
+                avg_score,
+            )
 
             # 即使未计次也保存 session，便于跳转反馈页展示分析建议
             # 生成 rep_segments（按单次动作筛选回放）
@@ -319,6 +372,9 @@ if router:
                         "issues": node.get("issues", []),
                     })
 
+            replay_meta["rep_segments"] = rep_segments_payload
+            replay_meta["rep_nodes"] = rep_nodes_payload
+
             saved_session = session_service.create_session(
                 exercise=summary["exercise"],
                 duration_seconds=summary["duration_seconds"],
@@ -328,16 +384,10 @@ if router:
                 average_score=summary["average_score"],
                 user_id=user_id,
                 pose_replay_frames=replay_frames,
-                pose_replay_meta={
-                    "source": "web_realtime",
-                    "sample_interval_ms": 100,
-                    "frame_count": len(replay_frames),
-                    "rep_segments": rep_segments_payload,
-                    "rep_nodes": rep_nodes_payload,
-                },
+                pose_replay_meta=replay_meta,
             )
 
-            # 保存反馈摘要（AI 建议后台异步生成，不阻塞结束训练）
+            # 保存反馈摘要（AI 建议后台异步生成，不阻塞跳转评估页）
             try:
                 from app.services.analysis.unified_feedback_service import (
                     build_unified_feedback_from_analyzer,
@@ -345,6 +395,7 @@ if router:
                 )
                 from app.services.session.feedback_persistence import (
                     build_feedback_data,
+                    load_session_orm,
                     save_session_feedback_summary,
                 )
 
@@ -357,6 +408,9 @@ if router:
                     generate_ai_async=True,
                     exercise=summary["exercise"],
                 )
+                refreshed = load_session_orm(saved_session.session_id)
+                if refreshed is not None:
+                    saved_session = refreshed
             except Exception:
                 pass  # 反馈保存失败不影响主流程
 
@@ -374,6 +428,9 @@ if router:
                     state = {}
                     saved_session = None
                     replay_frames = []
+                    error_snapshots = []
+                    last_frame_score = 100.0
+                    last_error_capture_ms = -100000
                     running = True
                     await websocket.send_json({
                         "type": "status", "state": "running", "exercise_type": new_exercise,
@@ -428,6 +485,33 @@ if router:
                 result["stage"] = result.get("stage") or result.get("phase", "")
                 result["errors"] = result.get("errors") or result.get("issues", [])
                 result["type"] = "analysis"
+
+                frame_score = result.get("score", 0)
+                frame_errors = result.get("errors") or []
+                if isinstance(replay_keypoints, list) and len(replay_keypoints) >= 33:
+                    ts = int(payload.get("timestamp_ms", len(replay_frames) * 100))
+                    score_f = float(frame_score) if isinstance(frame_score, (int, float)) else 100.0
+                    crossed_below = last_frame_score >= ERROR_CAPTURE_THRESHOLD and score_f < ERROR_CAPTURE_THRESHOLD
+                    has_errors = bool(frame_errors)
+                    cooldown_ok = ts - last_error_capture_ms >= ERROR_CAPTURE_COOLDOWN_MS
+
+                    if score_f < ERROR_CAPTURE_THRESHOLD and cooldown_ok:
+                        should_capture = crossed_below or has_errors or len(error_snapshots) == 0
+                        if should_capture:
+                            error_snapshots.append({
+                                "timestamp_ms": ts,
+                                "score": score_f,
+                                "landmarks": replay_keypoints[:33],
+                                "errors": frame_errors[:5] if frame_errors else [f"实时评分 {score_f:.0f} 分低于 {ERROR_CAPTURE_THRESHOLD} 分阈值"],
+                                "metrics": result.get("features") or result.get("metrics") or {},
+                                "capture_type": "threshold_cross",
+                            })
+                            last_error_capture_ms = ts
+                            if len(error_snapshots) > 30:
+                                error_snapshots[:] = error_snapshots[-30:]
+
+                    last_frame_score = score_f
+
                 await websocket.send_json(result)
 
         except WebSocketDisconnect:

@@ -36,14 +36,29 @@ async function throwRequestError(response: Response): Promise<never> {
   throw new Error(data.detail || `Request failed: ${response.status}`);
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: getAuthHeaders(),
-  });
-  if (!response.ok) {
-    await throwRequestError(response);
+export async function apiGet<T>(path: string, timeoutMs = 15000): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      headers: getAuthHeaders(),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      await throwRequestError(response);
+    }
+    return response.json();
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("请求超时，请确认后端服务已启动");
+    }
+    if (err instanceof TypeError) {
+      throw new Error("无法连接后端服务器，请确认后端已启动");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
-  return response.json();
 }
 
 export async function apiPost<T>(path: string, body: unknown): Promise<T> {
