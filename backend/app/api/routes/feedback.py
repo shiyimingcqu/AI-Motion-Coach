@@ -77,16 +77,29 @@ if router:
 
         db = SessionLocal()
         try:
-            query = db.query(SessionORM).order_by(SessionORM.created_at.desc())
-            user_id = current_user.id if current_user else None
-
-            if user_id and current_user.role != "admin":
-                query = query.filter(SessionORM.user_id == user_id)
-
             if session_id:
-                query = query.filter(SessionORM.session_id == session_id)
+                sess = db.query(SessionORM).filter(SessionORM.session_id == session_id).first()
+                if not sess:
+                    return {"items": [], "total": 0}
+                if (
+                    current_user
+                    and current_user.role != "admin"
+                    and sess.user_id is not None
+                    and sess.user_id != current_user.id
+                ):
+                    return {"items": [], "total": 0}
+                sessions = [sess]
+            else:
+                query = db.query(SessionORM).order_by(SessionORM.created_at.desc())
+                user_id = current_user.id if current_user else None
 
-            sessions = query.limit(limit).all()
+                if user_id and current_user.role != "admin":
+                    from sqlalchemy import or_
+                    query = query.filter(
+                        or_(SessionORM.user_id == user_id, SessionORM.user_id.is_(None))
+                    )
+
+                sessions = query.limit(limit).all()
             items: list[dict] = []
 
             for sess in sessions:
@@ -119,7 +132,8 @@ if router:
                 suggestions = fb_data.get("suggestions", [])
 
                 if issues:
-                    for index, (issue, suggestion) in enumerate(zip(issues, suggestions)):
+                    for index, issue in enumerate(issues):
+                        suggestion = suggestions[index] if index < len(suggestions) else ""
                         items.append({
                             "id": f"fb-{sess.session_id}-{index}",
                             "session_id": sess.session_id,

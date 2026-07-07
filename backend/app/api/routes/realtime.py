@@ -387,7 +387,7 @@ if router:
                 pose_replay_meta=replay_meta,
             )
 
-            # 保存反馈摘要（AI 建议后台异步生成，不阻塞结束训练）
+            # 保存反馈摘要（AI 建议后台异步生成，不阻塞跳转评估页）
             try:
                 from app.services.analysis.unified_feedback_service import (
                     build_unified_feedback_from_analyzer,
@@ -395,6 +395,7 @@ if router:
                 )
                 from app.services.session.feedback_persistence import (
                     build_feedback_data,
+                    load_session_orm,
                     save_session_feedback_summary,
                 )
 
@@ -407,6 +408,9 @@ if router:
                     generate_ai_async=True,
                     exercise=summary["exercise"],
                 )
+                refreshed = load_session_orm(saved_session.session_id)
+                if refreshed is not None:
+                    saved_session = refreshed
             except Exception:
                 pass  # 反馈保存失败不影响主流程
 

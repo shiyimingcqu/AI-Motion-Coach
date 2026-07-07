@@ -1,102 +1,183 @@
-<!-- 训练结果/评估报告页 -->
+<!-- 训练结果/评估报告页 - 手机端优先 -->
 <view class="result-page">
-  <!-- 顶部导航 -->
   <view class="top-bar" style="padding-top: {{statusBarHeight}}px;">
     <view class="top-bar-content">
       <view class="back-btn" bindtap="goBack">
         <text class="back-arrow">‹</text>
       </view>
       <text class="top-title">评估报告</text>
-      <view class="share-btn" bindtap="onShare">↗</view>
+      <view class="top-bar-placeholder"></view>
     </view>
   </view>
 
   <scroll-view class="result-scroll" scroll-y enhanced show-scrollbar="{{false}}">
-    <!-- 综合评分卡 -->
-    <view class="score-hero">
-      <view class="score-hero-row">
-        <view class="score-hero-left">
-          <text class="score-hero-label">综合评分</text>
-          <view class="score-hero-num">
-            <text class="score-hero-value">{{averageScore}}</text>
-            <text class="score-hero-unit">分</text>
+    <!-- 1. 评分概览（圆环 + 精简数据） -->
+    <view class="score-panel section-card">
+      <view class="score-panel-body">
+        <view class="score-ring-box">
+          <view
+            class="score-ring"
+            style="background: conic-gradient({{scoreColor}} 0 {{scorePercent}}%, #eef2f7 {{scorePercent}}% 100%);"
+          >
+            <view class="score-ring-inner">
+              <text class="score-ring-num">{{averageScore}}</text>
+            </view>
           </view>
+          <text class="score-ring-grade" style="color: {{scoreColor}};">{{gradeLabel || levelLabel}}</text>
         </view>
-        <view class="score-hero-right">
-          <view class="score-tag">{{levelLabel}}</view>
-          <view class="score-stars">
-            <text wx:for="{{stars}}" wx:key="index" class="star">★</text>
+        <view class="score-panel-side">
+          <text class="score-exercise-name">{{exerciseName || '训练'}}</text>
+          <view class="score-stat-chips">
+            <view class="score-chip">
+              <text class="chip-num">{{totalCount}}</text>
+              <text class="chip-label">总次</text>
+            </view>
+            <view class="score-chip chip-good">
+              <text class="chip-num">{{validCount}}</text>
+              <text class="chip-label">有效</text>
+            </view>
+            <view class="score-chip chip-warn">
+              <text class="chip-num">{{errorCount}}</text>
+              <text class="chip-label">错误</text>
+            </view>
+            <view class="score-chip">
+              <text class="chip-num">{{validRate}}%</text>
+              <text class="chip-label">正确率</text>
+            </view>
           </view>
-        </view>
-      </view>
-      <view class="score-meta">
-        <text>评估时长：{{durationText}}</text>
-        <text class="dot-sep">·</text>
-        <text>完成时间：{{finishedAt}}</text>
-      </view>
-    </view>
-
-    <!-- 雷达图 -->
-    <view class="card section-card">
-      <view class="radar-wrap">
-        <view class="radar-svg-wrap">
-          <rich-text nodes="{{radarSVG}}" class="radar-rich"></rich-text>
-          <view class="radar-labels">
-            <text class="radar-label radar-label-top">动作完成度 {{radar.completion}}</text>
-            <text class="radar-label radar-label-right">稳定性 {{radar.stability}}</text>
-            <text class="radar-label radar-label-bottom">节奏控制 {{radar.tempo}}</text>
-            <text class="radar-label radar-label-left">标准度 {{radar.standard}}</text>
-            <text class="radar-label radar-label-left-bottom">移动速度 {{radar.speed}}</text>
-          </view>
-        </view>
-        <view class="radar-legend">
-          <view class="legend-dot legend-blue"></view>
-          <text>本次表现</text>
-          <view class="legend-dot legend-gray" style="margin-left: 24rpx;"></view>
-          <text>标准水平</text>
+          <text class="score-time-line">{{durationText}} · {{finishedAt}}</text>
         </view>
       </view>
     </view>
 
-    <!-- 关键问题分析 -->
-    <view class="card section-card">
-      <view class="section-title-text">关键问题分析</view>
+    <!-- 同步中 -->
+    <view class="card section-card loading-card" wx:if="{{reportLoading && !hasBackendReport}}">
+      <text class="loading-text">正在同步训练分析与建议...</text>
+    </view>
+
+    <!-- 3. 训练反馈（最重要） -->
+    <view class="card section-card" wx:if="{{displayFeedbackItems.length > 0}}">
+      <view class="section-title-row">
+        <text class="section-title-text">需要注意</text>
+      </view>
+      <view class="feedback-stats" wx:if="{{feedbackStats.critical || feedbackStats.warning || feedbackStats.minor || feedbackStats.positive}}">
+        <view class="feedback-stat-chip critical" wx:if="{{feedbackStats.critical}}">严重 {{feedbackStats.critical}}</view>
+        <view class="feedback-stat-chip warning" wx:if="{{feedbackStats.warning}}">警告 {{feedbackStats.warning}}</view>
+        <view class="feedback-stat-chip minor" wx:if="{{feedbackStats.minor}}">轻微 {{feedbackStats.minor}}</view>
+        <view class="feedback-stat-chip positive" wx:if="{{feedbackStats.positive}}">不错 {{feedbackStats.positive}}</view>
+      </view>
+      <view class="feedback-detection-list">
+        <view
+          class="feedback-detection-row {{item.tone}}"
+          wx:for="{{displayFeedbackItems}}"
+          wx:key="index"
+        >
+          <text class="feedback-type-tag feedback-type-tag-{{item.tone}}">{{item.type}}</text>
+          <text class="feedback-problem">{{item.problem}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="card section-card empty-card" wx:elif="{{hasBackendReport && !reportLoading && displayFeedbackItems.length === 0}}">
+      <view class="section-title-text">需要注意</view>
+      <text class="empty-text">本次未检测到明显问题，动作质量良好，继续保持！</text>
+    </view>
+
+    <!-- 无后端时的本地占位 -->
+    <view class="card section-card" wx:elif="{{!hasBackendReport && !reportLoading && issues.length > 0}}">
+      <view class="section-title-text">需要注意</view>
       <view class="issue-list">
         <view class="issue-item" wx:for="{{issues}}" wx:key="index">
-          <view class="issue-bullet">{{item.level === 'major' ? '!' : (item.level === 'minor' ? 'i' : '·')}}</view>
           <view class="issue-content">
             <view class="issue-title">{{item.title}}</view>
-            <view class="issue-desc">{{item.desc}}</view>
-          </view>
-          <view class="issue-tag {{item.level === 'major' ? 'issue-tag-major' : 'issue-tag-minor'}}">
-            {{item.level === 'major' ? '主要问题' : '次要问题'}}
+            <view class="issue-desc" wx:if="{{item.desc}}">{{item.desc}}</view>
           </view>
         </view>
       </view>
     </view>
 
-    <!-- 改进建议 -->
-    <view class="card section-card">
-      <view class="section-title-text">改进建议</view>
-      <view class="suggest-list">
-        <view class="suggest-item" wx:for="{{suggestions}}" wx:key="index">
-          <view class="suggest-icon {{item.iconClass}}">{{item.icon}}</view>
-          <view class="suggest-text">
-            <view class="suggest-title">{{item.title}}</view>
-            <view class="suggest-desc">{{item.desc}}</view>
+    <!-- 4. AI 建议（可折叠） -->
+    <view class="card section-card ai-card">
+      <view class="section-title-row section-title-tap" bindtap="toggleAiAdvice">
+        <view class="ai-title-wrap">
+          <text class="section-title-text">AI 建议</text>
+          <text class="ai-status-tag" wx:if="{{aiAdvicePending}}">生成中</text>
+        </view>
+        <text class="section-subtitle">{{showAiAdvice ? '收起 ▲' : '展开 ▼'}}</text>
+      </view>
+
+      <block wx:if="{{showAiAdvice}}">
+        <view class="ai-loading" wx:if="{{aiAdvicePending && !aiAdvice}}">
+          <text>正在生成个性化建议...</text>
+        </view>
+        <view class="ai-content" wx:elif="{{aiAdvice}}">
+          <text class="ai-text">{{aiAdvice}}</text>
+        </view>
+        <view class="ai-empty" wx:else>
+          <text>{{aiAdviceFailed ? 'AI 建议暂时不可用，可参考上方动作反馈。' : '正在准备 AI 建议...'}}</text>
+        </view>
+      </block>
+      <view class="ai-preview" wx:elif="{{aiAdvice}}" bindtap="toggleAiAdvice">
+        <text class="ai-preview-text">{{aiAdvicePreview}}</text>
+        <text class="ai-preview-hint">点击展开全文</text>
+      </view>
+    </view>
+
+    <!-- 5. 下一步怎么做 -->
+    <view class="card section-card" wx:if="{{nextSteps.length > 0}}">
+      <view class="section-title-text">下一步怎么做</view>
+      <view class="next-step-item recommend" wx:for="{{nextSteps}}" wx:key="index">
+        <text class="next-step-dot">→</text>
+        <text class="next-step-text">{{item.text}}</text>
+      </view>
+    </view>
+
+    <!-- 6. 维度详情（可折叠） -->
+    <view class="card section-card" wx:if="{{dimensionList.length > 0}}">
+      <view class="section-title-row section-title-tap" bindtap="toggleDimensionDetail">
+        <text class="section-title-text">维度详情</text>
+        <text class="section-subtitle">{{showDimensionDetail ? '收起 ▲' : '展开 ▼'}}</text>
+      </view>
+      <view class="dimension-list" wx:if="{{showDimensionDetail}}">
+        <view class="dimension-item" wx:for="{{dimensionList}}" wx:key="label">
+          <view class="dimension-head">
+            <text class="dimension-label">{{item.label}}</text>
+            <text class="dimension-value">{{item.value}}</text>
           </view>
+          <view class="dimension-track">
+            <view class="dimension-fill" style="width: {{item.value}}%;"></view>
+          </view>
+        </view>
+      </view>
+      <view class="dimension-preview" wx:else>
+        <view class="dimension-preview-item" wx:for="{{dimensionPreview}}" wx:key="label">
+          <text class="dimension-preview-label">{{item.label}}</text>
+          <text class="dimension-preview-value">{{item.value}}</text>
         </view>
       </view>
     </view>
 
-    <view style="height: 40rpx;"></view>
+    <view style="height: 24rpx;"></view>
   </scroll-view>
 
-  <!-- 底部按钮 -->
+  <!-- 底部分享海报（页面内绘制，勿移出屏幕外） -->
+  <canvas canvas-id="sharePoster" class="share-poster-canvas" />
+
+  <!-- 分享预览弹层 -->
+  <view class="share-modal" wx:if="{{showSharePreview}}" catchtouchmove="true">
+    <view class="share-modal-mask" bindtap="closeSharePreview"></view>
+    <view class="share-modal-panel">
+      <text class="share-modal-title">训练成果卡片</text>
+      <image class="share-poster-preview" src="{{sharePosterUrl}}" mode="widthFix" show-menu-by-longpress />
+      <button class="btn btn-primary share-send-btn" open-type="share">发送给好友</button>
+      <button class="btn btn-outline share-save-btn" bindtap="saveSharePoster">保存到相册</button>
+      <text class="share-modal-cancel" bindtap="closeSharePreview">取消</text>
+    </view>
+  </view>
+
+  <!-- 底部操作 -->
   <view class="result-footer">
-    <button class="btn btn-outline footer-btn" bindtap="onShare">↗ 分享报告</button>
-    <button class="btn btn-primary footer-btn" loading="{{isSavingRecord}}" disabled="{{isSavingRecord || recordSaved}}" bindtap="onSave">
-      {{recordSaved ? '已保存记录' : '保存记录'}}
-    </button>
+    <button class="btn btn-outline footer-btn" bindtap="onShareTap" loading="{{sharePosterLoading}}">分享训练</button>
+    <button class="btn btn-primary footer-btn" bindtap="goTrainAgain">继续训练</button>
   </view>
 </view>
