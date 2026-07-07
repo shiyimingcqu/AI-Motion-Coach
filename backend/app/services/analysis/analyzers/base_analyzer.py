@@ -34,6 +34,8 @@ class BaseExerciseAnalyzer:
         self.valid_count = 0
         self._last_down_was_valid = False
         self.scores_history: list[float] = []
+        self._frame_score_sum = 0.0
+        self._frame_score_count = 0
         self.previous_stage = "ready"
         self.stage_stability_counter = 0
         self._rep_samples: list[dict[str, float]] = []
@@ -59,6 +61,8 @@ class BaseExerciseAnalyzer:
         self.valid_count = 0
         self._last_down_was_valid = False
         self.scores_history.clear()
+        self._frame_score_sum = 0.0
+        self._frame_score_count = 0
         self.previous_stage = "ready"
         self.stage_stability_counter = 0
         self._frame_index = 0
@@ -164,6 +168,7 @@ class BaseExerciseAnalyzer:
         frame_issues: list[str] = []
         frame_feedback: list[str] = []
         frame_score = score_result["score"]
+        self._record_frame_score(frame_score)
 
         # Rep segment tracking
         if phase == "standing":
@@ -257,13 +262,31 @@ class BaseExerciseAnalyzer:
             "detail_scores": score_result.get("detail_scores", {}),
         }
 
+    def _record_frame_score(self, score: float) -> None:
+        """累积实时帧评分，供平板支撑/未完成计次等场景计算 session 均分。"""
+        if isinstance(score, (int, float)) and score > 0:
+            self._frame_score_sum += float(score)
+            self._frame_score_count += 1
+
+    def _resolve_average_score(self) -> int:
+        if self.scores_history:
+            return int(round(sum(self.scores_history) / len(self.scores_history)))
+        if self._frame_score_count > 0:
+            return int(round(self._frame_score_sum / self._frame_score_count))
+        if self.rep_results:
+            rep_scores = [
+                float(item["score"])
+                for item in self.rep_results
+                if isinstance(item.get("score"), (int, float)) and item["score"] > 0
+            ]
+            if rep_scores:
+                return int(round(sum(rep_scores) / len(rep_scores)))
+        return 0
+
     def get_session_summary(self) -> dict:
         duration_seconds = int(time.time() - self.start_time)
         error_count = self.count - self.valid_count
-        average_score = (
-            int(sum(self.scores_history) / len(self.scores_history))
-            if self.scores_history else 0
-        )
+        average_score = self._resolve_average_score()
         return {
             "exercise": self.exercise_type,
             "duration_seconds": duration_seconds,

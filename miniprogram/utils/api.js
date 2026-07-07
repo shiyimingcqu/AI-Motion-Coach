@@ -1,6 +1,22 @@
 // HTTP 请求封装 + JWT 拦截
-const { API_BASE_URL } = require('./constants');
+const { getApiBaseUrl } = require('./constants');
 const Storage = require('./storage');
+
+function formatApiDetail(detail, fallback = '请求失败') {
+  if (!detail) return fallback;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail.map((item) => {
+      if (!item) return '';
+      if (typeof item === 'string') return item;
+      return item.msg || item.message || JSON.stringify(item);
+    }).filter(Boolean).join('；') || fallback;
+  }
+  if (typeof detail === 'object') {
+    return detail.message || detail.msg || JSON.stringify(detail);
+  }
+  return String(detail);
+}
 
 class ApiClient {
   /**
@@ -8,12 +24,14 @@ class ApiClient {
    */
   static request(options) {
     const token = Storage.get(Storage.KEYS.TOKEN);
+    const baseUrl = getApiBaseUrl();
 
     return new Promise((resolve, reject) => {
       wx.request({
-        url: API_BASE_URL + options.url,
+        url: baseUrl + options.url,
         method: options.method || 'GET',
         data: options.data || {},
+        timeout: options.timeout || 120000,
         header: {
           'Content-Type': options.isForm ? 'application/x-www-form-urlencoded' : 'application/json',
           'Authorization': token ? `Bearer ${token}` : '',
@@ -21,7 +39,6 @@ class ApiClient {
         },
         success(res) {
           if (res.statusCode === 401) {
-            // token 过期，跳转登录
             Storage.remove(Storage.KEYS.TOKEN);
             Storage.remove(Storage.KEYS.USER_INFO);
             wx.reLaunch({ url: '/pages/login/login' });
@@ -32,12 +49,11 @@ class ApiClient {
             resolve(res.data);
           } else {
             const detail = res.data && res.data.detail ? res.data.detail : '请求失败';
-            const message = typeof detail === 'string' ? detail : JSON.stringify(detail);
-            reject(new Error(`HTTP ${res.statusCode}: ${message}`));
+            reject(new Error(`HTTP ${res.statusCode}: ${formatApiDetail(detail)}`));
           }
         },
         fail(err) {
-          reject(new Error('网络请求失败: ' + (err.errMsg || '未知错误')));
+          reject(new Error('网络请求失败: ' + (err.errMsg || '未知错误') + ` @ ${baseUrl}`));
         }
       });
     });
@@ -52,8 +68,8 @@ class ApiClient {
     return this.request({ url: fullUrl, method: 'GET' });
   }
 
-  static post(url, data = {}) {
-    return this.request({ url, method: 'POST', data });
+  static post(url, data = {}, options = {}) {
+    return this.request({ url, method: 'POST', data, ...options });
   }
 
   static postForm(url, data = {}) {
@@ -73,21 +89,35 @@ class ApiClient {
    */
   static upload(url, filePath, formData = {}) {
     const token = Storage.get(Storage.KEYS.TOKEN);
+    const baseUrl = getApiBaseUrl();
 
     return new Promise((resolve, reject) => {
       wx.uploadFile({
-        url: API_BASE_URL + url,
+        url: baseUrl + url,
         filePath: filePath,
         name: 'file',
         formData: formData,
+        timeout: 300000,
         header: {
           'Authorization': token ? `Bearer ${token}` : ''
         },
         success(res) {
           if (res.statusCode === 401) {
             Storage.remove(Storage.KEYS.TOKEN);
+            Storage.remove(Storage.KEYS.USER_INFO);
             wx.reLaunch({ url: '/pages/login/login' });
-            reject(new Error('登录已过期'));
+            reject(new Error('登录已过期，请先登录'));
+            return;
+          }
+          if (res.statusCode < 200 || res.statusCode >= 300) {
+            let detail = '上传失败';
+            try {
+              const parsed = JSON.parse(res.data || '{}');
+              detail = formatApiDetail(parsed.detail || parsed.message, detail);
+            } catch (e) {
+              detail = res.data || detail;
+            }
+            reject(new Error(`HTTP ${res.statusCode}: ${detail}`));
             return;
           }
           try {
@@ -97,7 +127,7 @@ class ApiClient {
           }
         },
         fail(err) {
-          reject(new Error('上传失败: ' + (err.errMsg || '未知错误')));
+          reject(new Error('上传失败: ' + (err.errMsg || '未知错误') + ` @ ${baseUrl}`));
         }
       });
     });

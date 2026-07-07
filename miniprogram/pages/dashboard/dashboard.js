@@ -79,7 +79,7 @@ Page({
   },
 
   goToVideoAnalysis() {
-    wx.switchTab({ url: '/pages/exercises/list' });
+    wx.navigateTo({ url: '/pages/video-upload/video-upload' });
   },
 
   goToReports() {
