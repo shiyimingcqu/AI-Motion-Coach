@@ -489,7 +489,7 @@ if router:
                         keypoints, state,
                         frame_index=len(replay_frames) - 1 if replay_frames else 0,
                     )
-                except ValueError as exc:
+                except (ValueError, TypeError) as exc:
                     await websocket.send_json({
                         "type": "analysis",
                         "stage": "",

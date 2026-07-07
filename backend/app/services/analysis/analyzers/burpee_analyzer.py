@@ -238,7 +238,7 @@ class BurpeeAnalyzer(BaseExerciseAnalyzer):
         final = round(total_score / total_weight, 1) if total_weight else 0
         return {"score": final, "issues": issues, "detail_scores": detail_scores, "feedback": feedback}
 
-    def analyze_frame(self, landmarks: Keypoints, state: dict) -> dict:
+    def analyze_frame(self, landmarks: Keypoints, state: dict, frame_index: int | None = None) -> dict:
         features = self.extract_features(landmarks)
         phase = self.detect_phase(features, state)
         current_stage = self.stage

@@ -52,8 +52,8 @@ export const useReportsCacheStore = defineStore("reportsCache", {
 
     async fetchPersonalReport(params?: ReportQuery, options?: { force?: boolean }) {
       const queryKey = serializeQuery(params);
-      if (!options?.force && this.personalByKey[queryKey]) {
-        return this.personalByKey[queryKey];
+      if (options?.force) {
+        delete this.personalByKey[queryKey];
       }
       return this.dedupe(`personal:${queryKey}`, async () => {
         const data = await getPersonalReport(params);
@@ -64,8 +64,8 @@ export const useReportsCacheStore = defineStore("reportsCache", {
 
     async fetchReports(params?: ReportQuery, options?: { force?: boolean }) {
       const queryKey = serializeQuery(params);
-      if (!options?.force && this.reportsByKey[queryKey]) {
-        return this.reportsByKey[queryKey];
+      if (options?.force) {
+        delete this.reportsByKey[queryKey];
       }
       return this.dedupe(`reports:${queryKey}`, async () => {
         const data = await getReports(params);
@@ -76,14 +76,20 @@ export const useReportsCacheStore = defineStore("reportsCache", {
 
     async fetchErrorFrames(params?: ReportQuery, options?: { force?: boolean }) {
       const queryKey = serializeQuery(params);
-      if (!options?.force && this.errorFramesByKey[queryKey]) {
-        return this.errorFramesByKey[queryKey];
+      if (options?.force) {
+        delete this.errorFramesByKey[queryKey];
       }
       return this.dedupe(`frames:${queryKey}`, async () => {
         const data = await getErrorFrames(params);
         this.errorFramesByKey[queryKey] = data;
         return data;
       });
+    },
+
+    invalidateAll() {
+      this.personalByKey = {};
+      this.reportsByKey = {};
+      this.errorFramesByKey = {};
     },
 
     prefetchAssessmentBundle(baseQuery: ReportQuery) {

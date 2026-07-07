@@ -102,6 +102,13 @@
     </section>
 
     <StateDisplay
+      v-else-if="activeSessionId && sessionMetaLoading"
+      type="loading"
+      size="sm"
+      text="加载训练评分..."
+    />
+
+    <StateDisplay
       v-if="mode === 'session' && !activeSessionId"
       type="empty"
       title="暂无本次训练记录"
@@ -260,13 +267,13 @@
 
 <script setup lang="ts">
 defineOptions({ name: "ErrorFeedbackView" });
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onActivated, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronRight, Info, Layers, Sparkles, ThumbsUp, Volume2 } from "lucide-vue-next";
 import StateDisplay from "../components/StateDisplay.vue";
 import AiAdviceContent from "../components/AiAdviceContent.vue";
 import { getFeedbacks } from "../api/feedback";
-import { getSession, getSessions, type SessionRecord } from "../api/sessions";
+import { getSession, getSessions, readLastSessionCache, type SessionRecord } from "../api/sessions";
 import { useAiAdvice } from "../composables/useAiAdvice";
 import { getScoreFeedback } from "../utils/scoreFeedback";
 
@@ -471,6 +478,8 @@ function startAiAdvicePoll(sessionId: string) {
 const allDetections = ref<Detection[]>([]);
 const positiveNotes = ref<string[]>([]);
 const loading = ref(false);
+const sessionMetaLoading = ref(false);
+let lastLoadedSessionId = "";
 const historyLoading = ref(false);
 const mode = ref<Mode>("history");
 const activeSessionId = ref("");
@@ -689,19 +698,35 @@ function loadSavedAiAdvice(session: SessionRecord) {
 }
 
 async function loadSessionFeedbacks(sid: string) {
+  if (!sid) return;
+  lastLoadedSessionId = sid;
+  activeSessionId.value = sid;
   loading.value = true;
+  sessionMetaLoading.value = !currentSessionMeta.value || currentSessionMeta.value.session_id !== sid;
   clearAdvice();
   clearAiAdvicePoll();
   aiAdviceLost.value = false;
   aiAdvicePending.value = false;
   activeFilter.value = "all";
-  try {
-    const [fbRes, sessionRes] = await Promise.allSettled([
-      getFeedbacks({ session_id: sid, limit: 50 }),
-      getSession(sid),
-    ]);
 
-    const fbItems = fbRes.status === "fulfilled" ? fbRes.value.items : [];
+  try {
+    const session = await getSession(sid);
+    currentSessionMeta.value = session;
+    sessionExercise.value = session.exercise || "squat";
+    feedbackTime.value = session.created_at?.slice(11, 19) || "--:--";
+    loadSavedAiAdvice(session);
+  } catch (error) {
+    console.error("加载训练记录失败:", error);
+    currentSessionMeta.value = null;
+    aiAdvice.value = AI_ADVICE_LOST_MESSAGE;
+    aiAdviceLost.value = true;
+  } finally {
+    sessionMetaLoading.value = false;
+  }
+
+  try {
+    const fbRes = await getFeedbacks({ session_id: sid, limit: 50 });
+    const fbItems = fbRes.items || [];
     const errorItems = fbItems.filter(isErrorFeedback);
     const infoItems = fbItems.filter((f: any) => f.severity === "info" || !f.issue);
     const apiPositives = infoItems
@@ -724,21 +749,17 @@ async function loadSessionFeedbacks(sid: string) {
       stats.value = { critical: 0, warning: 0, minor: 0 };
     }
 
-    if (sessionRes.status === "fulfilled" && sessionRes.value) {
-      currentSessionMeta.value = sessionRes.value;
-      sessionExercise.value = sessionRes.value.exercise || "squat";
-      feedbackTime.value = sessionRes.value.created_at?.slice(11, 19) || "--:--";
-      loadSavedAiAdvice(sessionRes.value);
-    } else {
-      aiAdvice.value = AI_ADVICE_LOST_MESSAGE;
-      aiAdviceLost.value = true;
-    }
-
     rebuildPositiveNotes(
       sessionExercise.value,
       allDetections.value.map((item) => item.problem),
       apiPositives,
     );
+  } catch (error) {
+    console.error("加载反馈失败:", error);
+    if (!allDetections.value.length) {
+      allDetections.value = [];
+      stats.value = { critical: 0, warning: 0, minor: 0 };
+    }
   } finally {
     loading.value = false;
   }
@@ -830,20 +851,54 @@ function switchMode(newMode: Mode) {
   resetSessionDetailState();
 }
 
-onMounted(async () => {
+function hydrateSessionFromCache(sid: string): boolean {
+  const cached = readLastSessionCache(sid);
+  if (!cached) return false;
+  currentSessionMeta.value = cached;
+  sessionExercise.value = cached.exercise || "squat";
+  feedbackTime.value = cached.created_at?.slice(11, 19) || "--:--";
+  return true;
+}
+
+async function initFromRoute() {
   const querySession = route.query.session as string | undefined;
-  const fromRealtime = route.query.from === "realtime";
+  const fromTraining = route.query.from === "realtime" || route.query.from === "upload";
 
   if (querySession) {
-    activeSessionId.value = querySession;
-    mode.value = fromRealtime ? "session" : "history";
-    await loadSessionFeedbacks(querySession);
+    mode.value = fromTraining ? "session" : "history";
+    if (querySession !== lastLoadedSessionId) {
+      resetSessionDetailState();
+      if (fromTraining) {
+        hydrateSessionFromCache(querySession);
+      }
+      await loadSessionFeedbacks(querySession);
+    }
     return;
   }
 
+  activeSessionId.value = "";
+  lastLoadedSessionId = "";
+  resetSessionDetailState();
   mode.value = "history";
   await loadHistorySessions();
+}
+
+onMounted(() => {
+  void initFromRoute();
 });
+
+onActivated(() => {
+  void initFromRoute();
+});
+
+watch(
+  () => route.query.session,
+  (sid) => {
+    if (typeof sid === "string" && sid && sid !== lastLoadedSessionId) {
+      void loadSessionFeedbacks(sid);
+    }
+  },
+);
 
 onUnmounted(() => {
   clearAiAdvicePoll();

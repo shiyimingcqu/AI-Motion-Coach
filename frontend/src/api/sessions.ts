@@ -122,6 +122,54 @@ export function getSession(session_id: string) {
   return apiGet<SessionRecord>(`/sessions/${session_id}`);
 }
 
+export const LAST_SESSION_CACHE_KEY = "poseops:last-session";
+
+export function cacheLastSessionForFeedback(session: SessionRecord) {
+  sessionStorage.setItem(
+    LAST_SESSION_CACHE_KEY,
+    JSON.stringify({
+      session_id: session.session_id,
+      exercise: session.exercise,
+      average_score: session.average_score,
+      created_at: session.created_at,
+      duration_seconds: session.duration_seconds,
+    }),
+  );
+}
+
+export function readLastSessionCache(sessionId?: string): SessionRecord | null {
+  try {
+    const raw = sessionStorage.getItem(LAST_SESSION_CACHE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as SessionRecord;
+    if (!cached?.session_id) return null;
+    if (sessionId && cached.session_id !== sessionId) return null;
+    return cached;
+  } catch {
+    return null;
+  }
+}
+
+export function normalizeSessionSeed(raw: unknown): SessionRecord | null {
+  if (!raw || typeof raw !== "object") return null;
+  const record = raw as Record<string, unknown>;
+  const sessionId = record.session_id ?? record.id;
+  if (typeof sessionId !== "string" || !sessionId) return null;
+  return {
+    session_id: sessionId,
+    user_id: typeof record.user_id === "number" ? record.user_id : null,
+    exercise: String(record.exercise ?? "squat"),
+    duration_seconds: Number(record.duration_seconds ?? 0),
+    total_count: Number(record.total_count ?? 0),
+    valid_count: Number(record.valid_count ?? 0),
+    error_count: Number(record.error_count ?? 0),
+    average_score: Number(record.average_score ?? 0),
+    created_at: String(record.created_at ?? new Date().toISOString()),
+    has_pose_replay: Boolean(record.has_pose_replay),
+    feedback_summary: typeof record.feedback_summary === "string" ? record.feedback_summary : null,
+  };
+}
+
 export function getSessionReplay(session_id: string) {
   return apiGet<PoseReplayResponse>(`/sessions/${session_id}/replay`);
 }

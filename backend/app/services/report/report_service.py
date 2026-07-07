@@ -32,7 +32,10 @@ class ReportService:
         try:
             query = db.query(SessionORM).order_by(SessionORM.created_at.desc())
             if user_id is not None and not include_all_users:
-                query = query.filter(SessionORM.user_id == user_id)
+                from sqlalchemy import or_
+                query = query.filter(
+                    or_(SessionORM.user_id == user_id, SessionORM.user_id.is_(None))
+                )
             if exercise:
                 query = query.filter(SessionORM.exercise == exercise)
             if date_from:

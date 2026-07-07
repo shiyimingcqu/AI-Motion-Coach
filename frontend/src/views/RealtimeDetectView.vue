@@ -229,8 +229,9 @@ import { Camera, FileSearch, Pause, Play, RefreshCcw, Sparkles, Square, UploadCl
 
 import { apiGet, apiUpload, apiWebSocketUrl, apiPost } from "../api/client";
 import { getSimpleExercises, type ExerciseLibItem } from "../api/exercises";
-import { createSession, getSession, getSessions, updateSessionReplay, type SessionRecord } from "../api/sessions";
+import { createSession, getSession, getSessions, updateSessionReplay, cacheLastSessionForFeedback, normalizeSessionSeed, type SessionRecord } from "../api/sessions";
 import { useAuthStore } from "@/stores/auth";
+import { useReportsCacheStore } from "@/stores/reportsCache";
 import AiAdviceContent from "../components/AiAdviceContent.vue";
 import MetricTile from "../components/MetricTile.vue";
 import SkeletonCanvas from "../components/SkeletonCanvas.vue";
@@ -707,9 +708,25 @@ async function finishTraining() {
   socket.send(JSON.stringify({ type: "finish" }));
 }
 
+function invalidateReportsCache() {
+  useReportsCacheStore().invalidateAll();
+}
+
+async function prefetchAndRouteToFeedback(sessionId: string, seed?: unknown) {
+  invalidateReportsCache();
+  const normalized = normalizeSessionSeed(seed);
+  if (normalized?.session_id === sessionId) {
+    cacheLastSessionForFeedback(normalized);
+  }
+  await router.push({ path: "/feedback", query: { session: sessionId, from: "realtime" } });
+  void getSession(sessionId)
+    .then(cacheLastSessionForFeedback)
+    .catch((error) => console.warn("绑定训练记录失败:", error));
+}
+
 function viewFeedback() {
   if (lastSessionId.value) {
-    router.push({ path: "/feedback", query: { session: lastSessionId.value, from: "realtime" } });
+    void prefetchAndRouteToFeedback(lastSessionId.value);
   }
 }
 
@@ -810,13 +827,8 @@ async function handleTrainingSummary(sessionPayload: unknown) {
     } catch (error) {
       console.warn("姿态回放补传失败:", error);
     }
-    try {
-      await getSession(sessionId);
-    } catch (error) {
-      console.warn("绑定训练记录失败:", error);
-    }
     savedMessage.value = "训练已结束，正在跳转到本次反馈。";
-    await router.push({ path: "/feedback", query: { session: sessionId, from: "realtime" } });
+    await prefetchAndRouteToFeedback(sessionId, sessionPayload);
     return;
   }
 
@@ -1039,12 +1051,7 @@ async function recoverAndRouteAfterFinish(successMessage: string) {
       resetFinishState();
       trainingState.value = "finished";
       savedMessage.value = successMessage;
-      try {
-        await getSession(existingSession.session_id);
-      } catch (error) {
-        console.warn("绑定训练记录失败:", error);
-      }
-      await router.push({ path: "/feedback", query: { session: existingSession.session_id, from: "realtime" } });
+      await prefetchAndRouteToFeedback(existingSession.session_id, existingSession);
       return;
     }
 
@@ -1076,7 +1083,7 @@ async function saveSessionFallback(successMessage: string, allowZeroCount = fals
     resetFinishState();
     trainingState.value = "finished";
     savedMessage.value = successMessage;
-    await router.push({ path: "/feedback", query: { session: session.session_id, from: "realtime" } });
+    await prefetchAndRouteToFeedback(session.session_id, session);
   } catch (error) {
     console.error("训练记录补存失败:", error);
     resetFinishState();

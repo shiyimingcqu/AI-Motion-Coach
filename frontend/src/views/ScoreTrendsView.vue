@@ -103,8 +103,8 @@
             :class="{ active: selectedFrameIndex === index, blank: !frame.has_skeleton }"
             @click="selectedFrameIndex = index"
           >
-            <span class="thumb-score" :class="frame.has_skeleton ? (frame.score < 60 ? 'bad' : frame.score < 80 ? 'warn' : 'ok') : (frame.in_threshold_band ? 'warn' : 'blank')">
-              {{ frame.has_skeleton || frame.in_threshold_band ? frame.score : '—' }}
+            <span class="thumb-score" :class="frame.score < 60 ? 'bad' : frame.score < 80 ? 'warn' : 'ok'">
+              {{ frame.has_skeleton ? frame.score : '—' }}
             </span>
             <strong>{{ frame.exercise_name }}</strong>
             <small>{{ frame.captured_at || frame.date }}</small>
@@ -336,11 +336,19 @@ function buildSessionSlots(
     slotMap.set(slot.session_id, { ...slot });
   }
 
+  for (const session of report?.recent_sessions || []) {
+    ensureSlot(session.session_id, {
+      exercise: session.exercise,
+      exercise_name: exerciseName(session.exercise),
+      average_score: session.score,
+      captured_at: session.created_at || "",
+    });
+  }
+
   for (const item of items) {
     const slot = ensureSlot(item.session_id, {
       exercise: item.exercise,
       exercise_name: item.exercise_name,
-      average_score: item.score,
       captured_at: item.captured_at || item.date,
     });
     const score = item.score;
@@ -354,42 +362,36 @@ function buildSessionSlots(
     }
   }
 
-  for (const session of report?.recent_sessions || []) {
-    ensureSlot(session.session_id, {
-      exercise: session.exercise,
-      exercise_name: exerciseName(session.exercise),
-      average_score: session.score,
-      captured_at: session.created_at || "",
-    });
-  }
-
   return [...slotMap.values()]
     .map((slot) => enrichSlot(slot, items))
     .sort((a, b) => (b.captured_at || "").localeCompare(a.captured_at || ""));
 }
 
-function isScoreInThresholdFilter(score: number, filter: string): boolean {
+function sessionMatchesThresholdFilter(averageScore: number, filter: string): boolean {
+  const score = Number(averageScore);
   if (filter === "80") return score >= 60 && score < 80;
   if (filter === "60") return score < 60;
   return score < 80;
 }
 
 function slotToDisplayItem(slot: SessionPoseSlot, frame: ErrorFrameItem | null): ErrorFrameItem {
-  const inThreshold = isScoreInThresholdFilter(slot.average_score, thresholdFilter.value);
+  const displayScore = Math.round(Number(slot.average_score) * 10) / 10;
 
   if (frame?.landmarks?.length) {
     return {
       ...frame,
+      score: displayScore,
       has_skeleton: true,
-      in_threshold_band: inThreshold,
+      in_threshold_band: true,
     };
   }
 
   if (frame) {
     return {
       ...frame,
+      score: displayScore,
       has_skeleton: false,
-      in_threshold_band: inThreshold,
+      in_threshold_band: true,
       blank_reason: "未能还原姿态关键点，请重新完成该动作训练",
     };
   }
@@ -400,28 +402,29 @@ function slotToDisplayItem(slot: SessionPoseSlot, frame: ErrorFrameItem | null):
     exercise_name: slot.exercise_name,
     date: slot.captured_at,
     captured_at: slot.captured_at,
-    score: slot.average_score,
+    score: displayScore,
     timestamp_ms: 0,
     errors: [],
     landmarks: null,
     body_parts: [],
     source: "no_threshold",
     has_skeleton: false,
-    in_threshold_band: inThreshold,
-    blank_reason: inThreshold
-      ? "未能还原姿态关键点，请重新完成该动作训练"
-      : "本次训练得分未落入当前阈值区间，无骨架截图",
+    in_threshold_band: true,
+    blank_reason: "未能还原姿态关键点，请重新完成该动作训练",
   };
 }
 
 const visibleErrorFrames = computed(() => {
-  return sessionSlots.value.map((slot) => {
-    let frame: ErrorFrameItem | null = null;
-    if (thresholdFilter.value === "80") frame = slot.frame_mid;
-    else if (thresholdFilter.value === "60") frame = slot.frame_low;
-    else frame = slot.frame_any;
-    return slotToDisplayItem(slot, frame);
-  });
+  return sessionSlots.value
+    .filter((slot) => Number(slot.average_score) < 80)
+    .filter((slot) => sessionMatchesThresholdFilter(slot.average_score, thresholdFilter.value))
+    .map((slot) => {
+      let frame: ErrorFrameItem | null = null;
+      if (thresholdFilter.value === "80") frame = slot.frame_mid;
+      else if (thresholdFilter.value === "60") frame = slot.frame_low;
+      else frame = slot.frame_any ?? slot.frame_mid ?? slot.frame_low;
+      return slotToDisplayItem(slot, frame);
+    });
 });
 
 const selectedErrorFrame = computed(() =>
@@ -558,9 +561,9 @@ function exerciseName(key: string): string {
 }
 
 function thresholdLabel(t: number): string {
-  if (t === 80) return "60-80 分（最低时刻）";
-  if (t === 60) return "低于 60 分（最低时刻）";
-  return `低于 ${t} 分`;
+  if (t === 80) return "60-80 分";
+  if (t === 60) return "低于 60 分";
+  return "低于 80 分";
 }
 
 function applyRange() {
@@ -647,9 +650,9 @@ async function loadData(silent = false) {
   selectedFrameIndex.value = 0;
   try {
     const [reportRes, allReportRes, framesRes] = await Promise.all([
-      reportsCache.fetchPersonalReport(filteredQuery),
-      reportsCache.fetchPersonalReport(baseQuery),
-      reportsCache.fetchErrorFrames(filteredQuery),
+      reportsCache.fetchPersonalReport(filteredQuery, { force: silent }),
+      reportsCache.fetchPersonalReport(baseQuery, { force: silent }),
+      reportsCache.fetchErrorFrames(filteredQuery, { force: silent }),
     ]);
     personalReport.value = reportRes;
     allExerciseReport.value = allReportRes;

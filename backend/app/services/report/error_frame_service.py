@@ -479,6 +479,9 @@ def _resolve_session_slot_frames(session: SessionORM, picked: list[dict], raw_sn
     replay_frames = _load_json(session.pose_replay_json, [])
     avg = float(session.average_score)
 
+    if avg >= SESSION_ERROR_AVG:
+        return None, None, None
+
     frame_mid = next((f for f in picked if f.get("score_band") == "60-80"), None)
     frame_low = next((f for f in picked if f.get("score_band") == "below-60"), None)
     frame_any = min(picked, key=lambda f: float(f.get("score", 100))) if picked else None
@@ -650,6 +653,10 @@ class ErrorFrameService:
         all_frames: list[dict] = []
         session_slots: list[dict] = []
         for session in sessions[:session_scan]:
+            avg_score = float(session.average_score)
+            if avg_score >= SESSION_ERROR_AVG:
+                continue
+
             raw_frames = _session_snapshots(session)
             picked = _pick_session_band_frames(raw_frames)
             all_frames.extend(picked)

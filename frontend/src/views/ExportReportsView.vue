@@ -364,8 +364,8 @@ async function refreshData(silent = false) {
   error.value = "";
   try {
     const [personalRes, reportListRes] = await Promise.all([
-      reportsCache.fetchPersonalReport(queryParams.value),
-      reportsCache.fetchReports(queryParams.value),
+      reportsCache.fetchPersonalReport(queryParams.value, { force: silent }),
+      reportsCache.fetchReports(queryParams.value, { force: silent }),
     ]);
     summary.value = personalRes;
     reports.value = reportListRes.items;

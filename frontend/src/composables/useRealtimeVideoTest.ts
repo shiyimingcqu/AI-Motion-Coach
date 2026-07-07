@@ -2,7 +2,7 @@ import { onBeforeUnmount, ref, type Ref } from "vue";
 import { useRouter } from "vue-router";
 
 import { apiWebSocketUrl } from "../api/client";
-import { createSession, getSession, getSessions, updateSessionReplay, type SessionRecord, type PoseReplayFrame } from "../api/sessions";
+import { createSession, getSession, getSessions, updateSessionReplay, cacheLastSessionForFeedback, normalizeSessionSeed, type SessionRecord, type PoseReplayFrame } from "../api/sessions";
 import {
   clearPoseCanvas,
   createPoseLandmarker,
@@ -12,6 +12,7 @@ import {
   toReplayLandmarks,
 } from "../services/poseLandmarker";
 import { useAuthStore } from "../stores/auth";
+import { useReportsCacheStore } from "../stores/reportsCache";
 import { useTrainingStore } from "../stores/training";
 
 type TrainingState = "idle" | "connecting" | "running" | "paused" | "finished" | "error";
@@ -155,17 +156,20 @@ export function useRealtimeVideoTest(options: {
     });
   }
 
-  async function routeToFeedback(sessionId: string, successMessage: string) {
+  async function routeToFeedback(sessionId: string, successMessage: string, seed?: unknown) {
     message.value = successMessage;
-    try {
-      await getSession(sessionId);
-    } catch (error) {
-      console.warn("绑定训练记录失败:", error);
+    useReportsCacheStore().invalidateAll();
+    const normalized = normalizeSessionSeed(seed);
+    if (normalized?.session_id === sessionId) {
+      cacheLastSessionForFeedback(normalized);
     }
     await router.push({
       path: "/feedback",
       query: { session: sessionId, from: "upload" },
     });
+    void getSession(sessionId)
+      .then(cacheLastSessionForFeedback)
+      .catch((error) => console.warn("绑定训练记录失败:", error));
   }
 
   function resolveSummarySessionId(session: unknown): string {
@@ -191,7 +195,7 @@ export function useRealtimeVideoTest(options: {
       } catch (error) {
         console.warn("姿态回放补传失败:", error);
       }
-      await routeToFeedback(sessionId, "分析完成，正在跳转到反馈页。");
+      await routeToFeedback(sessionId, "分析完成，正在跳转到反馈页。", sessionPayload);
       return;
     }
 
@@ -229,7 +233,7 @@ export function useRealtimeVideoTest(options: {
           console.warn("新建训练补传回放失败:", error);
         }
       }
-      await routeToFeedback(session.session_id, successMessage);
+      await routeToFeedback(session.session_id, successMessage, session);
     } catch (error) {
       console.error("训练记录补存失败:", error);
       resetFinishState();
@@ -264,7 +268,7 @@ export function useRealtimeVideoTest(options: {
         if (finishHandled) return;
         resetFinishState();
         trainingState.value = "finished";
-        await routeToFeedback(existingSession.session_id, successMessage);
+        await routeToFeedback(existingSession.session_id, successMessage, existingSession);
         return;
       }
 
