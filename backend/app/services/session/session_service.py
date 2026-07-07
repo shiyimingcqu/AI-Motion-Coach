@@ -7,6 +7,7 @@ from uuid import uuid4
 from app.db.session import SessionLocal
 from app.models.entities import SessionORM, _isoformat_utc
 from app.services.evaluation.calorie_service import calculate_calories
+from app.services.evaluation.evaluation_service import build_evaluation, serialize_evaluation
 from app.services.report.error_frame_service import ensure_meta_error_snapshots
 
 
