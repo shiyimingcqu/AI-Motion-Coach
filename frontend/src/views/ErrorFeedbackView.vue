@@ -259,6 +259,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: "ErrorFeedbackView" });
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronRight, Info, Layers, Sparkles, ThumbsUp, Volume2 } from "lucide-vue-next";

@@ -21,7 +21,12 @@
           </div>
 
           <nav class="side-nav" aria-label="主导航">
-            <RouterLink v-for="item in navItems" :key="item.path" :to="item.path">
+            <RouterLink
+              v-for="item in navItems"
+              :key="item.path"
+              :to="item.path"
+              @mouseenter="prefetchRouteData(item.path)"
+            >
               <component :is="item.icon" :size="18" />
               <span>{{ item.label }}</span>
             </RouterLink>
@@ -84,7 +89,11 @@
           </header>
 
           <main class="content">
-            <RouterView />
+            <RouterView v-slot="{ Component }">
+              <KeepAlive :include="keepAliveViews">
+                <component :is="Component" />
+              </KeepAlive>
+            </RouterView>
           </main>
         </div>
       </div>
@@ -121,7 +130,16 @@ import {
 import UserAvatar from "./components/UserAvatar.vue";
 import { useAuthStore } from "./stores/auth";
 import { useSettingsStore } from "./stores/settings";
+import { defaultRecentRangeQuery, useReportsCacheStore } from "./stores/reportsCache";
 import { getDashboardStats } from "./api/dashboard";
+
+const keepAliveViews = [
+  "DashboardView",
+  "ScoreTrendsView",
+  "ExportReportsView",
+  "SessionsView",
+  "ErrorFeedbackView",
+];
 
 const route = useRoute();
 const router = useRouter();
@@ -192,6 +210,17 @@ const adminNavItems = [
 const navItems = computed(() =>
   authStore.isAdmin ? adminNavItems : baseNavItems
 );
+
+function prefetchRouteData(path: string) {
+  if (!authStore.isAuthenticated || authStore.isAdmin) return;
+  const cache = useReportsCacheStore();
+  const range = defaultRecentRangeQuery();
+  if (path === "/score-trends") {
+    cache.prefetchAssessmentBundle(range);
+  } else if (path === "/export") {
+    cache.prefetchExportBundle(range);
+  }
+}
 
 const searchPlaceholder = computed(() =>
   authStore.isAdmin ? "搜索用户、报告或规则" : "搜索动作、训练记录或报告"

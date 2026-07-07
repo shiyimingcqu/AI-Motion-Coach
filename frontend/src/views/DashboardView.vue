@@ -454,6 +454,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: "DashboardView" });
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import * as echarts from "echarts/core";

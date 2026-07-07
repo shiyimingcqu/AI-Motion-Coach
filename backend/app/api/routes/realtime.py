@@ -285,7 +285,9 @@ if router:
                 return saved_session
 
             summary = analyzer.get_session_summary()
-            if summary["total_count"] <= 0 and not replay_frames:
+            has_replay = bool(replay_frames)
+            has_activity = summary["total_count"] > 0 or has_replay
+            if not has_activity:
                 return None
 
             avg_score = float(summary["average_score"])
@@ -453,7 +455,12 @@ if router:
 
                 if message_type == "finish":
                     running = False
-                    session = save_session_once()
+                    session = None
+                    try:
+                        session = save_session_once()
+                    except Exception as exc:
+                        import logging
+                        logging.getLogger(__name__).exception("save_session_once failed: %s", exc)
                     await websocket.send_json({
                         "type": "summary",
                         "state": "finished",
@@ -477,10 +484,22 @@ if router:
                         replay_frames = replay_frames[-60000:]
 
                 keypoints = _parse_keypoints(payload.get("keypoints", {}))
-                result = analyzer.analyze_frame(
-                    keypoints, state,
-                    frame_index=len(replay_frames) - 1 if replay_frames else 0,
-                )
+                try:
+                    result = analyzer.analyze_frame(
+                        keypoints, state,
+                        frame_index=len(replay_frames) - 1 if replay_frames else 0,
+                    )
+                except ValueError as exc:
+                    await websocket.send_json({
+                        "type": "analysis",
+                        "stage": "",
+                        "count": getattr(analyzer, "count", 0),
+                        "valid_count": getattr(analyzer, "valid_count", 0),
+                        "score": 0,
+                        "errors": [str(exc)],
+                        "feedback": [],
+                    })
+                    continue
                 result["metrics"] = result.get("features", {})
                 result["stage"] = result.get("stage") or result.get("phase", "")
                 result["errors"] = result.get("errors") or result.get("issues", [])

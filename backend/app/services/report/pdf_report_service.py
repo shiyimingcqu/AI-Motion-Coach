@@ -37,6 +37,148 @@ def _normalize_text(text: str) -> str:
     return text
 
 
+def _truncate_text(text: str, max_len: int = 120) -> str:
+    text = _normalize_text(text)
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 1].rstrip() + "…"
+
+
+def _score_feedback(score: float) -> tuple[str, str]:
+    if score >= 90:
+        return "太棒了！", "动作几近完美，继续保持这股势头！"
+    if score >= 80:
+        return "做得不错！", "整体质量良好，再精进一点就能更上一层楼。"
+    if score >= 70:
+        return "继续加油！", "已经有进步空间，盯住错误反馈练几组会有明显提升。"
+    return "别灰心！", "每次训练都是积累，对照截图纠正难点会慢慢变好。"
+
+
+POSE_CONNECTIONS: list[tuple[int, int]] = [
+    (11, 12), (11, 13), (13, 15), (12, 14), (14, 16),
+    (11, 23), (12, 24), (23, 24), (23, 25), (25, 27),
+    (24, 26), (26, 28), (0, 11), (0, 12),
+]
+
+
+def _pick_pose_frames(assessment_data: dict | None, *, limit: int = 4) -> list[dict]:
+    if not assessment_data:
+        return []
+    frames: list[dict] = []
+    seen: set[str] = set()
+    for frame in assessment_data.get("items") or []:
+        landmarks = frame.get("landmarks")
+        if not isinstance(landmarks, list) or len(landmarks) < 11:
+            continue
+        key = f"{frame.get('session_id')}:{frame.get('timestamp_ms', 0)}"
+        if key in seen:
+            continue
+        seen.add(key)
+        frames.append(frame)
+        if len(frames) >= limit:
+            break
+    if frames:
+        return frames
+    for slot in assessment_data.get("session_slots") or []:
+        for candidate in (slot.get("frame_any"), slot.get("frame_mid"), slot.get("frame_low")):
+            if not candidate:
+                continue
+            landmarks = candidate.get("landmarks")
+            if not isinstance(landmarks, list) or len(landmarks) < 11:
+                continue
+            key = f"{candidate.get('session_id')}:{candidate.get('timestamp_ms', 0)}"
+            if key in seen:
+                continue
+            seen.add(key)
+            frames.append(candidate)
+            if len(frames) >= limit:
+                return frames
+    return frames
+
+
+def _render_pose_snapshot_png(frame: dict) -> bytes | None:
+    landmarks = frame.get("landmarks")
+    if not isinstance(landmarks, list) or len(landmarks) < 11:
+        return None
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return None
+
+    highlight_indices: set[int] = set()
+    for part in frame.get("body_parts") or []:
+        if part.get("severity") != "error":
+            continue
+        for index in part.get("landmark_indices") or []:
+            highlight_indices.add(int(index))
+
+    xs: list[float] = []
+    ys: list[float] = []
+    for item in landmarks[:33]:
+        if not isinstance(item, dict):
+            return None
+        vis = float(item.get("visibility", 1))
+        if vis < 0.3:
+            xs.append(float("nan"))
+            ys.append(float("nan"))
+            continue
+        xs.append(float(item.get("x", 0)))
+        ys.append(float(item.get("y", 0)))
+
+    valid_x = [x for x in xs if x == x]
+    valid_y = [y for y in ys if y == y]
+    if len(valid_x) < 4:
+        return None
+
+    min_x, max_x = min(valid_x), max(valid_x)
+    min_y, max_y = min(valid_y), max(valid_y)
+    pad_x = max((max_x - min_x) * 0.12, 0.05)
+    pad_y = max((max_y - min_y) * 0.12, 0.05)
+
+    fig, ax = plt.subplots(figsize=(2.6, 3.4))
+    ax.set_facecolor("#1e293b")
+    fig.patch.set_facecolor("#0f172a")
+
+    for start_idx, end_idx in POSE_CONNECTIONS:
+        if start_idx >= len(xs) or end_idx >= len(xs):
+            continue
+        x1, y1, x2, y2 = xs[start_idx], ys[start_idx], xs[end_idx], ys[end_idx]
+        if x1 != x1 or y1 != y1 or x2 != x2 or y2 != y2:
+            continue
+        highlighted = start_idx in highlight_indices or end_idx in highlight_indices
+        ax.plot(
+            [x1, x2], [y1, y2],
+            color="#f97316" if highlighted else "#64748b",
+            linewidth=3.0 if highlighted else 1.8,
+            solid_capstyle="round",
+        )
+
+    for idx, (x, y) in enumerate(zip(xs, ys)):
+        if x != x or y != y:
+            continue
+        highlighted = idx in highlight_indices
+        ax.scatter(
+            [x], [y],
+            s=42 if highlighted else 18,
+            c="#f97316" if highlighted else "#94a3b8",
+            edgecolors="#0f172a",
+            linewidths=0.6,
+            zorder=3,
+        )
+
+    ax.set_xlim(min_x - pad_x, max_x + pad_x)
+    ax.set_ylim(max_y + pad_y, min_y - pad_y)
+    ax.axis("off")
+
+    buf = io.BytesIO()
+    fig.tight_layout(pad=0.05)
+    fig.savefig(buf, format="png", dpi=110, facecolor="#0f172a")
+    plt.close(fig)
+    return buf.getvalue()
+
+
 def _exercise_daily_trend_text(summary: dict) -> str:
     trends = summary.get("exercise_trends") or summary.get("charts", {}).get("score_trend_by_exercise", [])
     if not trends:
@@ -114,9 +256,6 @@ def _quality_overall_narrative(summary: dict) -> str:
             f"优势维度为「{best[0]}」（{best[1]:.0f}分），"
             f"优先改进维度为「{weak[0]}」（{weak[1]:.0f}分）。"
         )
-        parts.append("各维度解读如下：")
-        for d, v in paired[:6]:
-            parts.append(_dimension_comment(d, v))
     valid_total = summary.get("total_count", 0)
     valid_count = summary.get("valid_count", 0)
     if valid_total > 0:
@@ -279,6 +418,27 @@ def _render_chart_images(summary: dict) -> dict[str, bytes]:
         plt.close(fig)
         images["radar"] = buf.getvalue()
 
+    distribution = charts.get("exercise_distribution", [])
+    if distribution:
+        fig, ax = plt.subplots(figsize=(4.2, 2.6))
+        names = [item["name"] for item in distribution]
+        values = [item["value"] for item in distribution]
+        colors = ["#3b82f6", "#8b5cf6", "#14b8a6", "#f59e0b", "#ef4444", "#6366f1"]
+        ax.pie(
+            values,
+            labels=names,
+            autopct="%1.0f%%",
+            startangle=90,
+            colors=colors[: len(names)],
+            textprops={"fontsize": 7},
+        )
+        ax.set_title("训练动作分布", fontsize=10, fontweight="bold", color="#1e40af", pad=8)
+        buf = io.BytesIO()
+        fig.tight_layout()
+        fig.savefig(buf, format="png", dpi=120, facecolor="white")
+        plt.close(fig)
+        images["distribution"] = buf.getvalue()
+
     per_exercise = charts.get("per_exercise_radar", {})
     for exercise_key, radar_data in per_exercise.items():
         p_dims = radar_data.get("dimensions", [])
@@ -319,6 +479,7 @@ class PdfReportBuilder:
         exercise: str | None = None,
         *,
         single_session: bool = False,
+        assessment_data: dict | None = None,
     ) -> bytes:
         from fpdf import FPDF
 
@@ -339,6 +500,16 @@ class PdfReportBuilder:
         try:
             self._cover_page(pdf, font_name, username, summary, filter_label, single_session=single_session)
             self._summary_page(pdf, font_name, username, summary, filter_label, single_session=single_session)
+            self._assessment_overview_page(
+                pdf,
+                font_name,
+                summary,
+                sessions,
+                chart_images,
+                temp_files,
+                assessment_data,
+                single_session=single_session,
+            )
             if not single_session:
                 self._analysis_and_charts_page(pdf, font_name, summary, sessions, chart_images, temp_files)
             self._quality_analysis_page(pdf, font_name, summary, chart_images, temp_files, single_session=single_session)
@@ -386,15 +557,26 @@ class PdfReportBuilder:
     def _paragraph(self, pdf, font_name: str, text: str, size: int = 10, line_h: float = 5):
         self._multi(pdf, font_name, text, size, line_h)
 
-    def _bullet_list(self, pdf, font_name: str, title: str, items: list[str], size: int = 9, line_h: float = 5):
-        if not items:
+    def _bullet_list(
+        self,
+        pdf,
+        font_name: str,
+        title: str,
+        items: list[str],
+        size: int = 9,
+        line_h: float = 5,
+        *,
+        max_items: int = 3,
+    ):
+        trimmed = [_truncate_text(item, 100) for item in items if item][:max_items]
+        if not trimmed:
             return
-        self._ensure_space(pdf, 12 + line_h * min(len(items), 3))
+        self._ensure_space(pdf, 12 + line_h * min(len(trimmed), 3))
         self._set_font(pdf, font_name, size, "B")
         self._reset_x(pdf)
         pdf.multi_cell(self._text_width(pdf), line_h, title)
         self._set_font(pdf, font_name, size)
-        for item in items:
+        for item in trimmed:
             self._ensure_space(pdf, line_h * 2)
             self._paragraph(pdf, font_name, f"  - {item}", size, line_h)
 
@@ -585,9 +767,119 @@ class PdfReportBuilder:
         if fb.get("weaknesses"):
             self._paragraph(
                 pdf, font_name,
-                "跨训练高频薄弱点：" + "；".join(fb["weaknesses"][:4]) + "。",
+                "跨训练高频薄弱点：" + "；".join(fb["weaknesses"][:3]) + "。",
                 9,
             )
+
+    def _assessment_overview_page(
+        self,
+        pdf,
+        font_name: str,
+        summary: dict,
+        sessions: list,
+        chart_images: dict,
+        temp_files: list,
+        assessment_data: dict | None,
+        *,
+        single_session: bool = False,
+    ):
+        latest_score = summary.get("average_score", 0)
+        latest_name = ""
+        latest_time = ""
+        if sessions:
+            latest = sessions[0]
+            latest_score = float(latest.average_score)
+            evaluation = self._session_evaluation(latest)
+            latest_name = evaluation.get("exercise_name") or get_exercise_display_name(latest.exercise)
+            latest_time = latest.created_at.strftime("%Y-%m-%d %H:%M") if latest.created_at else ""
+        elif summary.get("recent_sessions"):
+            recent = summary["recent_sessions"][0]
+            latest_score = float(recent.get("score", latest_score))
+            latest_name = get_exercise_display_name(recent.get("exercise", ""))
+
+        title_text, message_text = _score_feedback(latest_score)
+        pose_frames = _pick_pose_frames(assessment_data, limit=4 if single_session else 4)
+        has_distribution = "distribution" in chart_images
+        if not (latest_name or has_distribution or pose_frames):
+            return
+
+        pdf.add_page()
+        section_title = "二、动作评估概览" if not single_session else "二、动作评估"
+        self._section_title(pdf, font_name, section_title)
+
+        if latest_name:
+            self._set_font(pdf, font_name, 10, "B")
+            self._paragraph(
+                pdf,
+                font_name,
+                f"最近一次训练：{latest_name}"
+                + (f"（{latest_time}）" if latest_time else "")
+                + f" · 评分 {latest_score:.0f} 分",
+                10,
+            )
+            self._paragraph(pdf, font_name, f"{title_text}{message_text}", 10)
+            pdf.ln(2)
+
+        if has_distribution and not single_session:
+            self._embed_chart(
+                pdf,
+                font_name,
+                "训练动作分布",
+                "与动作评估页一致，展示本期各动作训练次数占比。",
+                chart_images["distribution"],
+                temp_files,
+                img_width=118,
+            )
+
+        if pose_frames:
+            self._subsection_title(pdf, font_name, "姿态评估截图")
+            self._paragraph(
+                pdf,
+                font_name,
+                "以下为评分低于阈值时自动记录的骨架线条，橙色部位为待改进区域。",
+                9,
+            )
+            img_w = 82
+            gap = 8
+            x0 = pdf.l_margin
+            y_row = pdf.get_y()
+            col = 0
+            for frame in pose_frames:
+                image_bytes = _render_pose_snapshot_png(frame)
+                if not image_bytes:
+                    continue
+                if col == 2:
+                    col = 0
+                    pdf.set_y(y_row + 96)
+                    y_row = pdf.get_y()
+                    self._ensure_space(pdf, 100)
+                x = x0 + col * (img_w + gap)
+                if y_row + 96 > pdf.h - pdf.b_margin:
+                    pdf.add_page()
+                    y_row = pdf.get_y()
+                    col = 0
+                    x = x0
+
+                tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+                tmp.write(image_bytes)
+                tmp.close()
+                temp_files.append(tmp.name)
+
+                pdf.set_xy(x, y_row)
+                pdf.image(tmp.name, x=x, y=y_row, w=img_w)
+                caption_y = y_row + 78
+                pdf.set_xy(x, caption_y)
+                self._set_font(pdf, font_name, 8)
+                exercise_name = frame.get("exercise_name") or get_exercise_display_name(frame.get("exercise", ""))
+                caption = f"{exercise_name} · {frame.get('score', '-')}分"
+                captured = frame.get("captured_at") or frame.get("date") or ""
+                if captured:
+                    caption += f"\n{captured[:16]}"
+                pdf.multi_cell(img_w, 4, caption, align="C")
+                col += 1
+
+            pdf.set_y(y_row + 96)
+            pdf.ln(2)
 
     def _subsection_title(self, pdf, font_name: str, title: str):
         self._ensure_space(pdf, 16)
@@ -633,7 +925,7 @@ class PdfReportBuilder:
         temp_files: list,
     ):
         pdf.add_page()
-        self._section_title(pdf, font_name, "二、综合评估与趋势分析")
+        self._section_title(pdf, font_name, "三、综合评估与趋势分析")
 
         avg = summary.get("average_score", 0)
         self._paragraph(
@@ -661,11 +953,11 @@ class PdfReportBuilder:
         if "trend_by_exercise" in chart_images:
             exercise_trends = summary.get("exercise_trends") or []
             lines = ["以下展示各动作近7日评分变化，便于发现单项技术的进步或退步。"]
-            for item in exercise_trends[:4]:
+            for item in exercise_trends[:3]:
                 name = item.get("name") or get_exercise_display_name(item.get("exercise", ""))
                 pts = item.get("trend", [])
                 if pts:
-                    lines.append(_trend_narrative(pts, label=name))
+                    lines.append(_truncate_text(_trend_narrative(pts, label=name), 90))
             self._embed_chart(
                 pdf, font_name,
                 "分动作评分走势",
@@ -675,15 +967,10 @@ class PdfReportBuilder:
             )
 
         exercise_detail = _exercise_daily_trend_text(summary)
-        if exercise_detail and exercise_detail != "暂无分动作趋势数据。":
+        if exercise_detail and exercise_detail != "暂无分动作趋势数据。" and "trend_by_exercise" not in chart_images:
             self._subsection_title(pdf, font_name, "分动作每日评分明细")
-            self._paragraph(
-                pdf, font_name,
-                "以下按动作汇总近7日每日得分，便于横向对比单项进步情况。",
-                9,
-            )
-            for line in exercise_detail.split("\n"):
-                self._paragraph(pdf, font_name, line, 9)
+            for line in exercise_detail.split("\n")[:4]:
+                self._paragraph(pdf, font_name, _truncate_text(line, 95), 9)
             pdf.ln(2)
 
         if "calories" in chart_images:
@@ -711,9 +998,9 @@ class PdfReportBuilder:
             return
 
         pdf.add_page()
-        title = "二、动作质量分析" if single_session else "三、动作质量深度分析"
+        title = "三、动作质量分析" if single_session else "四、动作质量深度分析"
         self._section_title(pdf, font_name, title)
-        self._paragraph(pdf, font_name, _quality_overall_narrative(summary), 10)
+        self._paragraph(pdf, font_name, _truncate_text(_quality_overall_narrative(summary), 280), 10)
         pdf.ln(3)
 
         if "radar" in chart_images:
@@ -729,24 +1016,24 @@ class PdfReportBuilder:
         breakdown = summary.get("exercise_breakdown") or []
         if breakdown and not single_session:
             self._subsection_title(pdf, font_name, "分动作质量评述")
-            for item in breakdown[:6]:
+            for item in breakdown[:4]:
                 name = item.get("name", "")
                 avg_score = item.get("avg_score", 0)
                 valid_rate = item.get("valid_rate", 100)
                 errors = item.get("total_errors", 0)
                 text = (
-                    f"{name}：本期训练 {item.get('count', 0)} 次，均分 {avg_score:.1f}，"
-                    f"有效率 {valid_rate:.0f}%，累计错误 {errors} 次。"
+                    f"{name}：训练 {item.get('count', 0)} 次，均分 {avg_score:.1f}，"
+                    f"有效率 {valid_rate:.0f}%，错误 {errors} 次。"
                 )
                 if avg_score >= 85:
-                    text += " 动作质量稳定，可尝试增加负重或节奏变化。"
+                    text += " 动作质量稳定。"
                 elif avg_score >= 70:
-                    text += " 整体达标，建议针对薄弱维度做分解练习。"
+                    text += " 整体达标，建议针对薄弱维度练习。"
                 else:
-                    text += " 建议降低强度，先纠正基础姿态再增加训练量。"
-                self._paragraph(pdf, font_name, text, 9)
+                    text += " 建议先纠正基础姿态。"
+                self._paragraph(pdf, font_name, _truncate_text(text, 110), 9)
 
-        per_keys = [k for k in chart_images if k.startswith("radar_")][:4]
+        per_keys = [k for k in chart_images if k.startswith("radar_")][:2]
         if per_keys and not single_session:
             self._subsection_title(pdf, font_name, "分动作质量雷达")
             self._paragraph(
@@ -761,7 +1048,7 @@ class PdfReportBuilder:
                 vals = radar_data.get("values", [])
                 name = get_exercise_display_name(exercise_key)
                 analysis_lines = [f"{name}各维度表现："]
-                for d, v in zip(dims, vals):
+                for d, v in zip(dims, vals)[:4]:
                     analysis_lines.append(_dimension_comment(d, v))
                 self._embed_chart(
                     pdf, font_name,
@@ -777,12 +1064,12 @@ class PdfReportBuilder:
             return
 
         pdf.add_page()
-        title = "三、评估与纠错明细" if single_session else "四、训练记录与评估纠错明细"
+        title = "四、评估与纠错明细" if single_session else "五、训练记录与评估纠错明细"
         self._section_title(pdf, font_name, title)
         intro = (
-            "以下为本次训练的评估摘要、维度评分、纠错建议与 AI 指导。"
+            "以下为本次训练的评估摘要与精简纠错建议。"
             if single_session
-            else "下表汇总筛选范围内的训练记录；每条记录后附分项评估、纠错建议与 AI 指导，排版已自动换行。"
+            else "下表汇总筛选范围内的训练记录；每条记录附简要评估与纠错要点，排版已自动换行。"
         )
         self._paragraph(pdf, font_name, intro, 10)
         pdf.ln(3)
@@ -793,8 +1080,8 @@ class PdfReportBuilder:
         if (weaknesses or recommendations) and not single_session:
             self._set_font(pdf, font_name, 10, "B")
             self._paragraph(pdf, font_name, "整体薄弱点与训练建议（汇总）", 10)
-            self._bullet_list(pdf, font_name, "常见薄弱点：", weaknesses[:6], size=9)
-            self._bullet_list(pdf, font_name, "综合训练建议：", recommendations[:6], size=9)
+            self._bullet_list(pdf, font_name, "常见薄弱点：", weaknesses, size=9, max_items=3)
+            self._bullet_list(pdf, font_name, "综合训练建议：", recommendations, size=9, max_items=3)
             pdf.ln(4)
 
         record_widths = [22, 20, 12, 12, 14, 14, 12, 16]
@@ -831,7 +1118,7 @@ class PdfReportBuilder:
         self._paragraph(pdf, font_name, section_label, 11)
         pdf.ln(2)
 
-        session_limit = 1 if single_session else 15
+        session_limit = 1 if single_session else 5
         for session in sessions[:session_limit]:
             evaluation = self._session_evaluation(session)
             feedback = build_session_feedback_view(session)
@@ -853,7 +1140,7 @@ class PdfReportBuilder:
             if summary_text:
                 self._set_font(pdf, font_name, 9, "B")
                 self._paragraph(pdf, font_name, "评估摘要", 9)
-                self._paragraph(pdf, font_name, summary_text, 9)
+                self._paragraph(pdf, font_name, _truncate_text(summary_text, 160), 9)
 
             dims = evaluation.get("dimension_scores", {})
             if dims:
@@ -861,21 +1148,19 @@ class PdfReportBuilder:
                 self._paragraph(pdf, font_name, "质量维度评分", 9)
                 dim_widths = [60, 30]
                 self._table_row(pdf, font_name, dim_widths, ["维度", "得分"], header=True, size=8)
-                for dim_name, dim_score in dims.items():
+                for dim_name, dim_score in list(dims.items())[:5]:
                     self._table_row(pdf, font_name, dim_widths, [dim_name, str(dim_score)], size=8)
-                for d, v in dims.items():
-                    self._paragraph(pdf, font_name, _dimension_comment(d, v), 9)
                 pdf.ln(1)
 
-            self._bullet_list(pdf, font_name, "动作优势：", evaluation.get("strengths", []), size=9)
-            self._bullet_list(pdf, font_name, "待改进项：", evaluation.get("weaknesses", []), size=9)
-            self._bullet_list(pdf, font_name, "训练建议：", evaluation.get("recommendations", []), size=9)
+            self._bullet_list(pdf, font_name, "动作优势：", evaluation.get("strengths", []), size=9, max_items=2)
+            self._bullet_list(pdf, font_name, "待改进项：", evaluation.get("weaknesses", []), size=9, max_items=3)
+            self._bullet_list(pdf, font_name, "训练建议：", evaluation.get("recommendations", []), size=9, max_items=3)
 
             error_cards = [c for c in feedback.get("cards", []) if c.get("kind") == "error"]
             if error_cards:
                 self._set_font(pdf, font_name, 9, "B")
                 self._paragraph(pdf, font_name, "纠错反馈", 9)
-                for card in error_cards:
+                for card in error_cards[:2]:
                     self._ensure_space(pdf, 20)
                     label = card.get("label", "问题")
                     self._set_font(pdf, font_name, 9, "B")
@@ -883,31 +1168,34 @@ class PdfReportBuilder:
                     problem = card.get("problem", "")
                     if problem:
                         self._set_font(pdf, font_name, 9)
-                        self._paragraph(pdf, font_name, f"问题：{problem}", 9)
+                        self._paragraph(pdf, font_name, f"问题：{_truncate_text(problem, 90)}", 9)
                     suggestion = card.get("suggestion", "")
                     if suggestion:
                         pdf.set_text_color(30, 64, 175)
-                        self._paragraph(pdf, font_name, f"纠正建议：{suggestion}", 9)
+                        self._paragraph(pdf, font_name, f"纠正建议：{_truncate_text(suggestion, 90)}", 9)
                         pdf.set_text_color(15, 23, 42)
 
             if feedback.get("error_analysis"):
                 types = [
                     f"{item['type']}（{item['percent']}%）"
-                    for item in feedback["error_analysis"]
+                    for item in feedback["error_analysis"][:3]
                 ]
-                self._bullet_list(pdf, font_name, "错误类型分布：", types, size=9)
+                self._bullet_list(pdf, font_name, "错误类型分布：", types, size=9, max_items=3)
 
             ai_advice = feedback.get("ai_advice", "")
             if ai_advice:
-                self._ensure_space(pdf, 30)
+                self._ensure_space(pdf, 24)
                 self._set_font(pdf, font_name, 9, "B")
                 pdf.set_text_color(30, 64, 175)
                 self._paragraph(pdf, font_name, "AI 智能建议", 9)
                 pdf.set_text_color(15, 23, 42)
-                for block in _strip_markdown(ai_advice).split("\n"):
-                    block = block.strip()
-                    if block:
-                        self._paragraph(pdf, font_name, block, 9)
+                advice_lines = [
+                    block.strip()
+                    for block in _strip_markdown(ai_advice).split("\n")
+                    if block.strip()
+                ][:3]
+                for block in advice_lines:
+                    self._paragraph(pdf, font_name, _truncate_text(block, 120), 9)
 
             pdf.ln(3)
             pdf.set_draw_color(226, 232, 240)

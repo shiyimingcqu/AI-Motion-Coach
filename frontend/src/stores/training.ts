@@ -32,6 +32,17 @@ export interface LiveAnalysisResult {
   feedback: string[];
 }
 
+export const SUPPORTED_EXERCISE_KEYS = [
+  "squat",
+  "plank",
+  "push_up",
+  "jumping_jack",
+  "glute_bridge",
+  "burpee",
+  "lunge",
+  "high_knees",
+] as const;
+
 export const exercises: Exercise[] = [
   {
     key: "squat",
@@ -42,6 +53,16 @@ export const exercises: Exercise[] = [
     modes: ["摄像头实时检测", "视频上传分析"],
     errors: ["下蹲深度不足", "膝盖内扣"],
     accent: "#22c55e"
+  },
+  {
+    key: "plank",
+    name: "平板支撑",
+    category: "核心稳定",
+    level: "高级",
+    duration: "6 分钟",
+    modes: ["摄像头实时检测", "视频上传分析"],
+    errors: ["髋部下沉", "肩肘未对齐"],
+    accent: "#14b8a6"
   },
   {
     key: "push_up",
@@ -64,24 +85,14 @@ export const exercises: Exercise[] = [
     accent: "#f59e0b"
   },
   {
-    key: "plank",
-    name: "平板支撑",
-    category: "核心稳定",
-    level: "高级",
-    duration: "6 分钟",
-    modes: ["摄像头实时检测", "视频上传分析"],
-    errors: ["髋部下沉", "肩肘未对齐"],
-    accent: "#14b8a6"
-  },
-  {
-    key: "lunge",
-    name: "弓步蹲",
+    key: "glute_bridge",
+    name: "臀桥",
     category: "下肢力量",
-    level: "中级",
-    duration: "10 分钟",
+    level: "初级",
+    duration: "8 分钟",
     modes: ["摄像头实时检测", "视频上传分析"],
-    errors: ["膝盖超过脚尖", "身体前倾"],
-    accent: "#8b5cf6"
+    errors: ["腰部代偿", "抬臀高度不足"],
+    accent: "#14b8a6"
   },
   {
     key: "burpee",
@@ -94,44 +105,14 @@ export const exercises: Exercise[] = [
     accent: "#ef4444"
   },
   {
-    key: "mountain_climber",
-    name: "登山跑",
-    category: "核心稳定",
-    level: "中级",
-    duration: "8 分钟",
-    modes: ["摄像头实时检测", "视频上传分析"],
-    errors: ["臀部抬高", "节奏不稳"],
-    accent: "#f97316"
-  },
-  {
-    key: "pull_up",
-    name: "引体向上",
-    category: "上肢力量",
-    level: "高级",
-    duration: "10 分钟",
-    modes: ["摄像头实时检测", "视频上传分析"],
-    errors: ["摆动借力", "下降过快"],
-    accent: "#06b6d4"
-  },
-  {
-    key: "dumbbell_curl",
-    name: "哑铃弯举",
-    category: "上肢力量",
-    level: "初级",
-    duration: "8 分钟",
-    modes: ["视频上传分析"],
-    errors: ["身体晃动", "肘部前移"],
-    accent: "#ec4899"
-  },
-  {
-    key: "dumbbell_press",
-    name: "哑铃推举",
-    category: "上肢力量",
+    key: "lunge",
+    name: "弓步蹲",
+    category: "下肢力量",
     level: "中级",
     duration: "10 分钟",
-    modes: ["视频上传分析"],
-    errors: ["腰部反弓", "手臂未完全伸直"],
-    accent: "#a855f7"
+    modes: ["摄像头实时检测", "视频上传分析"],
+    errors: ["膝盖超过脚尖", "身体前倾"],
+    accent: "#8b5cf6"
   },
   {
     key: "high_knees",
@@ -143,26 +124,6 @@ export const exercises: Exercise[] = [
     errors: ["节奏不稳", "膝盖抬起高度不足"],
     accent: "#eab308"
   },
-  {
-    key: "russian_twist",
-    name: "俄罗斯转体",
-    category: "核心稳定",
-    level: "中级",
-    duration: "8 分钟",
-    modes: ["视频上传分析"],
-    errors: ["身体晃动", "背部未挺直"],
-    accent: "#f97316"
-  },
-  {
-    key: "glute_bridge",
-    name: "臀桥",
-    category: "下肢力量",
-    level: "初级",
-    duration: "8 分钟",
-    modes: ["视频上传分析"],
-    errors: ["腰部代偿", "抬臀高度不足"],
-    accent: "#14b8a6"
-  }
 ];
 
 export const demoSessions: Session[] = [
@@ -234,8 +195,10 @@ export const useTrainingStore = defineStore("training", {
   },
   actions: {
     setExercise(exercise: string) {
-      this.currentExercise = exercise;
-      const meta = exercises.find((item) => item.key === exercise);
+      const allowed = SUPPORTED_EXERCISE_KEYS as readonly string[];
+      const next = allowed.includes(exercise) ? exercise : allowed[0];
+      this.currentExercise = next;
+      const meta = exercises.find((item) => item.key === next);
       if (meta) {
         this.errors = meta.errors;
       }

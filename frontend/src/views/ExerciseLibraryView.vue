@@ -106,7 +106,7 @@ import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import CircularGallery from "@/components/CircularGallery.vue";
-import { useTrainingStore } from "@/stores/training";
+import { exercises, SUPPORTED_EXERCISE_KEYS, useTrainingStore } from "@/stores/training";
 import { getSimpleExercises, type ExerciseLibItem } from "@/api/exercises";
 import StateDisplay from "@/components/StateDisplay.vue";
 
@@ -120,9 +120,12 @@ const levelFilter = ref("");
 const loading = ref(true);
 const backendExercises = ref<ExerciseLibItem[]>([]);
 
-const libraryExercises = computed(() =>
-  backendExercises.value.length > 0
-    ? backendExercises.value.map(e => {
+const libraryExercises = computed(() => {
+  const allowed = new Set<string>(SUPPORTED_EXERCISE_KEYS);
+  const source = backendExercises.value.length > 0
+    ? backendExercises.value.filter((item) => allowed.has(item.key))
+    : exercises;
+  return source.map(e => {
         const catMap: Record<string, string> = {
           squat: t("categories.lower_body"), push_up: t("categories.upper_body"),
           jumping_jack: t("categories.cardio"), plank: t("categories.core"),
@@ -190,9 +193,8 @@ const libraryExercises = computed(() =>
           points: ["Good form", "Full range", "Control"],
           image: imgMap[e.key] || "https://images.unsplash.com/photo-1574680178050-55c6a6a96e0a?w=800&h=600&fit=crop",
         };
-      })
-    : []
-);
+      });
+});
 
 const galleryItems = computed(() =>
   libraryExercises.value.map(e => ({

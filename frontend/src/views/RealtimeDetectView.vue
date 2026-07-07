@@ -229,7 +229,7 @@ import { Camera, FileSearch, Pause, Play, RefreshCcw, Sparkles, Square, UploadCl
 
 import { apiGet, apiUpload, apiWebSocketUrl, apiPost } from "../api/client";
 import { getSimpleExercises, type ExerciseLibItem } from "../api/exercises";
-import { createSession, getSessions, type SessionRecord } from "../api/sessions";
+import { createSession, getSession, getSessions, updateSessionReplay, type SessionRecord } from "../api/sessions";
 import { useAuthStore } from "@/stores/auth";
 import AiAdviceContent from "../components/AiAdviceContent.vue";
 import MetricTile from "../components/MetricTile.vue";
@@ -245,7 +245,7 @@ import {
   toBackendKeypoints,
   toReplayLandmarks,
 } from "../services/poseLandmarker";
-import { useTrainingStore } from "../stores/training";
+import { useTrainingStore, SUPPORTED_EXERCISE_KEYS } from "../stores/training";
 
 type TrainingState = "idle" | "connecting" | "running" | "paused" | "finished" | "error";
 type PoseLandmarkerInstance = Awaited<ReturnType<typeof createPoseLandmarker>>;
@@ -356,6 +356,7 @@ let lastSentAt = 0;
 let motionFrames: MetricValues[] = [];
 let poseReplayFrames: PoseReplayFramePayload[] = [];
 let finishRecoveryInFlight = false;
+let finishHandled = false;
 
 const DEFAULT_EXERCISE_OPTIONS: ExerciseOption[] = [
   {
@@ -421,46 +422,6 @@ const DEFAULT_EXERCISE_OPTIONS: ExerciseOption[] = [
     supported_metrics: ["count", "valid_count", "score"],
     core_angles: ["髋角", "身体直线角", "手腕高度"],
     core_feature_keys: ["hip_angle", "body_line_angle", "wrist_height"],
-  },
-  {
-    key: "mountain_climber",
-    name: "登山跑",
-    description: "评估平板姿势、提膝高度和核心稳定。",
-    supported_metrics: ["count", "valid_count", "score"],
-    core_angles: ["身体直线角", "髋角", "提膝高度"],
-    core_feature_keys: ["body_line_angle", "hip_angle", "knee_raise"],
-  },
-  {
-    key: "pull_up",
-    name: "引体向上",
-    description: "评估上拉幅度、身体控制和左右对称。",
-    supported_metrics: ["count", "valid_count", "score"],
-    core_angles: ["肘角", "身体摆动", "左右对称差"],
-    core_feature_keys: ["elbow_angle", "body_line_angle", "symmetry_diff"],
-  },
-  {
-    key: "dumbbell_curl",
-    name: "哑铃弯举",
-    description: "评估弯举幅度和上臂稳定性。",
-    supported_metrics: ["count", "valid_count", "score"],
-    core_angles: ["肘角", "肩角", "左右对称差"],
-    core_feature_keys: ["elbow_angle", "shoulder_angle", "symmetry_diff"],
-  },
-  {
-    key: "dumbbell_press",
-    name: "哑铃推举",
-    description: "评估推举幅度和肩部控制。",
-    supported_metrics: ["count", "valid_count", "score"],
-    core_angles: ["肘角", "肩角", "左右对称差"],
-    core_feature_keys: ["elbow_angle", "shoulder_angle", "symmetry_diff"],
-  },
-  {
-    key: "russian_twist",
-    name: "俄罗斯转体",
-    description: "评估躯干旋转幅度和核心控制。",
-    supported_metrics: ["count", "valid_count", "score"],
-    core_angles: ["旋转幅度", "躯干角"],
-    core_feature_keys: ["rotation_offset", "trunk_angle"],
   },
 ];
 
@@ -572,11 +533,14 @@ function formatMetricValue(value: number | undefined, key: string) {
 }
 
 function normalizeExerciseOptions(items: ExerciseLibItem[]) {
-  return items.map((item) => ({
-    ...item,
-    core_angles: item.core_angles ?? [],
-    core_feature_keys: item.core_feature_keys ?? [],
-  }));
+  const allowed = new Set<string>(SUPPORTED_EXERCISE_KEYS);
+  return items
+    .filter((item) => allowed.has(item.key))
+    .map((item) => ({
+      ...item,
+      core_angles: item.core_angles ?? [],
+      core_feature_keys: item.core_feature_keys ?? [],
+    }));
 }
 
 async function loadExerciseOptions() {
@@ -662,6 +626,7 @@ async function startTraining() {
   resetDynamicTemplateState(true);
   poseReplayFrames = [];
   resetFinishState();
+  finishHandled = false;
   trainingStartedAt.value = null;
   clearPoseCanvas(overlayRef.value);
   stopVideoTestPlayback();
@@ -706,6 +671,7 @@ function resetTraining() {
   resetDynamicTemplateState(true);
   poseReplayFrames = [];
   resetFinishState();
+  finishHandled = false;
   trainingStartedAt.value = null;
   clearPoseCanvas(overlayRef.value);
 
@@ -770,8 +736,12 @@ function openRealtimeSocket(): Promise<void> {
     };
     socket.onclose = () => {
       stopPoseLoop();
+      if (finishHandled || trainingState.value === "finished" || finishRecoveryInFlight) {
+        return;
+      }
       if (finishPending.value) {
         void recoverAndRouteAfterFinish("实时通道已断开，已尝试恢复本次训练记录。");
+        return;
       }
       if (trainingState.value === "running" || trainingState.value === "connecting") {
         trainingState.value = "error";
@@ -807,24 +777,53 @@ function handleRealtimeMessage(message: Record<string, any>) {
   }
 
   if (message.type === "summary") {
-    resetFinishState();
-    trainingState.value = "finished";
-    stopPoseLoop();
-    poseStatus.value = "";
+    void handleTrainingSummary(message.session);
+  }
+}
 
-    if (motionFrames.length > 0) {
-      scoreByTemplate();
+function resolveSummarySessionId(session: unknown): string {
+  if (!session || typeof session !== "object") return "";
+  const record = session as Record<string, unknown>;
+  const id = record.session_id ?? record.id;
+  return typeof id === "string" && id.length > 0 ? id : "";
+}
+
+async function handleTrainingSummary(sessionPayload: unknown) {
+  if (finishHandled) return;
+  resetFinishState();
+  trainingState.value = "finished";
+  stopPoseLoop();
+  poseStatus.value = "";
+
+  if (motionFrames.length > 0) {
+    scoreByTemplate();
+  }
+
+  const sessionId = resolveSummarySessionId(sessionPayload);
+  lastSessionId.value = sessionId;
+
+  if (sessionId) {
+    finishHandled = true;
+    savedMessage.value = "训练已结束，正在保存姿态回放...";
+    try {
+      await persistTrainingReplay(sessionId);
+    } catch (error) {
+      console.warn("姿态回放补传失败:", error);
     }
-
-    const session = message.session as { session_id?: string; total_count?: number } | undefined;
-    lastSessionId.value = session?.session_id ?? "";
-
-    if (session?.session_id) {
-      savedMessage.value = "训练已结束，正在跳转到本次反馈。";
-      void router.push({ path: "/feedback", query: { session: session.session_id, from: "realtime" } });
-    } else {
-      void recoverAndRouteAfterFinish("训练已结束，已恢复本次训练记录并准备跳转反馈页。");
+    try {
+      await getSession(sessionId);
+    } catch (error) {
+      console.warn("绑定训练记录失败:", error);
     }
+    savedMessage.value = "训练已结束，正在跳转到本次反馈。";
+    await router.push({ path: "/feedback", query: { session: sessionId, from: "realtime" } });
+    return;
+  }
+
+  try {
+    await recoverAndRouteAfterFinish("训练已结束，已恢复本次训练记录并准备跳转反馈页。");
+  } finally {
+    finishHandled = true;
   }
 }
 
@@ -997,12 +996,8 @@ function buildFallbackSessionPayload() {
 
 function isRecentMatchingSession(session: SessionRecord, payload: ReturnType<typeof buildFallbackSessionPayload>) {
   const createdAt = Date.parse(session.created_at);
-  const recentEnough = Number.isFinite(createdAt) && Math.abs(Date.now() - createdAt) <= 2 * 60 * 1000;
-  return recentEnough
-    && session.exercise === payload.exercise
-    && session.total_count === payload.total_count
-    && session.valid_count === payload.valid_count
-    && session.error_count === payload.error_count;
+  const recentEnough = Number.isFinite(createdAt) && (Date.now() - createdAt) <= 2 * 60 * 1000;
+  return recentEnough && session.exercise === payload.exercise;
 }
 
 async function recoverLatestSession(payload: ReturnType<typeof buildFallbackSessionPayload>) {
@@ -1013,6 +1008,14 @@ async function recoverLatestSession(payload: ReturnType<typeof buildFallbackSess
     console.error("查询最近训练记录失败:", error);
     return null;
   }
+}
+
+async function persistTrainingReplay(sessionId: string) {
+  if (!poseReplayFrames.length) return;
+  await updateSessionReplay(sessionId, {
+    pose_replay: poseReplayFrames,
+    pose_replay_meta: buildFallbackSessionPayload().pose_replay_meta,
+  });
 }
 
 async function recoverAndRouteAfterFinish(successMessage: string) {
@@ -1032,13 +1035,20 @@ async function recoverAndRouteAfterFinish(successMessage: string) {
     const existingSession = await recoverLatestSession(payload);
     if (existingSession?.session_id) {
       lastSessionId.value = existingSession.session_id;
+      if (finishHandled) return;
       resetFinishState();
       trainingState.value = "finished";
       savedMessage.value = successMessage;
+      try {
+        await getSession(existingSession.session_id);
+      } catch (error) {
+        console.warn("绑定训练记录失败:", error);
+      }
       await router.push({ path: "/feedback", query: { session: existingSession.session_id, from: "realtime" } });
       return;
     }
 
+    if (finishHandled) return;
     await saveSessionFallback(successMessage, true);
   } finally {
     finishRecoveryInFlight = false;

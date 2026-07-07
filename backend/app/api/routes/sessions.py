@@ -34,7 +34,7 @@ if router and BaseModel:
         total_count: int
         valid_count: int
         error_count: int
-        average_score: int
+        average_score: float
         pose_replay: list[dict] | None = None
         pose_replay_meta: dict | None = None
         issues: list[str] = []
@@ -91,24 +91,11 @@ if router:
         session_id: str,
         current_user=Depends(get_current_active_user) if get_current_active_user else None,
     ):
-        session = session_service.get_session(session_id)
+        user_id = current_user.id if current_user else None
+        session = session_service.claim_session_for_user(session_id, user_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Session not found")
         _deny_session_access(session, current_user)
-
-        if current_user and session.user_id is None:
-            from app.db.session import SessionLocal
-            db = SessionLocal()
-            try:
-                sess = db.query(SessionORM).filter(SessionORM.session_id == session_id).first()
-                if sess and sess.user_id is None:
-                    sess.user_id = current_user.id
-                    db.commit()
-                    db.refresh(sess)
-                    session = sess
-            finally:
-                db.close()
-
         return session.to_dict()
 
     @router.get("/{session_id}/replay")
@@ -116,7 +103,8 @@ if router:
         session_id: str,
         current_user=Depends(get_current_active_user) if get_current_active_user else None,
     ):
-        session = session_service.get_session(session_id)
+        user_id = current_user.id if current_user else None
+        session = session_service.claim_session_for_user(session_id, user_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Session not found")
         _deny_session_access(session, current_user)
@@ -195,7 +183,8 @@ if router:
         body: dict,
         current_user=Depends(get_current_active_user) if get_current_active_user else None,
     ):
-        session = session_service.get_session(session_id)
+        user_id = current_user.id if current_user else None
+        session = session_service.claim_session_for_user(session_id, user_id)
         if session is None:
             raise HTTPException(status_code=404, detail="Session not found")
         _deny_session_access(session, current_user)

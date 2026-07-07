@@ -128,6 +128,39 @@ class SessionService:
         finally:
             db.close()
 
+    def claim_session_for_user(self, session_id: str, user_id: int | None) -> SessionORM | None:
+        """Attach an unassigned session to the logged-in user."""
+        if SessionLocal is None or user_id is None:
+            return self.get_session(session_id)
+
+        db = SessionLocal()
+        try:
+            session = db.query(SessionORM).filter(
+                SessionORM.session_id == session_id
+            ).first()
+            if session is None:
+                return None
+            if session.user_id is None:
+                session.user_id = user_id
+                db.commit()
+                db.refresh(session)
+            return session
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    @staticmethod
+    def user_can_access(session: SessionORM, user_id: int | None, is_admin: bool) -> bool:
+        if is_admin:
+            return True
+        if user_id is None:
+            return True
+        if session.user_id is None:
+            return True
+        return session.user_id == user_id
+
     def update_session_replay(
         self,
         session_id: str,

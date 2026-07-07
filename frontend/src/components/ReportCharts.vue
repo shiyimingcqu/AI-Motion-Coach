@@ -1,5 +1,5 @@
 <template>
-  <section class="report-charts">
+  <section class="report-charts" :class="{ 'fill-height': fillHeight }">
     <article v-if="showTrend" class="chart-card wide">
       <header>
         <h3>7日评分趋势 / 7-Day Score Trend</h3>
@@ -68,6 +68,7 @@ const props = withDefaults(
     trendSeries?: TrendSeriesItem[];
     radarSubtitle?: string;
     trendSubtitle?: string;
+    fillHeight?: boolean;
   }>(),
   {
     showTrend: true,
@@ -78,6 +79,7 @@ const props = withDefaults(
     trendSeries: () => [],
     radarSubtitle: "综合各维度动作质量评估",
     trendSubtitle: "近 7 日训练平均分变化（可按动作区分）",
+    fillHeight: false,
   },
 );
 
@@ -263,6 +265,10 @@ function renderCharts() {
   if (hasDistributionData) initChart(pieRef.value, options.pieOption);
   if (hasRadarData) initChart(radarRef.value, options.radarOption);
   if (hasErrorData) initChart(errorRef.value, options.errorOption);
+
+  nextTick(() => {
+    instances.forEach((chart) => chart.resize());
+  });
 }
 
 function handleResize() {
@@ -288,6 +294,35 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .report-charts { display: grid; gap: 16px; }
+.report-charts.fill-height {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.report-charts.fill-height .chart-row,
+.report-charts.fill-height > .chart-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.report-charts.fill-height .chart-row {
+  grid-template-columns: 1fr !important;
+}
+.report-charts.fill-height .chart-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.report-charts.fill-height .chart-box,
+.report-charts.fill-height .radar-box {
+  flex: 1;
+  min-height: 360px;
+  height: auto !important;
+}
 .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .chart-card {
   padding: 20px;

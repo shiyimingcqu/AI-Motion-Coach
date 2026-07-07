@@ -2,7 +2,7 @@ import { onBeforeUnmount, ref, type Ref } from "vue";
 import { useRouter } from "vue-router";
 
 import { apiWebSocketUrl } from "../api/client";
-import { createSession, getSessions, type SessionRecord, type PoseReplayFrame } from "../api/sessions";
+import { createSession, getSession, getSessions, updateSessionReplay, type SessionRecord, type PoseReplayFrame } from "../api/sessions";
 import {
   clearPoseCanvas,
   createPoseLandmarker,
@@ -54,6 +54,7 @@ export function useRealtimeVideoTest(options: {
   let trainingStartedAt: number | null = null;
   let poseReplayFrames: PoseReplayFrame[] = [];
   let finishRecoveryInFlight = false;
+  let finishHandled = false;
 
   function clearFinishTimeout() {
     if (finishTimeoutId) {
@@ -132,12 +133,8 @@ export function useRealtimeVideoTest(options: {
     payload: ReturnType<typeof buildFallbackSessionPayload>,
   ) {
     const createdAt = Date.parse(session.created_at);
-    const recentEnough = Number.isFinite(createdAt) && Math.abs(Date.now() - createdAt) <= 2 * 60 * 1000;
-    return recentEnough
-      && session.exercise === payload.exercise
-      && session.total_count === payload.total_count
-      && session.valid_count === payload.valid_count
-      && session.error_count === payload.error_count;
+    const recentEnough = Number.isFinite(createdAt) && (Date.now() - createdAt) <= 2 * 60 * 1000;
+    return recentEnough && session.exercise === payload.exercise;
   }
 
   async function recoverLatestSession(payload: ReturnType<typeof buildFallbackSessionPayload>) {
@@ -150,18 +147,65 @@ export function useRealtimeVideoTest(options: {
     }
   }
 
+  async function persistTrainingReplay(sessionId: string) {
+    if (!poseReplayFrames.length) return;
+    await updateSessionReplay(sessionId, {
+      pose_replay: poseReplayFrames,
+      pose_replay_meta: buildFallbackSessionPayload().pose_replay_meta,
+    });
+  }
+
   async function routeToFeedback(sessionId: string, successMessage: string) {
     message.value = successMessage;
+    try {
+      await getSession(sessionId);
+    } catch (error) {
+      console.warn("绑定训练记录失败:", error);
+    }
     await router.push({
       path: "/feedback",
-      query: { session: sessionId, from: "realtime" },
+      query: { session: sessionId, from: "upload" },
     });
+  }
+
+  function resolveSummarySessionId(session: unknown): string {
+    if (!session || typeof session !== "object") return "";
+    const record = session as Record<string, unknown>;
+    const id = record.session_id ?? record.id;
+    return typeof id === "string" && id.length > 0 ? id : "";
+  }
+
+  async function handleTrainingSummary(sessionPayload: unknown) {
+    if (finishHandled) return;
+    resetFinishState();
+    trainingState.value = "finished";
+    stopPoseLoop();
+    poseStatus.value = "";
+    analyzing.value = false;
+
+    const sessionId = resolveSummarySessionId(sessionPayload);
+    if (sessionId) {
+      finishHandled = true;
+      try {
+        await persistTrainingReplay(sessionId);
+      } catch (error) {
+        console.warn("姿态回放补传失败:", error);
+      }
+      await routeToFeedback(sessionId, "分析完成，正在跳转到反馈页。");
+      return;
+    }
+
+    try {
+      await recoverAndRouteAfterFinish("分析完成，正在恢复训练记录并跳转反馈页。");
+    } finally {
+      finishHandled = true;
+    }
   }
 
   async function saveSessionFallback(successMessage: string) {
     const payload = buildFallbackSessionPayload();
 
-    if (payload.total_count <= 0) {
+    if (payload.total_count <= 0 && payload.pose_replay.length === 0) {
       resetFinishState();
       trainingState.value = "finished";
       message.value = "本次没有完成动作，未生成训练记录。";
@@ -175,8 +219,16 @@ export function useRealtimeVideoTest(options: {
         issues: [...new Set(store.errors.filter(Boolean))],
         suggestions: [...new Set(store.feedbacks.filter(Boolean))],
       });
+      if (finishHandled) return;
       resetFinishState();
       trainingState.value = "finished";
+      if (payload.pose_replay.length > 0) {
+        try {
+          await persistTrainingReplay(session.session_id);
+        } catch (error) {
+          console.warn("新建训练补传回放失败:", error);
+        }
+      }
       await routeToFeedback(session.session_id, successMessage);
     } catch (error) {
       console.error("训练记录补存失败:", error);
@@ -193,7 +245,7 @@ export function useRealtimeVideoTest(options: {
 
     try {
       const payload = buildFallbackSessionPayload();
-      if (payload.total_count <= 0) {
+      if (payload.total_count <= 0 && payload.pose_replay.length === 0) {
         resetFinishState();
         trainingState.value = "finished";
         message.value = "本次没有完成动作，未生成训练记录。";
@@ -202,12 +254,21 @@ export function useRealtimeVideoTest(options: {
 
       const existingSession = await recoverLatestSession(payload);
       if (existingSession?.session_id) {
+        if (!existingSession.has_pose_replay && payload.pose_replay.length > 0) {
+          try {
+            await persistTrainingReplay(existingSession.session_id);
+          } catch (error) {
+            console.warn("为已有训练补传回放失败:", error);
+          }
+        }
+        if (finishHandled) return;
         resetFinishState();
         trainingState.value = "finished";
         await routeToFeedback(existingSession.session_id, successMessage);
         return;
       }
 
+      if (finishHandled) return;
       await saveSessionFallback(successMessage);
     } finally {
       finishRecoveryInFlight = false;
@@ -265,18 +326,8 @@ export function useRealtimeVideoTest(options: {
     }
 
     if (messageData.type === "summary") {
-      resetFinishState();
-      trainingState.value = "finished";
-      stopPoseLoop();
-      poseStatus.value = "";
-      analyzing.value = false;
-
-      const session = messageData.session as { session_id?: string } | undefined;
-      if (session?.session_id) {
-        void routeToFeedback(session.session_id, "分析完成，正在跳转到反馈页。");
-      } else {
-        void recoverAndRouteAfterFinish("分析完成，正在恢复训练记录并跳转反馈页。");
-      }
+      void handleTrainingSummary(messageData.session);
+      return;
     }
   }
 
@@ -303,8 +354,12 @@ export function useRealtimeVideoTest(options: {
       };
       socket.onclose = () => {
         stopPoseLoop();
+        if (finishHandled || trainingState.value === "finished" || finishRecoveryInFlight) {
+          return;
+        }
         if (finishPending.value) {
           void recoverAndRouteAfterFinish("分析通道已断开，正在尝试恢复训练记录。");
+          return;
         }
         if (trainingState.value === "running" || trainingState.value === "connecting") {
           trainingState.value = "error";
@@ -391,6 +446,8 @@ export function useRealtimeVideoTest(options: {
     store.resetLiveMetrics();
     store.setExercise(options.exercise.value);
     resetFinishState();
+    finishHandled = false;
+    poseReplayFrames = [];
     cameraError.value = "";
     message.value = "";
     poseStatus.value = "正在加载姿态识别模型...";

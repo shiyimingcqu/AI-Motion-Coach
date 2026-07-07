@@ -1,5 +1,5 @@
 <template>
-  <StateDisplay v-if="loading" type="loading" skeleton="chart" />
+  <StateDisplay v-if="loading && !personalReport" type="loading" skeleton="chart" />
   <div v-else class="score-trends-page assessment-typography">
     <header class="section-page-header">
       <div>
@@ -9,41 +9,44 @@
     </header>
 
     <section
-      v-if="showScoreHero"
-      class="score-hero-banner"
-      :class="scoreFeedback.tone"
+      v-if="showScoreHero || allDistribution.length"
+      class="hero-top-row"
     >
-      <div class="score-hero-main">
-        <span class="score-hero-emoji">{{ scoreFeedback.emoji }}</span>
-        <div>
-          <p class="score-hero-label">{{ heroScoreLabel }}</p>
-          <strong class="score-hero-value">{{ heroScore }}</strong>
-          <span class="score-hero-unit">分</span>
+      <section
+        v-if="showScoreHero"
+        class="score-hero-banner"
+        :class="scoreFeedback.tone"
+      >
+        <div class="score-hero-main">
+          <span class="score-hero-emoji">{{ scoreFeedback.emoji }}</span>
+          <div class="score-hero-score-block">
+            <p class="score-hero-label">{{ heroScoreLabel }}</p>
+            <div class="score-hero-score-line">
+              <strong class="score-hero-value">{{ heroScore }}</strong>
+              <span class="score-hero-unit">分</span>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="score-hero-message">
-        <strong>{{ scoreFeedback.title }}</strong>
-        <p>{{ scoreFeedback.message }}</p>
-        <div v-if="recentSessions.length" class="recent-session-chips">
-          <span
-            v-for="session in recentSessions.slice(0, 5)"
-            :key="session.session_id"
-            class="recent-chip"
-          >
-            {{ exerciseName(session.exercise) }}
-            · {{ session.score }}分
-            {{ getScoreFeedback(session.score).emoji }}
-            <small>{{ getScoreFeedback(session.score).title }}</small>
-          </span>
+        <div class="score-hero-message score-hero-message--compact">
+          <strong>{{ scoreFeedback.title }}</strong>
+          <p>{{ scoreFeedback.message }}</p>
         </div>
-      </div>
+      </section>
+
+      <article v-if="allDistribution.length" class="distribution-hero-card">
+        <header>
+          <h4>训练分布</h4>
+          <span>全部动作</span>
+        </header>
+        <div ref="distributionRef" class="distribution-chart" />
+      </article>
     </section>
 
     <section class="summary-filter-bar">
       <div class="summary-filter-controls">
         <label>
           <span>动作筛选 / Exercise</span>
-          <select v-model="exerciseFilter" @change="loadData">
+          <select v-model="exerciseFilter" @change="() => loadData()">
             <option value="">全部动作</option>
             <option v-for="ex in EXERCISE_OPTIONS" :key="ex.key" :value="ex.key">{{ ex.name }}</option>
           </select>
@@ -134,92 +137,90 @@
             <small>{{ card.hint }}</small>
           </div>
         </button>
-
-        <article class="distribution-fixed-card">
-          <header>
-            <h4>训练分布（全部动作）</h4>
-            <span>不随动作筛选变化</span>
-          </header>
-          <div ref="distributionRef" class="distribution-chart" />
-        </article>
       </aside>
 
       <main class="chart-panel">
-        <CalorieRingPanel
-          v-if="activeChart === 'calorie'"
-          :total-calories="totalCalories"
-          :goal="calorieGoal"
-          :subtitle="calorieSubtitle"
-          :breakdown="displayCharts.calorie_by_exercise"
-        />
+        <div class="chart-panel-body">
+          <CalorieRingPanel
+            v-if="activeChart === 'calorie'"
+            class="chart-panel-fill"
+            :total-calories="totalCalories"
+            :goal="calorieGoal"
+            :subtitle="calorieSubtitle"
+            :breakdown="displayCharts.calorie_by_exercise"
+          />
 
-        <ReportCharts
-          v-else-if="hasChartData || activeChart === 'radar'"
-          :key="activeChart"
-          :charts="displayCharts"
-          :trend-series="trendSeries"
-          :radar-subtitle="radarSubtitle"
-          :trend-subtitle="trendSubtitle"
-          :distribution-data="allDistribution"
-          :show-trend="activeChart === 'trend'"
-          :show-calorie="false"
-          :show-radar="activeChart === 'radar'"
-          :show-errors="false"
-          :show-distribution="false"
-        />
+          <ReportCharts
+            v-else-if="activeChart === 'trend' || activeChart === 'radar'"
+            :key="activeChart"
+            class="chart-panel-fill"
+            fill-height
+            :charts="displayCharts"
+            :trend-series="trendSeries"
+            :radar-subtitle="radarSubtitle"
+            :trend-subtitle="trendSubtitle"
+            :distribution-data="allDistribution"
+            :show-trend="activeChart === 'trend'"
+            :show-calorie="false"
+            :show-radar="activeChart === 'radar'"
+            :show-errors="false"
+            :show-distribution="false"
+          />
 
-        <section v-if="activeChart === 'comparison'" class="progress-card comparison-card">
-          <h2>动作对比详情</h2>
-          <div v-if="comparisonRows.length" class="comparison-table-wrap">
-            <table class="comparison-table">
-              <thead>
-                <tr>
-                  <th>动作</th>
-                  <th>训练次数</th>
-                  <th>平均分</th>
-                  <th>最新分</th>
-                  <th>最高分</th>
-                  <th>有效率</th>
-                  <th>错误数</th>
-                  <th>卡路里</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in comparisonRows" :key="row.exercise">
-                  <td><strong>{{ row.name }}</strong></td>
-                  <td>{{ row.count }}</td>
-                  <td>{{ row.avg_score }}</td>
-                  <td>{{ row.latest_score }}</td>
-                  <td>{{ row.best_score }}</td>
-                  <td>{{ row.valid_rate }}%</td>
-                  <td>{{ row.total_errors }}</td>
-                  <td>{{ row.calories }} kcal</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <StateDisplay v-else type="empty" title="暂无对比数据" text="完成不同动作训练后将显示详细对比" />
-          <div ref="comparisonChartRef" class="comparison-chart" />
-        </section>
+          <section v-else-if="activeChart === 'comparison'" class="comparison-card chart-panel-fill">
+            <h2>动作对比详情</h2>
+            <div v-if="comparisonRows.length" class="comparison-table-wrap">
+              <table class="comparison-table">
+                <thead>
+                  <tr>
+                    <th>动作</th>
+                    <th>训练次数</th>
+                    <th>平均分</th>
+                    <th>最新分</th>
+                    <th>最高分</th>
+                    <th>有效率</th>
+                    <th>错误数</th>
+                    <th>卡路里</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="row in comparisonRows" :key="row.exercise">
+                    <td><strong>{{ row.name }}</strong></td>
+                    <td>{{ row.count }}</td>
+                    <td>{{ row.avg_score }}</td>
+                    <td>{{ row.latest_score }}</td>
+                    <td>{{ row.best_score }}</td>
+                    <td>{{ row.valid_rate }}%</td>
+                    <td>{{ row.total_errors }}</td>
+                    <td>{{ row.calories }} kcal</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <StateDisplay v-else type="empty" title="暂无对比数据" text="完成不同动作训练后将显示详细对比" />
+            <div ref="comparisonChartRef" class="comparison-chart" />
+          </section>
 
-        <StateDisplay
-          v-if="!hasChartData && activeChart !== 'comparison' && activeChart !== 'calorie'"
-          type="empty"
-          title="暂无图表数据"
-          text="完成训练后将生成分数趋势与质量分析"
-        />
+          <StateDisplay
+            v-else
+            class="chart-panel-fill"
+            type="empty"
+            title="暂无图表数据"
+            text="完成训练后将生成分数趋势与质量分析"
+          />
+        </div>
       </main>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: "ScoreTrendsView" });
+
 import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import * as echarts from "echarts";
 import { BarChart3, Flame, Radar, Table2 } from "lucide-vue-next";
 import {
-  getErrorFrames,
-  getPersonalReport,
   type ErrorFrameItem,
   type PersonalReport,
   type SessionPoseSlot,
@@ -231,6 +232,9 @@ import StateDisplay from "../components/StateDisplay.vue";
 import { getScoreFeedback } from "../utils/scoreFeedback";
 import { exercises } from "../stores/training";
 import { getSessions } from "../api/sessions";
+import { useReportsCacheStore } from "../stores/reportsCache";
+
+const reportsCache = useReportsCacheStore();
 
 const EXERCISE_OPTIONS = exercises.map((item) => ({ key: item.key, name: item.name }));
 
@@ -590,6 +594,7 @@ function renderComparisonChart() {
       { name: "最高分", type: "bar", data: rows.map((r) => r.best_score ?? r.avg_score), itemStyle: { color: "#f59e0b" } },
     ],
   });
+  comparisonChart.resize();
 }
 
 function renderDistributionChart() {
@@ -600,31 +605,51 @@ function renderDistributionChart() {
     tooltip: { trigger: "item", formatter: "{b}<br/>{c} 次 · {d}%" },
     series: [{
       type: "pie",
-      radius: ["42%", "68%"],
-      center: ["50%", "50%"],
+      radius: ["40%", "76%"],
+      center: ["50%", "48%"],
       data: allDistribution.value,
       label: { color: "#e2e8f0", fontSize: 10 },
       color: ["#3b82f6", "#8b5cf6", "#14b8a6", "#f59e0b", "#ef4444"],
     }],
   });
+  distributionChart.resize();
 }
 
-async function loadData() {
-  loading.value = true;
+async function loadData(silent = false) {
+  const baseQuery = {
+    date_from: dateFrom.value || undefined,
+    date_to: dateTo.value || undefined,
+  };
+  const filteredQuery = {
+    ...baseQuery,
+    exercise: exerciseFilter.value || undefined,
+  };
+
+  const cachedReport = reportsCache.getPersonalCached(filteredQuery);
+  const cachedAllReport = reportsCache.getPersonalCached(baseQuery);
+  const cachedFrames = reportsCache.getErrorFramesCached(filteredQuery);
+  if (cachedReport) personalReport.value = cachedReport;
+  if (cachedAllReport) allExerciseReport.value = cachedAllReport;
+  if (cachedFrames) {
+    errorFrames.value = cachedFrames.items;
+    thresholds.value = cachedFrames.thresholds.length ? cachedFrames.thresholds : [80, 60];
+    sessionSlots.value = buildSessionSlots(
+      cachedFrames.session_slots,
+      cachedFrames.items,
+      cachedReport || personalReport.value,
+    );
+  }
+
+  if (!silent && !personalReport.value) {
+    loading.value = true;
+  }
   loadError.value = "";
   selectedFrameIndex.value = 0;
   try {
-    const baseQuery = {
-      date_from: dateFrom.value || undefined,
-      date_to: dateTo.value || undefined,
-    };
     const [reportRes, allReportRes, framesRes] = await Promise.all([
-      getPersonalReport({ ...baseQuery, exercise: exerciseFilter.value || undefined }),
-      getPersonalReport(baseQuery),
-      getErrorFrames({
-        ...baseQuery,
-        exercise: exerciseFilter.value || undefined,
-      }),
+      reportsCache.fetchPersonalReport(filteredQuery),
+      reportsCache.fetchPersonalReport(baseQuery),
+      reportsCache.fetchErrorFrames(filteredQuery),
     ]);
     personalReport.value = reportRes;
     allExerciseReport.value = allReportRes;
@@ -668,6 +693,19 @@ watch([comparisonRows, activeChart], () => {
   }
 });
 
+watch(activeChart, () => {
+  nextTick().then(() => {
+    if (activeChart.value === "comparison") {
+      renderComparisonChart();
+    }
+    window.dispatchEvent(new Event("resize"));
+  });
+});
+
+watch(allDistribution, () => {
+  nextTick().then(renderDistributionChart);
+});
+
 watch(visibleErrorFrames, () => {
   if (selectedFrameIndex.value >= visibleErrorFrames.value.length) {
     selectedFrameIndex.value = 0;
@@ -675,7 +713,11 @@ watch(visibleErrorFrames, () => {
 });
 
 onMounted(() => applyRange());
-onActivated(loadData);
+onActivated(() => {
+  if (personalReport.value) {
+    void loadData(true);
+  }
+});
 onBeforeUnmount(() => {
   comparisonChart?.dispose();
   distributionChart?.dispose();
@@ -686,100 +728,111 @@ onBeforeUnmount(() => {
 .assessment-typography :is(h1, h2, h3, h4, strong, .thumb-card strong, .chart-nav-btn strong) {
   font-weight: 800;
 }
-.assessment-typography .section-page-header h1 { font-size: 24px; font-weight: 800; }
-.assessment-typography .section-page-header p { font-size: 14px; font-weight: 600; }
+.assessment-typography .section-page-header h1 { font-size: 22px; font-weight: 800; }
+.assessment-typography .section-page-header p { font-size: 13px; font-weight: 600; }
 .assessment-typography .section-head h2 { font-size: 18px; font-weight: 800; }
 .assessment-typography .section-head p { font-size: 13px; font-weight: 600; }
 .assessment-typography .threshold-tab { font-size: 13px; font-weight: 700; }
 .assessment-typography .thumb-card strong { font-size: 14px; }
 .assessment-typography .thumb-card small { font-size: 12px; font-weight: 600; }
 .assessment-typography .thumb-score { font-size: 12px; font-weight: 800; }
-.assessment-typography .summary-card span { font-size: 13px; font-weight: 700; }
-.assessment-typography .summary-card strong { font-size: 28px; font-weight: 900; }
-.assessment-typography .summary-card small { font-size: 12px; font-weight: 600; }
+.assessment-typography .summary-card span { font-size: 11px; font-weight: 700; }
+.assessment-typography .summary-card strong { font-size: 22px; font-weight: 900; }
+.assessment-typography .summary-card small { font-size: 10px; font-weight: 600; }
 .assessment-typography .chart-nav h3 { font-size: 16px; font-weight: 800; }
 .assessment-typography .chart-nav-btn strong { font-size: 14px; }
 .assessment-typography .chart-nav-btn small { font-size: 12px; font-weight: 600; }
-.assessment-typography .distribution-fixed-card h4 { font-size: 14px; font-weight: 800; }
-.assessment-typography .score-hero-label { font-size: 13px; font-weight: 700; }
-.assessment-typography .score-hero-value { font-size: 44px; }
+.assessment-typography .distribution-hero-card h4 { font-size: 14px; font-weight: 800; }
+.assessment-typography .score-hero-label { font-size: 15px; font-weight: 800; }
+.assessment-typography .score-hero-value { font-size: 52px; }
 .assessment-typography .score-hero-unit { font-size: 16px; }
 .assessment-typography .score-hero-message strong { font-size: 17px; font-weight: 800; }
 .assessment-typography .score-hero-message p { font-size: 14px; font-weight: 600; }
-.assessment-typography .recent-chip { font-size: 12px; font-weight: 700; }
 .assessment-typography .trend-filter-card label { font-size: 13px; font-weight: 700; }
 .assessment-typography .trend-filter-card select { font-size: 13px; font-weight: 600; }
 .assessment-typography .empty-hint { font-size: 13px; font-weight: 600; }
 .assessment-typography .thumb-blank-hint { color: #64748b; font-size: 11px; font-weight: 600; }
 
-.score-trends-page { display: grid; gap: 24px; }
+.score-trends-page {
+  display: grid;
+  gap: 10px;
+}
+.section-page-header {
+  margin: 0;
+}
 .summary-filter-bar {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) 1fr;
-  gap: 16px;
-  align-items: stretch;
-  padding: 16px 20px;
+  grid-template-columns: minmax(200px, 240px) 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 14px;
   border-radius: 12px;
   background: rgba(15,23,42,0.96);
   border: 1px solid rgba(59,130,246,0.1);
 }
 .summary-filter-controls {
   display: grid;
-  gap: 12px;
-  align-content: start;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-content: center;
 }
 .summary-filter-controls label,
-.trend-filter-card label { display: grid; gap: 6px; color: #94a3b8; font-size: 12px; }
+.trend-filter-card label { display: grid; gap: 4px; color: #94a3b8; font-size: 11px; }
 .summary-filter-controls select,
 .trend-filter-card select {
-  padding: 8px 12px;
+  padding: 6px 10px;
   border-radius: 8px;
   border: 1px solid rgba(59,130,246,0.15);
   background: rgba(8,13,26,0.8);
   color: #f8fafc;
+  font-size: 12px;
 }
 .summary-card-grid.merged-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
+}
+.compact-summary {
+  padding: 8px 10px;
+  gap: 2px;
 }
 .trend-filter-card { display: flex; gap: 16px; flex-wrap: wrap; padding: 16px 20px; border-radius: 12px; background: rgba(15,23,42,0.96); border: 1px solid rgba(59,130,246,0.1); }
 .trend-load-error { color: #f87171; font-size: 13px; margin: 0; }
 
 .error-frames-section {
-  padding: 20px;
+  padding: 10px 12px;
   border-radius: 14px;
   background: linear-gradient(145deg, rgba(15,23,42,0.98), rgba(8,13,26,0.99));
   border: 1px solid rgba(239,68,68,0.15);
   display: grid;
-  gap: 14px;
+  gap: 8px;
 }
-.section-head h2 { margin: 0 0 4px; color: #f8fafc; font-size: 16px; }
-.section-head p { margin: 0; color: #64748b; font-size: 12px; }
-.threshold-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.section-head h2 { margin: 0 0 2px; color: #f8fafc; font-size: 15px; }
+.section-head p { margin: 0; color: #64748b; font-size: 11px; }
+.threshold-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .threshold-tab {
-  padding: 8px 14px;
+  padding: 5px 10px;
   border-radius: 8px;
   border: 1px solid rgba(59,130,246,0.12);
   background: rgba(8,13,26,0.5);
   color: #94a3b8;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
 }
 .threshold-tab.active { border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.1); color: #fecaca; }
 .error-frames-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 4fr) minmax(320px, 6fr);
-  gap: 20px;
+  grid-template-columns: minmax(200px, 3fr) minmax(280px, 7fr);
+  gap: 14px;
   align-items: stretch;
   width: 100%;
 }
 .frame-thumbs {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
   width: 100%;
-  max-height: 480px;
+  max-height: 300px;
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 4px;
@@ -787,13 +840,17 @@ onBeforeUnmount(() => {
 .error-frames-section :deep(.error-pose-viewer) {
   min-width: 0;
   width: 100%;
+  min-height: 300px;
+}
+.error-frames-section :deep(.pose-canvas) {
+  height: 300px;
 }
 .thumb-card.blank { opacity: 0.72; border-style: dashed; }
 .thumb-score.blank { background: #475569; }
 .thumb-card {
   display: grid;
-  gap: 4px;
-  padding: 10px 12px;
+  gap: 3px;
+  padding: 8px 10px;
   border-radius: 10px;
   border: 1px solid rgba(59,130,246,0.1);
   background: rgba(8,13,26,0.5);
@@ -821,38 +878,104 @@ onBeforeUnmount(() => {
 
 .score-hero-banner {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 20px;
-  align-items: center;
-  padding: 20px 24px;
-  border-radius: 16px;
+  grid-template-columns: minmax(130px, auto) 1fr;
+  gap: 12px;
+  align-items: stretch;
+  padding: 8px 14px;
+  border-radius: 14px;
   border: 1px solid rgba(59, 130, 246, 0.2);
   background: linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(8, 13, 26, 0.99));
+  min-width: 0;
+  height: 100%;
+}
+.hero-top-row {
+  display: grid;
+  grid-template-columns: 6.5fr 3.5fr;
+  gap: 10px;
+  align-items: stretch;
+  min-height: 148px;
+  max-height: 148px;
+}
+.hero-top-row:has(.score-hero-banner):not(:has(.distribution-hero-card)) {
+  grid-template-columns: 1fr;
+  max-height: none;
+}
+.hero-top-row:not(:has(.score-hero-banner)):has(.distribution-hero-card) {
+  grid-template-columns: 1fr;
+  max-width: 280px;
+}
+.distribution-hero-card {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 2px;
+  padding: 6px 10px 4px;
+  border-radius: 14px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(8, 13, 26, 0.99));
+  min-height: 0;
+  overflow: visible;
+}
+.distribution-hero-card header {
+  margin: 0;
+  line-height: 1.2;
+}
+.distribution-hero-card h4 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 800;
+}
+.distribution-hero-card span {
+  color: #64748b;
+  font-size: 10px;
+}
+.distribution-chart {
+  width: 100%;
+  height: 100%;
+  min-height: 108px;
+  margin-top: -2px;
 }
 .score-hero-banner.excellent { border-color: rgba(250, 204, 21, 0.35); box-shadow: 0 0 32px rgba(250, 204, 21, 0.08); }
 .score-hero-banner.good { border-color: rgba(34, 197, 94, 0.3); }
 .score-hero-banner.encourage { border-color: rgba(59, 130, 246, 0.3); }
 .score-hero-banner.improve { border-color: rgba(249, 115, 22, 0.3); }
-.score-hero-main { display: flex; align-items: center; gap: 16px; }
-.score-hero-emoji { font-size: 42px; line-height: 1; }
-.score-hero-label { margin: 0 0 4px; color: #94a3b8; font-size: 12px; }
-.score-hero-value { font-size: 48px; font-weight: 800; color: #f8fafc; line-height: 1; }
-.score-hero-unit { margin-left: 4px; color: #94a3b8; font-size: 16px; font-weight: 600; }
-.score-hero-message strong { display: block; color: #f8fafc; font-size: 18px; margin-bottom: 6px; }
-.score-hero-message p { margin: 0 0 10px; color: #cbd5e1; font-size: 14px; line-height: 1.5; }
-.recent-session-chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.recent-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  background: rgba(8, 13, 26, 0.6);
-  border: 1px solid rgba(59, 130, 246, 0.12);
-  font-size: 12px;
-  color: #cbd5e1;
+.score-hero-main { display: flex; align-items: center; gap: 12px; min-width: 0; flex-shrink: 0; }
+.score-hero-score-block { min-width: 0; }
+.score-hero-score-line { display: flex; align-items: baseline; gap: 4px; }
+.score-hero-emoji { font-size: 30px; line-height: 1; flex-shrink: 0; }
+.score-hero-label { margin: 0 0 4px; color: #94a3b8; font-size: 15px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.score-hero-value { font-size: 52px; font-weight: 900; color: #f8fafc; line-height: 0.95; letter-spacing: -0.02em; }
+.score-hero-unit { color: #94a3b8; font-size: 16px; font-weight: 700; }
+.score-hero-message--compact {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: 1;
+  min-width: 0;
+  padding: 2px 0;
 }
-.recent-chip small { color: #94a3b8; font-size: 11px; }
+.score-hero-message--compact strong {
+  display: block;
+  color: #f8fafc;
+  font-size: 17px;
+  font-weight: 800;
+  margin-bottom: 4px;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  line-height: 1.25;
+}
+.score-hero-message--compact p {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 
 .highlight-frames-section {
   padding: 20px;
@@ -864,27 +987,85 @@ onBeforeUnmount(() => {
 }
 
 .analytics-layout {
+  --analytics-panel-height: 520px;
   display: grid;
-  grid-template-columns: 4fr 6fr;
+  grid-template-columns: minmax(220px, 3fr) minmax(320px, 7fr);
   gap: 24px;
   align-items: start;
 }
 .chart-panel {
   min-width: 0;
+  height: var(--analytics-panel-height);
+}
+.chart-panel-body {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.chart-panel-fill {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.chart-panel :deep(.calorie-ring-panel) {
+  height: 100%;
+  min-height: 0;
+  padding: 16px;
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  gap: 10px;
+  overflow: hidden;
+  box-sizing: border-box;
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.98), rgba(8, 13, 26, 0.99));
+  border: 1px solid rgba(59, 130, 246, 0.14);
+}
+.chart-panel :deep(.ring-stage) {
+  max-width: none;
+  width: 100%;
+  height: 100%;
+  max-height: 240px;
+  margin: 0 auto;
+  aspect-ratio: auto;
+}
+.chart-panel :deep(.food-equiv) {
+  padding: 8px 10px;
+}
+.chart-panel :deep(.breakdown-rings) {
+  overflow-x: auto;
+}
+.chart-panel :deep(.state-display) {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  place-content: center;
+  border-radius: 14px;
+  background: rgba(15,23,42,0.96);
+  border: 1px solid rgba(59,130,246,0.1);
 }
 .chart-nav {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   padding: 20px;
   border-radius: 14px;
   background: rgba(15,23,42,0.96);
   border: 1px solid rgba(59,130,246,0.1);
+  height: var(--analytics-panel-height);
+  min-height: var(--analytics-panel-height);
+  max-height: var(--analytics-panel-height);
+  box-sizing: border-box;
 }
 .chart-nav h3 { margin: 0; color: #f8fafc; font-size: 14px; }
 .chart-nav-btn {
   display: flex;
   gap: 10px;
-  align-items: flex-start;
+  align-items: center;
+  flex: 1;
+  min-height: 72px;
   padding: 12px;
   border-radius: 10px;
   border: 1px solid rgba(59,130,246,0.08);
@@ -900,27 +1081,59 @@ onBeforeUnmount(() => {
 }
 .chart-nav-btn strong { display: block; color: #f8fafc; font-size: 13px; }
 .chart-nav-btn small { font-size: 11px; }
-.distribution-fixed-card {
-  margin-top: 8px;
-  padding-top: 12px;
-  border-top: 1px solid rgba(59,130,246,0.1);
-}
-.distribution-fixed-card header { margin-bottom: 8px; }
-.distribution-fixed-card h4 { margin: 0 0 2px; color: #f8fafc; font-size: 13px; }
-.distribution-fixed-card span { color: #64748b; font-size: 11px; }
-.distribution-chart { width: 100%; height: 300px; }
 
-.comparison-card { display: grid; gap: 16px; padding: 20px; border-radius: 14px; background: rgba(15,23,42,0.96); border: 1px solid rgba(59,130,246,0.1); }
-.comparison-table-wrap { overflow-x: auto; }
+.comparison-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(15,23,42,0.96);
+  border: 1px solid rgba(59,130,246,0.1);
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.comparison-card h2 {
+  margin: 0;
+  font-size: 15px;
+  color: #f8fafc;
+  flex-shrink: 0;
+}
+.comparison-table-wrap {
+  flex: 0 1 auto;
+  max-height: 42%;
+  overflow: auto;
+  min-height: 0;
+}
+.comparison-chart {
+  flex: 1;
+  min-height: 220px;
+  width: 100%;
+}
 .comparison-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .comparison-table th, .comparison-table td { padding: 10px 12px; border-bottom: 1px solid rgba(59,130,246,0.08); color: #cbd5e1; text-align: left; }
 .comparison-table th { color: #64748b; font-size: 11px; }
-.comparison-chart { width: 100%; height: 260px; }
 .empty-hint { color: #64748b; font-size: 12px; margin: 0; }
 
 @media (max-width: 1000px) {
+  .hero-top-row {
+    grid-template-columns: 1fr;
+    max-height: none;
+  }
+  .hero-top-row:not(:has(.score-hero-banner)):has(.distribution-hero-card) { max-width: none; }
   .summary-filter-bar { grid-template-columns: 1fr; }
+  .summary-filter-controls { grid-template-columns: 1fr 1fr; }
   .summary-card-grid.merged-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .error-frames-layout, .analytics-layout { grid-template-columns: 1fr; }
+  .analytics-layout { --analytics-panel-height: auto; }
+  .chart-nav {
+    height: auto;
+    min-height: auto;
+    max-height: none;
+  }
+  .chart-panel { height: auto; }
+  .chart-panel-fill { min-height: 360px; }
 }
 </style>

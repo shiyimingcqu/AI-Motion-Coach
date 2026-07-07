@@ -7,82 +7,28 @@
       </div>
     </header>
 
-    <section class="summary-card-grid">
-      <article class="summary-card">
-        <span>筛选训练次数</span>
-        <strong class="tone-text-blue">{{ summary.total_sessions }}</strong>
-      </article>
-      <article class="summary-card">
-        <span>平均分数</span>
-        <strong class="tone-text-green">{{ summary.average_score }}</strong>
-      </article>
-      <article class="summary-card">
-        <span>总时长</span>
-        <strong class="tone-text-purple">{{ summary.total_duration_minutes }} min</strong>
-      </article>
-      <article class="summary-card">
-        <span>总卡路里</span>
-        <strong class="tone-text-orange">{{ summary.total_calories ?? 0 }} kcal</strong>
-      </article>
-    </section>
-
-    <StateDisplay v-if="loading" type="loading" skeleton="cards" text="加载数据中..." />
-
-    <template v-else>
-      <section class="export-layout">
-        <div class="export-main">
-          <article class="export-card">
-            <h2>导出格式</h2>
-            <div class="format-grid">
-              <button
-                v-for="fmt in formats"
-                :key="fmt.value"
-                type="button"
-                class="format-option"
-                :class="{ selected: selectedFormat === fmt.value }"
-                @click="selectedFormat = fmt.value"
-              >
-                <span class="settings-icon" :class="fmt.color">
-                  <component :is="fmt.icon" :size="25" />
-                </span>
-                <div>
-                  <strong>{{ fmt.title }}</strong>
-                  <small>{{ fmt.desc }}</small>
-                </div>
-              </button>
-            </div>
-          </article>
-
-          <article class="export-card">
-            <h2>综合报告筛选</h2>
-
-            <label class="export-field">
-              时间范围
-              <select v-model="rangePreset" @change="applyRangePreset">
-                <option value="today">今天</option>
-                <option value="7d">近 7 天</option>
-                <option value="all">全部记录</option>
-                <option value="custom">自定义日期</option>
-              </select>
-            </label>
-
-            <label v-if="rangePreset === 'custom'" class="export-field">
-              自定义日期
-              <div class="date-range-row">
-                <input v-model="dateFrom" type="date" class="date-input" @change="refreshData" />
-                <span>—</span>
-                <input v-model="dateTo" type="date" class="date-input" @change="refreshData" />
+    <section class="export-layout">
+        <article class="export-card export-card--format">
+          <h2>导出格式</h2>
+          <div class="format-grid">
+            <button
+              v-for="fmt in formats"
+              :key="fmt.value"
+              type="button"
+              class="format-option"
+              :class="{ selected: selectedFormat === fmt.value }"
+              @click="selectedFormat = fmt.value"
+            >
+              <span class="settings-icon" :class="fmt.color">
+                <component :is="fmt.icon" :size="25" />
+              </span>
+              <div>
+                <strong>{{ fmt.title }}</strong>
+                <small>{{ fmt.desc }}</small>
               </div>
-            </label>
-
-            <label class="export-field">
-              动作类型
-              <select v-model="exerciseFilter" @change="refreshData">
-                <option value="">全部动作</option>
-                <option v-for="ex in EXERCISE_OPTIONS" :key="ex.key" :value="ex.key">{{ ex.name }}</option>
-              </select>
-            </label>
-
+            </button>
+          </div>
+          <div class="export-format-footer">
             <button
               class="primary-button"
               type="button"
@@ -93,35 +39,43 @@
               {{ exporting ? "生成中..." : "下载综合报告" }}
             </button>
             <div v-if="error" class="error-message">{{ error }}</div>
-          </article>
-        </div>
-
-        <aside class="quick-export-card">
-          <h2>快速导出</h2>
-          <button class="quick-button" type="button" :disabled="summary.total_sessions === 0" @click="quickExport('pdf', '7d')">
-            <FileText :size="20" /> 近7天 PDF
-          </button>
-          <button class="quick-button" type="button" :disabled="summary.total_sessions === 0" @click="quickExport('pdf', 'all')">
-            <FileText :size="20" /> 全部 PDF
-          </button>
-          <button class="quick-button" type="button" :disabled="summary.total_sessions === 0" @click="quickExport('csv', 'all')">
-            <FileSpreadsheet :size="20" /> 全部 CSV
-          </button>
-
-          <div class="recent-export-box">
-            <h3>预览说明</h3>
-            <p class="preview-desc">
-              综合 PDF 包含训练概览、图表分析、训练记录明细、分项评估与纠错建议。
-              下方训练记录可单独勾选，生成每次训练的独立评估报告。
-            </p>
-            <div v-if="summary.total_sessions > 0" class="preview-stats">
-              <div><span>范围</span><strong>{{ rangeLabel }}</strong></div>
-              <div><span>动作</span><strong>{{ exerciseLabel }}</strong></div>
-              <div><span>训练次数</span><strong>{{ summary.total_sessions }}</strong></div>
-              <div><span>均分</span><strong>{{ summary.average_score }}</strong></div>
-            </div>
           </div>
-        </aside>
+        </article>
+
+        <article class="export-card export-card--filter">
+          <h2>综合报告筛选</h2>
+
+          <div class="export-filter-fields">
+            <label class="export-field">
+              <span class="export-field-label">时间范围</span>
+              <select v-model="rangePreset" class="export-select" @change="applyRangePreset">
+                <option value="today">今天</option>
+                <option value="7d">近 7 天</option>
+                <option value="all">全部记录</option>
+                <option value="custom">自定义日期</option>
+              </select>
+            </label>
+
+            <div class="export-date-reserve" :class="{ 'is-visible': rangePreset === 'custom' }">
+              <label v-show="rangePreset === 'custom'" class="export-field">
+                <span class="export-field-label">自定义日期</span>
+                <div class="date-range-row">
+                  <input v-model="dateFrom" type="date" class="date-input" @change="() => refreshData()" />
+                  <span>—</span>
+                  <input v-model="dateTo" type="date" class="date-input" @change="() => refreshData()" />
+                </div>
+              </label>
+            </div>
+
+            <label class="export-field">
+              <span class="export-field-label">动作类型</span>
+              <select v-model="exerciseFilter" class="export-select" @change="() => refreshData()">
+                <option value="">全部动作</option>
+                <option v-for="ex in EXERCISE_OPTIONS" :key="ex.key" :value="ex.key">{{ ex.name }}</option>
+              </select>
+            </label>
+          </div>
+        </article>
       </section>
 
       <section class="records-section">
@@ -221,7 +175,6 @@
           </table>
         </section>
       </section>
-    </template>
 
     <div v-if="showDetail" class="modal-overlay" @click.self="closeDetail">
       <div class="modal-content report-detail-modal">
@@ -284,15 +237,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
+defineOptions({ name: "ExportReportsView" });
+
+import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import * as echarts from "echarts";
 import { Download, Eye, FileSpreadsheet, FileText, Filter, X } from "lucide-vue-next";
 import StateDisplay from "@/components/StateDisplay.vue";
 import {
-  getPersonalReport,
   getReportDetail,
-  getReports,
   exportReport,
   exportSessionReport,
   downloadReport,
@@ -300,13 +253,12 @@ import {
   type ReportDetail,
   type ReportItem,
 } from "@/api/reports";
+import { useReportsCacheStore } from "@/stores/reportsCache";
+import { exercises } from "@/stores/training";
 
-const EXERCISE_OPTIONS = [
-  { key: "squat", name: "深蹲" },
-  { key: "push_up", name: "俯卧撑" },
-  { key: "jumping_jack", name: "开合跳" },
-  { key: "plank", name: "平板支撑" },
-];
+const reportsCache = useReportsCacheStore();
+
+const EXERCISE_OPTIONS = exercises.map((item) => ({ key: item.key, name: item.name }));
 
 const formats = [
   { value: "pdf", title: "PDF 综合报告", desc: "含图表、评估、纠错建议的完整报告", icon: FileText, color: "tone-red" },
@@ -327,7 +279,6 @@ const rangePreset = ref("7d");
 const dateFrom = ref("");
 const dateTo = ref("");
 const exerciseFilter = ref("");
-const loading = ref(true);
 const recordsLoading = ref(false);
 const exporting = ref(false);
 const exportingSelected = ref(false);
@@ -348,19 +299,6 @@ const queryParams = computed(() => ({
   date_to: dateTo.value || undefined,
   exercise: exerciseFilter.value || undefined,
 }));
-
-const rangeLabel = computed(() => {
-  if (rangePreset.value === "today") return "今天";
-  if (rangePreset.value === "7d") return "近 7 天";
-  if (rangePreset.value === "all") return "全部";
-  return `${dateFrom.value || "—"} ~ ${dateTo.value || "—"}`;
-});
-
-const exerciseLabel = computed(() =>
-  exerciseFilter.value
-    ? EXERCISE_OPTIONS.find((e) => e.key === exerciseFilter.value)?.name ?? exerciseFilter.value
-    : "全部动作",
-);
 
 const filteredReports = computed(() => {
   let list = [...reports.value];
@@ -410,13 +348,24 @@ async function applyRangePreset() {
   await refreshData();
 }
 
-async function refreshData() {
-  recordsLoading.value = true;
+function hydrateFromCache() {
+  const cachedSummary = reportsCache.getPersonalCached(queryParams.value);
+  const cachedReports = reportsCache.getReportsCached(queryParams.value);
+  if (cachedSummary) summary.value = cachedSummary;
+  if (cachedReports) reports.value = cachedReports.items;
+  return Boolean(cachedSummary && cachedReports);
+}
+
+async function refreshData(silent = false) {
+  if (!silent && !reports.value.length) {
+    recordsLoading.value = true;
+  }
+  hydrateFromCache();
   error.value = "";
   try {
     const [personalRes, reportListRes] = await Promise.all([
-      getPersonalReport(queryParams.value),
-      getReports(queryParams.value),
+      reportsCache.fetchPersonalReport(queryParams.value),
+      reportsCache.fetchReports(queryParams.value),
     ]);
     summary.value = personalRes;
     reports.value = reportListRes.items;
@@ -426,8 +375,10 @@ async function refreshData() {
     );
   } catch (err: unknown) {
     error.value = err instanceof Error ? err.message : "加载失败";
-    summary.value.total_sessions = 0;
-    reports.value = [];
+    if (!silent) {
+      summary.value.total_sessions = 0;
+      reports.value = [];
+    }
   } finally {
     recordsLoading.value = false;
   }
@@ -464,13 +415,6 @@ async function handleBulkExport() {
   } finally {
     exporting.value = false;
   }
-}
-
-async function quickExport(format: "pdf" | "csv", range: "7d" | "all") {
-  rangePreset.value = range;
-  applyRangePreset();
-  selectedFormat.value = format;
-  await handleBulkExport();
 }
 
 async function downloadSingle(report: ReportItem) {
@@ -572,15 +516,17 @@ function closeDetail() {
 }
 
 onMounted(async () => {
-  loading.value = true;
-  try {
-    await applyRangePreset();
-    const sessionId = route.query.session;
-    if (typeof sessionId === "string" && sessionId) {
-      await openDetail(sessionId);
-    }
-  } finally {
-    loading.value = false;
+  hydrateFromCache();
+  await applyRangePreset();
+  const sessionId = route.query.session;
+  if (typeof sessionId === "string" && sessionId) {
+    await openDetail(sessionId);
+  }
+});
+
+onActivated(() => {
+  if (reports.value.length) {
+    void refreshData(true);
   }
 });
 
@@ -593,17 +539,11 @@ onBeforeUnmount(disposeDetailCharts);
 }
 .export-typography .section-page-header h1 { font-size: 24px; font-weight: 800; }
 .export-typography .section-page-header p { font-size: 14px; font-weight: 600; }
-.export-typography .summary-card span { font-size: 13px; font-weight: 700; }
-.export-typography .summary-card strong { font-size: 28px; font-weight: 900; }
 .export-typography .export-card h2 { font-size: 17px; font-weight: 800; }
 .export-typography .export-field { font-size: 14px; font-weight: 700; }
 .export-typography .export-field select, .export-typography .date-input { font-size: 13px; font-weight: 600; }
 .export-typography .primary-button { font-size: 14px; font-weight: 800; }
 .export-typography .ghost-button { font-size: 13px; font-weight: 700; }
-.export-typography .quick-button { font-size: 13px; font-weight: 700; }
-.export-typography .preview-desc { font-size: 13px; font-weight: 600; }
-.export-typography .preview-stats div { font-size: 13px; font-weight: 600; }
-.export-typography .preview-stats strong { font-size: 15px; font-weight: 800; }
 .export-typography .records-header h2 { font-size: 17px; font-weight: 800; }
 .export-typography .records-header p { font-size: 13px; font-weight: 600; }
 .export-typography .report-table th { font-size: 12px; font-weight: 800; }
@@ -622,36 +562,109 @@ onBeforeUnmount(disposeDetailCharts);
 .section-page-header h1 { margin: 0 0 4px; color: #f8fafc; }
 .section-page-header p { margin: 0; color: #64748b; font-size: 13px; }
 
-.summary-card-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-.summary-card { background: rgba(15,23,42,0.96); border: 1px solid rgba(59,130,246,0.1); border-radius: 12px; padding: 18px; display: grid; gap: 6px; }
-.summary-card span { color: #64748b; font-size: 12px; }
-.summary-card strong { font-size: 26px; font-weight: 900; }
 .tone-text-blue { color: #60a5fa; }
 .tone-text-green { color: #34d399; }
 .tone-text-purple { color: #a78bfa; }
 .tone-text-orange { color: #fbbf24; }
 
-.export-layout { display: grid; grid-template-columns: 1.6fr 1fr; gap: 24px; }
-.export-card { padding: 24px; border-radius: 14px; background: linear-gradient(180deg, rgba(15,23,42,0.96), rgba(8,13,26,0.98)); border: 1px solid rgba(59,130,246,0.1); display: grid; gap: 18px; }
-.export-card h2 { color: #f8fafc; font-size: 16px; margin: 0; }
-.format-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.format-option { display: flex; gap: 12px; padding: 16px; border: 1px solid rgba(59,130,246,0.08); border-radius: 10px; background: rgba(8,13,26,0.4); cursor: pointer; text-align: left; color: #94a3b8; }
+.export-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  width: 100%;
+  align-items: stretch;
+}
+.export-card {
+  padding: 24px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(15,23,42,0.96), rgba(8,13,26,0.98));
+  border: 1px solid rgba(59,130,246,0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 332px;
+  min-height: 332px;
+  max-height: 332px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.export-card--filter {
+  gap: 14px;
+}
+.export-card--format {
+  gap: 10px;
+}
+.export-card h2 { color: #f8fafc; font-size: 16px; margin: 0; flex-shrink: 0; }
+.format-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  flex: 0 0 auto;
+  align-content: start;
+}
+.export-format-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+  padding-top: 6px;
+}
+.export-filter-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+}
+.export-date-reserve {
+  min-height: 0;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.15s ease;
+}
+.export-date-reserve.is-visible {
+  min-height: 68px;
+  max-height: 68px;
+}
+.format-option { display: flex; gap: 10px; padding: 10px 12px; border: 1px solid rgba(59,130,246,0.08); border-radius: 10px; background: rgba(8,13,26,0.4); cursor: pointer; text-align: left; color: #94a3b8; }
 .format-option.selected { border-color: rgba(59,130,246,0.3); background: rgba(59,130,246,0.06); }
-.export-field { display: grid; gap: 8px; color: #cbd5e1; font-size: 13px; font-weight: 600; }
-.export-field select, .date-input { padding: 10px 14px; border: 1px solid rgba(59,130,246,0.1); border-radius: 8px; background: rgba(8,13,26,0.7); color: #f8fafc; }
-.date-range-row { display: flex; align-items: center; gap: 8px; }
+.export-field {
+  display: grid;
+  grid-template-rows: auto 40px;
+  gap: 6px;
+  color: #cbd5e1;
+  font-size: 13px;
+  font-weight: 600;
+}
+.export-field-label {
+  display: block;
+  line-height: 1.2;
+  min-height: 17px;
+}
+.export-field select,
+.export-select,
+.date-input {
+  height: 40px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border: 1px solid rgba(59,130,246,0.1);
+  border-radius: 8px;
+  background: rgba(8,13,26,0.7);
+  color: #f8fafc;
+  width: 100%;
+}
+.export-date-reserve .export-field {
+  grid-template-rows: auto 40px;
+}
+.date-range-row { display: flex; align-items: center; gap: 8px; height: 40px; }
+.date-range-row .date-input { flex: 1; min-width: 0; }
 .primary-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 24px; border: none; border-radius: 9px; background: linear-gradient(135deg, #3b82f6, #6366f1); color: #fff; font-weight: 700; cursor: pointer; }
 .primary-button.compact { padding: 10px 16px; font-size: 13px; }
 .primary-button:disabled { opacity: 0.5; cursor: not-allowed; }
 .ghost-button { padding: 10px 14px; border: 1px solid rgba(59,130,246,0.15); border-radius: 9px; background: transparent; color: #94a3b8; cursor: pointer; font-size: 13px; }
 .ghost-button:disabled { opacity: 0.4; cursor: not-allowed; }
 .error-message { color: #f87171; font-size: 13px; }
-
-.quick-export-card { padding: 24px; border-radius: 14px; background: linear-gradient(180deg, rgba(15,23,42,0.96), rgba(8,13,26,0.98)); border: 1px solid rgba(59,130,246,0.1); display: grid; gap: 12px; align-content: start; }
-.quick-button { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border: 1px solid rgba(59,130,246,0.08); border-radius: 9px; background: rgba(8,13,26,0.4); color: #94a3b8; cursor: pointer; }
-.preview-desc { color: #64748b; font-size: 12px; line-height: 1.6; margin: 0 0 12px; }
-.preview-stats div { display: flex; justify-content: space-between; color: #94a3b8; font-size: 13px; margin-bottom: 6px; }
-.preview-stats strong { color: #f8fafc; }
 
 .records-section { display: grid; gap: 16px; padding: 24px; border-radius: 14px; background: linear-gradient(180deg, rgba(15,23,42,0.96), rgba(8,13,26,0.98)); border: 1px solid rgba(59,130,246,0.1); }
 .records-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
@@ -710,8 +723,8 @@ onBeforeUnmount(disposeDetailCharts);
 .eval-columns ul { margin: 0; padding-left: 16px; color: #94a3b8; font-size: 12px; line-height: 1.6; }
 .modal-export-btn { width: 100%; }
 
-@media (max-width: 1000px) {
-  .export-layout, .summary-card-grid { grid-template-columns: 1fr; }
+@media (max-width: 900px) {
+  .export-layout { grid-template-columns: 1fr; }
   .detail-charts, .eval-columns { grid-template-columns: 1fr; }
 }
 </style>

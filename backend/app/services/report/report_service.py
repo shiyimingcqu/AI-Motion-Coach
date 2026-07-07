@@ -459,6 +459,17 @@ th {{ background: #f1f5f9; }}
         sessions = self._query_sessions(
             user_id, date_from, date_to, include_all_users, exercise
         )
+        from app.services.report.error_frame_service import error_frame_service
+
+        assessment_data = error_frame_service.list_error_frames(
+            user_id=user_id,
+            date_from=date_from,
+            date_to=date_to,
+            include_all_users=include_all_users,
+            exercise=exercise,
+            limit=80,
+            session_scan=30,
+        )
         return pdf_report_builder.build(
             summary,
             sessions,
@@ -466,6 +477,7 @@ th {{ background: #f1f5f9; }}
             date_from=date_from,
             date_to=date_to,
             exercise=exercise,
+            assessment_data=assessment_data,
         )
 
     def export_session_pdf(self, session: SessionORM, username: str = "学员") -> bytes:
@@ -473,6 +485,16 @@ th {{ background: #f1f5f9; }}
 
         summary = self._aggregate_personal_data([session])
         date_str = session.created_at.strftime("%Y-%m-%d") if session.created_at else None
+        from app.services.report.error_frame_service import error_frame_service
+
+        assessment_data = error_frame_service.list_error_frames(
+            user_id=session.user_id,
+            date_from=date_str,
+            date_to=date_str,
+            exercise=session.exercise,
+            limit=20,
+            session_scan=1,
+        )
         return pdf_report_builder.build(
             summary,
             [session],
@@ -481,6 +503,7 @@ th {{ background: #f1f5f9; }}
             date_to=date_str,
             exercise=session.exercise,
             single_session=True,
+            assessment_data=assessment_data,
         )
 
     def class_summary(self) -> dict:
