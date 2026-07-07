@@ -297,6 +297,121 @@ class AnalysisTests(unittest.TestCase):
         })
         self.assertIn("下蹲阶段深度不足", result["issues"])
 
+    def test_squat_completed_rep_uses_active_template_score(self):
+        analyzer = get_analyzer("squat")
+        state: dict = {}
+        analyzer.score_rep_by_active_template = lambda samples: {
+            "score": 82.0,
+            "score_source": "template",
+            "template_id": "squat_template_side_v1",
+            "template_detail_scores": {"knee_angle": 82.0},
+            "template_differences": {"knee_angle": 5.0},
+            "is_valid": True,
+        }
+        down_frame, up_frame = self._squat_down_up_frames()
+
+        analyzer.analyze_frame(down_frame, state)
+        result = analyzer.analyze_frame(up_frame, state)
+
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["score_source"], "template")
+        self.assertEqual(result["score"], 82.0)
+        self.assertEqual(result["template_id"], "squat_template_side_v1")
+        self.assertEqual(analyzer.get_session_summary()["average_score"], 82)
+
+    def test_squat_without_active_template_uses_rule_score(self):
+        analyzer = get_analyzer("squat")
+        state: dict = {}
+        down_frame, up_frame = self._squat_down_up_frames()
+
+        analyzer.analyze_frame(down_frame, state)
+        result = analyzer.analyze_frame(up_frame, state)
+
+        self.assertEqual(result["count"], 1)
+        self.assertEqual(result["score_source"], "rule")
+        self.assertIsNone(result["template_id"])
+
+    def test_template_average_score_uses_completed_rep_scores(self):
+        analyzer = get_analyzer("squat")
+        state: dict = {}
+        scores = [90.0, 70.0]
+
+        def template_score(samples):
+            return {
+                "score": scores.pop(0),
+                "score_source": "template",
+                "template_id": "squat_template_side_v1",
+                "template_detail_scores": {},
+                "template_differences": {},
+                "is_valid": True,
+            }
+
+        analyzer.score_rep_by_active_template = template_score
+        down_frame, up_frame = self._squat_down_up_frames()
+
+        analyzer.analyze_frame(down_frame, state)
+        analyzer.analyze_frame(up_frame, state)
+        analyzer.analyze_frame(down_frame, state)
+        analyzer.analyze_frame(up_frame, state)
+
+        summary = analyzer.get_session_summary()
+        self.assertEqual(summary["total_count"], 2)
+        self.assertEqual(summary["average_score"], 80)
+
+    def test_template_valid_count_uses_fair_threshold_result(self):
+        analyzer = get_analyzer("squat")
+        state: dict = {}
+        validity = [False, True]
+
+        def template_score(samples):
+            is_valid = validity.pop(0)
+            return {
+                "score": 59.0 if not is_valid else 60.0,
+                "score_source": "template",
+                "template_id": "squat_template_side_v1",
+                "template_detail_scores": {},
+                "template_differences": {},
+                "is_valid": is_valid,
+            }
+
+        analyzer.score_rep_by_active_template = template_score
+        down_frame, up_frame = self._squat_down_up_frames()
+
+        analyzer.analyze_frame(down_frame, state)
+        analyzer.analyze_frame(up_frame, state)
+        analyzer.analyze_frame(down_frame, state)
+        analyzer.analyze_frame(up_frame, state)
+
+        summary = analyzer.get_session_summary()
+        self.assertEqual(summary["total_count"], 2)
+        self.assertEqual(summary["valid_count"], 1)
+
+    @staticmethod
+    def _squat_down_up_frames():
+        shoulders = {
+            "left_shoulder": NormalizedKeypoint(x=0.45, y=0.20, visibility=0.99),
+            "right_shoulder": NormalizedKeypoint(x=0.55, y=0.20, visibility=0.99),
+        }
+        down_frame = {
+            **shoulders,
+            "left_hip": NormalizedKeypoint(x=0.45, y=0.72, visibility=0.99),
+            "left_knee": NormalizedKeypoint(x=0.47, y=0.66, visibility=0.99),
+            "left_ankle": NormalizedKeypoint(x=0.47, y=0.82, visibility=0.99),
+            "right_hip": NormalizedKeypoint(x=0.55, y=0.72, visibility=0.99),
+            "right_knee": NormalizedKeypoint(x=0.53, y=0.66, visibility=0.99),
+            "right_ankle": NormalizedKeypoint(x=0.53, y=0.82, visibility=0.99),
+        }
+        up_frame = {
+            **shoulders,
+            "left_hip": NormalizedKeypoint(x=0.45, y=0.24, visibility=0.99),
+            "left_knee": NormalizedKeypoint(x=0.47, y=0.58, visibility=0.99),
+            "left_ankle": NormalizedKeypoint(x=0.47, y=0.82, visibility=0.99),
+            "right_hip": NormalizedKeypoint(x=0.55, y=0.24, visibility=0.99),
+            "right_knee": NormalizedKeypoint(x=0.53, y=0.58, visibility=0.99),
+            "right_ankle": NormalizedKeypoint(x=0.53, y=0.82, visibility=0.99),
+        }
+        return down_frame, up_frame
+
 
 if __name__ == "__main__":
     unittest.main()

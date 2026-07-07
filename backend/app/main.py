@@ -1,6 +1,8 @@
 from app.api.router import create_api_router
 from app.core.config import settings
+from app.db.session import SessionLocal
 from app.db.init_db import init_db
+from app.services.analysis.template_service import refresh_active_templates
 
 try:
     from fastapi import FastAPI
@@ -24,6 +26,11 @@ def create_app():
 
     # 初始化数据库（创建表和默认账号）
     init_db()
+    db = SessionLocal()
+    try:
+        refresh_active_templates(db)
+    finally:
+        db.close()
 
     application.add_middleware(
         CORSMiddleware,
