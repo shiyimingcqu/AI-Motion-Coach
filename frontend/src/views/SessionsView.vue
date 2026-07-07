@@ -4,6 +4,9 @@
       <div>
         <h1>{{ $t("sessions.title") }}</h1>
       </div>
+      <div class="streak-tag" v-if="streakDays > 0">
+        <strong>{{ $t("sessions.streak", { count: streakDays }) }}</strong>
+      </div>
     </header>
 
     <section class="filter-card report-filter-card">
@@ -26,6 +29,14 @@
       <StateDisplay v-else-if="error" type="error" :title="$t('common.loadFailed')" :text="error" />
       <StateDisplay v-else-if="filteredSessions.length === 0" type="empty" :title="$t('sessions.noSessions')" :text="$t('sessions.noSessionsText')" />
       <table v-else class="report-table">
+        <colgroup>
+          <col style="width:18%">
+          <col style="width:18%">
+          <col style="width:12%">
+          <col style="width:10%">
+          <col style="width:12%">
+          <col style="width:30%">
+        </colgroup>
         <thead>
           <tr>
             <th>{{ $t("sessions.tableHead_datetime") }}</th>
@@ -33,7 +44,6 @@
             <th>{{ $t("sessions.tableHead_duration") }}</th>
             <th>{{ $t("sessions.tableHead_reps") }}</th>
             <th>{{ $t("sessions.tableHead_score") }}</th>
-            <th>REPLAY</th>
             <th>{{ $t("sessions.tableHead_actions") }}</th>
           </tr>
         </thead>
@@ -48,14 +58,13 @@
                 {{ session.average_score }}
               </span>
             </td>
-            <td>
-              <span v-if="session.has_pose_replay" title="有 3D 回放">🎬</span>
-              <span v-else>—</span>
-            </td>
-            <td>
-              <button @click="viewSession(session.session_id)">查看</button>
-              <button v-if="session.has_pose_replay" @click="viewReplay(session.session_id)">3D 回放</button>
-              <button class="btn-delete" @click="handleDelete(session)">删除</button>
+            <td class="actions-cell">
+              <div class="actions-row">
+                <button @click="viewSession(session.session_id)">查看报告</button>
+                <button v-if="session.has_pose_replay" @click="viewReplay(session.session_id)">3D 回放</button>
+                <span v-else class="na-text">--</span>
+                <button @click="viewFeedback(session.session_id)">动作反馈</button>
+              </div>
             </td>
           </tr>
         </tbody>
@@ -68,18 +77,6 @@
         <strong>{{ card.value }}</strong>
       </article>
     </section>
-
-    <!-- Streak -->
-    <section class="blue-shadow-card" style="margin-top:16px;padding:14px 20px;">
-      <span class="blue-solid"><Flame :size="28" /></span>
-      <div style="margin-left:10px">
-        <strong v-if="streakDays > 0">{{ $t("sessions.streak", { count: streakDays }) }}</strong>
-        <strong v-else>{{ $t("sessions.noStreakYet") }}</strong>
-        <p style="margin:4px 0 0;font-size:13px;color:#64748b">
-          {{ streakDays > 0 ? $t("sessions.keepGoing") : $t("sessions.startFirst") }}
-        </p>
-      </div>
-    </section>
   </div>
 </template>
 
@@ -87,9 +84,9 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { Filter, Flame } from "lucide-vue-next";
+import { Filter, Trash2 } from "lucide-vue-next";
 import StateDisplay from "../components/StateDisplay.vue";
-import { getSessions, deleteSession as apiDeleteSession } from "../api/sessions";
+import { getSessions } from "../api/sessions";
 
 const router = useRouter();
 const { t } = useI18n();
@@ -103,7 +100,6 @@ interface SessionItem {
   valid_count: number;
   error_count: number;
   average_score: number;
-  has_pose_replay?: boolean;
 }
 
 const sessions = ref<SessionItem[]>([]);
@@ -144,11 +140,15 @@ const filteredSessions = computed(() => {
 });
 
 function viewSession(session_id: string) {
-  router.push("/export?session=" + session_id);
+  router.push("/reports?session=" + session_id);
 }
 
 function viewReplay(session_id: string) {
   router.push("/?replay=" + session_id);
+}
+
+function viewFeedback(session_id: string) {
+  router.push("/feedback?session=" + session_id);
 }
 
 const summaryCards = computed(() => {
@@ -212,16 +212,6 @@ async function loadSessions() {
     error.value = e?.message || t("common.networkError");
   } finally {
     loading.value = false;
-  }
-}
-
-async function handleDelete(session: SessionItem) {
-  if (!confirm(`确定删除 ${exerciseLabels[session.exercise] || session.exercise} 训练记录？`)) return;
-  try {
-    await apiDeleteSession(session.session_id);
-    sessions.value = sessions.value.filter(s => s.session_id !== session.session_id);
-  } catch (e: any) {
-    alert(e?.message || "删除失败");
   }
 }
 </script>
