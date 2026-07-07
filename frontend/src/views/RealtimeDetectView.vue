@@ -223,7 +223,7 @@ import { Camera, FileSearch, Pause, Play, RefreshCcw, Sparkles, Square, UploadCl
 
 import { apiGet, apiUpload, apiWebSocketUrl, apiPost } from "../api/client";
 import { getSimpleExercises, type ExerciseLibItem } from "../api/exercises";
-import { createSession, getSessions, type SessionRecord } from "../api/sessions";
+import { createSession, getSessions, updateSessionReplay, type SessionRecord } from "../api/sessions";
 import { useAuthStore } from "@/stores/auth";
 import AiAdviceContent from "../components/AiAdviceContent.vue";
 import MetricTile from "../components/MetricTile.vue";
@@ -349,6 +349,13 @@ let videoTestUrl = "";
 let lastSentAt = 0;
 let motionFrames: MetricValues[] = [];
 let poseReplayFrames: PoseReplayFramePayload[] = [];
+let localErrorSnapshots: Array<{
+  timestamp_ms: number;
+  score: number;
+  landmarks: PoseReplayFramePayload["landmarks"];
+  errors: string[];
+  capture_type: string;
+}> = [];
 let finishRecoveryInFlight = false;
 
 const DEFAULT_EXERCISE_OPTIONS: ExerciseOption[] = [
@@ -645,6 +652,7 @@ async function startTraining() {
   store.resetLiveMetrics();
   resetDynamicTemplateState(true);
   poseReplayFrames = [];
+  localErrorSnapshots = [];
   resetFinishState();
   trainingStartedAt.value = null;
   clearPoseCanvas(overlayRef.value);
@@ -689,6 +697,7 @@ function resetTraining() {
   store.resetLiveMetrics();
   resetDynamicTemplateState(true);
   poseReplayFrames = [];
+  localErrorSnapshots = [];
   resetFinishState();
   trainingStartedAt.value = null;
   clearPoseCanvas(overlayRef.value);
@@ -786,6 +795,7 @@ function handleRealtimeMessage(message: Record<string, any>) {
   }
 
   if (message.type === "analysis") {
+    maybeCaptureErrorSnapshot(message as VideoTestFrame);
     handleAnalysisFrame(message as VideoTestFrame);
     return;
   }
@@ -804,8 +814,16 @@ function handleRealtimeMessage(message: Record<string, any>) {
     lastSessionId.value = session?.session_id ?? "";
 
     if (session?.session_id) {
-      savedMessage.value = "训练已结束，正在跳转到本次反馈。";
-      void router.push({ path: "/feedback", query: { session: session.session_id, from: "realtime" } });
+      savedMessage.value = "训练已结束，正在保存姿态回放...";
+      void (async () => {
+        try {
+          await persistTrainingReplay(session.session_id!);
+        } catch (error) {
+          console.warn("姿态回放补传失败:", error);
+        }
+        savedMessage.value = "训练已结束，正在跳转到本次反馈。";
+        await router.push({ path: "/feedback", query: { session: session.session_id, from: "realtime" } });
+      })();
     } else {
       void recoverAndRouteAfterFinish("训练已结束，已恢复本次训练记录并准备跳转反馈页。");
     }
@@ -954,6 +972,72 @@ function resetFinishState() {
   finishStatusText.value = "";
 }
 
+function buildDerivedErrorSnapshots() {
+  const avg = Number(store.score ?? 0);
+  if (avg >= 80 || !poseReplayFrames.length) return [];
+  const frame = poseReplayFrames[Math.floor(poseReplayFrames.length / 2)];
+  if (!frame?.landmarks?.length) return [];
+  return [{
+    timestamp_ms: frame.timestamp_ms,
+    score: avg,
+    landmarks: frame.landmarks,
+    errors: [`本次训练平均分 ${avg} 分低于 80 分阈值`],
+    capture_type: "client_summary",
+  }];
+}
+
+function buildReplayMeta() {
+  const errorSnapshots = localErrorSnapshots.length
+    ? localErrorSnapshots
+    : buildDerivedErrorSnapshots();
+  return {
+    schema_version: 1,
+    source: "web_realtime",
+    sample_interval_ms: SEND_INTERVAL_MS,
+    frame_count: poseReplayFrames.length,
+    error_snapshots: errorSnapshots,
+  };
+}
+
+async function persistTrainingReplay(sessionId: string) {
+  if (!poseReplayFrames.length) return;
+  await updateSessionReplay(sessionId, {
+    pose_replay: poseReplayFrames,
+    pose_replay_meta: buildReplayMeta(),
+  });
+}
+
+function maybeCaptureErrorSnapshot(frame: VideoTestFrame) {
+  const score = Number(frame.score ?? 100);
+  if (score >= 80) return;
+
+  const lastReplay = poseReplayFrames[poseReplayFrames.length - 1];
+  if (!lastReplay?.landmarks || lastReplay.landmarks.length < 33) return;
+
+  const ts = lastReplay.timestamp_ms;
+  if (localErrorSnapshots.some((item) => Math.abs(item.timestamp_ms - ts) < 2500)) return;
+
+  const errors = Array.isArray(frame.errors)
+    ? frame.errors
+    : Array.isArray(frame.issues)
+      ? frame.issues
+      : [];
+
+  localErrorSnapshots.push({
+    timestamp_ms: ts,
+    score,
+    landmarks: lastReplay.landmarks,
+    errors: errors.length
+      ? errors.slice(0, 5)
+      : [`实时评分 ${score} 分低于 80 分阈值`],
+    capture_type: "threshold_cross",
+  });
+
+  if (localErrorSnapshots.length > 30) {
+    localErrorSnapshots = localErrorSnapshots.slice(-30);
+  }
+}
+
 function buildFallbackSessionPayload() {
   const durationSeconds = trainingStartedAt.value
     ? Math.max(1, Math.round((Date.now() - trainingStartedAt.value) / 1000))
@@ -970,12 +1054,7 @@ function buildFallbackSessionPayload() {
     error_count: Math.max(0, totalCount - validCount),
     average_score: averageScore,
     pose_replay: poseReplayFrames,
-    pose_replay_meta: {
-      schema_version: 1,
-      source: "web_realtime",
-      sample_interval_ms: SEND_INTERVAL_MS,
-      frame_count: poseReplayFrames.length,
-    },
+    pose_replay_meta: buildReplayMeta(),
   };
 }
 
@@ -1016,6 +1095,13 @@ async function recoverAndRouteAfterFinish(successMessage: string) {
     const existingSession = await recoverLatestSession(payload);
     if (existingSession?.session_id) {
       lastSessionId.value = existingSession.session_id;
+      if (!existingSession.has_pose_replay && payload.pose_replay.length > 0) {
+        try {
+          await persistTrainingReplay(existingSession.session_id);
+        } catch (error) {
+          console.warn("为已有训练补传回放失败:", error);
+        }
+      }
       resetFinishState();
       trainingState.value = "finished";
       savedMessage.value = successMessage;
@@ -1047,6 +1133,13 @@ async function saveSessionFallback(successMessage: string, allowZeroCount = fals
       suggestions: [...new Set(store.feedbacks.filter(Boolean))],
     });
     lastSessionId.value = session.session_id;
+    if (payload.pose_replay.length > 0) {
+      try {
+        await persistTrainingReplay(session.session_id);
+      } catch (error) {
+        console.warn("新建训练补传回放失败:", error);
+      }
+    }
     resetFinishState();
     trainingState.value = "finished";
     savedMessage.value = successMessage;

@@ -61,6 +61,7 @@
           </header>
           <div class="history-session-metrics">
             <span>评分 {{ session.average_score }}</span>
+            <span class="history-score-hint">{{ getScoreFeedback(session.average_score).emoji }} {{ getScoreFeedback(session.average_score).title }}</span>
           </div>
         </button>
       </div>
@@ -78,13 +79,25 @@
 
     <section
       v-if="activeSessionId && currentSessionMeta"
-      class="feedback-card session-meta-card"
+      class="score-hero-banner"
+      :class="scoreFeedback.tone"
     >
-      <h2>{{ formatExerciseName(currentSessionMeta.exercise) }} · 训练详情</h2>
-      <div class="session-meta-grid">
-        <span>时间 {{ formatSessionDate(currentSessionMeta.created_at) }}</span>
-        <span>时长 {{ formatDuration(currentSessionMeta.duration_seconds) }}</span>
-        <span>评分 {{ currentSessionMeta.average_score }}</span>
+      <div class="score-hero-main">
+        <span class="score-hero-emoji">{{ scoreFeedback.emoji }}</span>
+        <div>
+          <p class="score-hero-label">本次训练平均分</p>
+          <strong class="score-hero-value">{{ currentSessionMeta.average_score }}</strong>
+          <span class="score-hero-unit">分</span>
+        </div>
+      </div>
+      <div class="score-hero-message">
+        <strong>{{ scoreFeedback.title }}</strong>
+        <p>{{ scoreFeedback.message }}</p>
+        <div class="score-hero-meta">
+          <span>{{ formatExerciseName(currentSessionMeta.exercise) }}</span>
+          <span>{{ formatSessionDate(currentSessionMeta.created_at) }}</span>
+          <span>时长 {{ formatDuration(currentSessionMeta.duration_seconds) }}</span>
+        </div>
       </div>
     </section>
 
@@ -254,6 +267,7 @@ import AiAdviceContent from "../components/AiAdviceContent.vue";
 import { getFeedbacks } from "../api/feedback";
 import { getSession, getSessions, type SessionRecord } from "../api/sessions";
 import { useAiAdvice } from "../composables/useAiAdvice";
+import { getScoreFeedback } from "../utils/scoreFeedback";
 
 type Mode = "session" | "history";
 type StatFilter = "all" | "critical" | "warning" | "minor" | "positive";
@@ -464,6 +478,10 @@ const feedbackTime = ref("--:--");
 const activeFilter = ref<StatFilter>("all");
 const historySessions = ref<SessionRecord[]>([]);
 const currentSessionMeta = ref<SessionRecord | null>(null);
+
+const scoreFeedback = computed(() =>
+  getScoreFeedback(Number(currentSessionMeta.value?.average_score ?? 0)),
+);
 
 const stats = ref({ critical: 0, warning: 0, minor: 0 });
 
@@ -1196,6 +1214,79 @@ onUnmounted(() => {
 .history-back-btn:hover {
   border-color: #22c55e;
   color: #86efac;
+}
+
+.score-hero-banner {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 20px;
+  align-items: center;
+  padding: 20px 24px;
+  border-radius: 16px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(8, 13, 26, 0.99));
+}
+.score-hero-banner.excellent {
+  border-color: rgba(250, 204, 21, 0.35);
+  background: linear-gradient(135deg, rgba(30, 27, 10, 0.95), rgba(15, 23, 42, 0.98));
+  box-shadow: 0 0 32px rgba(250, 204, 21, 0.08);
+}
+.score-hero-banner.good { border-color: rgba(34, 197, 94, 0.3); }
+.score-hero-banner.encourage { border-color: rgba(59, 130, 246, 0.3); }
+.score-hero-banner.improve { border-color: rgba(239, 68, 68, 0.25); }
+.score-hero-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.score-hero-emoji { font-size: 42px; line-height: 1; }
+.score-hero-label { margin: 0 0 4px; color: #94a3b8; font-size: 12px; }
+.score-hero-value {
+  font-size: 48px;
+  font-weight: 800;
+  color: #f8fafc;
+  line-height: 1;
+}
+.score-hero-unit { margin-left: 4px; color: #94a3b8; font-size: 16px; font-weight: 600; }
+.score-hero-message strong { display: block; color: #f8fafc; font-size: 18px; margin-bottom: 6px; }
+.score-hero-message p { margin: 0 0 10px; color: #cbd5e1; font-size: 14px; line-height: 1.5; }
+.score-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  font-size: 12px;
+  color: #64748b;
+}
+.history-score-hint { color: #fde047; font-size: 12px; }
+.highlight-captures-card {
+  border-color: rgba(250, 204, 21, 0.25) !important;
+}
+.highlight-captures-header h2 { margin: 0 0 4px; color: #fde047; }
+.highlight-captures-header p { margin: 0; color: #94a3b8; font-size: 13px; }
+.highlight-captures-layout {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 16px;
+  margin-top: 14px;
+}
+.highlight-thumb-list { display: grid; gap: 8px; }
+.highlight-thumb-btn {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(250, 204, 21, 0.2);
+  background: rgba(8, 13, 26, 0.5);
+  color: #fde047;
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+.highlight-thumb-btn small { color: #94a3b8; font-size: 11px; font-weight: 400; }
+.highlight-thumb-btn.active {
+  border-color: rgba(250, 204, 21, 0.5);
+  background: rgba(250, 204, 21, 0.1);
 }
 
 .session-meta-card h2 {

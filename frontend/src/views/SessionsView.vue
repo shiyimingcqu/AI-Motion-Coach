@@ -144,7 +144,7 @@ const filteredSessions = computed(() => {
 });
 
 function viewSession(session_id: string) {
-  router.push("/reports?session=" + session_id);
+  router.push("/export?session=" + session_id);
 }
 
 function viewReplay(session_id: string) {

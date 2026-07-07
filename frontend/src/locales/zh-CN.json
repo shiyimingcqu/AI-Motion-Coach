@@ -101,7 +101,7 @@
     "exerciseLibrary": "动作库",
     "realtimeDetect": "实时检测",
     "sessions": "训练记录",
-    "scoreTrends": "分数趋势",
+    "scoreTrends": "动作评估",
     "reports": "评估报告",
     "motionQuality": "动作质量",
     "personalProgress": "个人进步",
@@ -270,7 +270,7 @@
     "deleteConfirm": "确定删除这条训练记录？"
   },
   "scoreTrends": {
-    "title": "分数趋势",
+    "title": "动作评估",
     "subtitle": "按动作分析 7 日训练趋势、卡路里与质量维度",
     "exerciseFilter": "动作筛选",
     "allExercises": "全部动作（分色折线对比）",

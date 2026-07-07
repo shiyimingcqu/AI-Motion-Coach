@@ -57,11 +57,24 @@ export const useAuthStore = defineStore("auth", {
         formData.append("username", username);
         formData.append("password", password);
 
-        const response = await fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: formData.toString(),
-        });
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 15000);
+        let response: Response;
+        try {
+          response = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: formData.toString(),
+            signal: controller.signal,
+          });
+        } catch (err) {
+          if (err instanceof DOMException && err.name === "AbortError") {
+            throw new Error("登录请求超时，请确认后端服务已启动");
+          }
+          throw new Error("无法连接后端服务器，请确认后端已启动");
+        } finally {
+          clearTimeout(timer);
+        }
 
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));

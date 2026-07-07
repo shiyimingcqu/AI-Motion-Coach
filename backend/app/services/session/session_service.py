@@ -7,7 +7,7 @@ from uuid import uuid4
 from app.db.session import SessionLocal
 from app.models.entities import SessionORM, _isoformat_utc
 from app.services.evaluation.calorie_service import calculate_calories
-from app.services.evaluation.evaluation_service import build_evaluation, serialize_evaluation
+from app.services.report.error_frame_service import ensure_meta_error_snapshots
 
 
 class SessionService:
@@ -70,6 +70,12 @@ class SessionService:
             duration_seconds=duration_seconds,
         )
 
+        replay_meta = ensure_meta_error_snapshots(
+            pose_replay_meta,
+            pose_replay_frames,
+            float(average_score),
+        ) if (pose_replay_meta or pose_replay_frames) else pose_replay_meta
+
         db = SessionLocal()
         try:
             session = SessionORM(
@@ -83,7 +89,7 @@ class SessionService:
                 average_score=float(average_score),
                 pose_replay_json=self._dump_replay_frames(pose_replay_frames),
                 pose_replay_meta_json=self._dump_replay_meta(
-                    pose_replay_meta,
+                    replay_meta,
                     pose_replay_frames,
                 ),
                 calories_burned=calories,
@@ -167,6 +173,11 @@ class SessionService:
             })
             if pose_replay_meta:
                 meta_payload.update(pose_replay_meta)
+            meta_payload = ensure_meta_error_snapshots(
+                meta_payload,
+                normalized,
+                float(session.average_score),
+            )
             session.pose_replay_meta_json = json.dumps(
                 meta_payload, ensure_ascii=False, separators=(",", ":")
             )
@@ -220,14 +231,22 @@ class SessionService:
         meta: dict | None,
         frames: list[dict] | None,
     ) -> str | None:
-        if not frames:
+        has_snapshots = bool(
+            meta
+            and (
+                meta.get("error_snapshots")
+                or meta.get("highlight_snapshots")
+            )
+        )
+        if not frames and not has_snapshots:
             return None
 
+        frame_list = frames or []
         payload = {
             "schema_version": 1,
             "source": "web_realtime",
             "sample_interval_ms": 100,
-            "frame_count": len(frames),
+            "frame_count": len(frame_list),
         }
         if meta:
             payload.update(meta)
