@@ -1,8 +1,8 @@
 // 常量定义
 // const API_BASE_URL = 'http://127.0.0.1:8000';
-const API_BASE_URL = 'http://172.20.10.3:8000';
+const API_BASE_URL = 'http://192.168.43.113:8000';
 
-// 8种动作配置
+// 动作配置
 const EXERCISE_CONFIG = {
   squat: {
     key: 'squat',
@@ -83,6 +83,66 @@ const EXERCISE_CONFIG = {
     icon: '🔥',
     keypointsNeeded: ['nose', 'left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow', 'left_wrist', 'right_wrist', 'left_hip', 'right_hip', 'left_knee', 'right_knee', 'left_ankle', 'right_ankle'],
     phases: ['standing', 'squat_down', 'plank', 'push_up', 'squat_up', 'jump']
+  },
+  pull_up: {
+    key: 'pull_up',
+    name: '引体向上',
+    category: '上肢力量',
+    level: '高级',
+    accentColor: '#06b6d4',
+    icon: '💪',
+    keypointsNeeded: ['left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow', 'left_wrist', 'right_wrist', 'left_hip', 'right_hip'],
+    phases: ['hanging', 'pulling', 'top', 'lowering']
+  },
+  bench_press: {
+    key: 'bench_press',
+    name: '卧推',
+    category: '上肢力量',
+    level: '中级',
+    accentColor: '#2563eb',
+    icon: '💪',
+    keypointsNeeded: ['left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow', 'left_wrist', 'right_wrist', 'left_hip', 'right_hip'],
+    phases: ['bottom', 'moving', 'top']
+  },
+  barbell_squat: {
+    key: 'barbell_squat',
+    name: '杠铃深蹲',
+    category: '下肢力量',
+    level: '高级',
+    accentColor: '#16a34a',
+    icon: '🏋️',
+    keypointsNeeded: ['left_shoulder', 'right_shoulder', 'left_wrist', 'right_wrist', 'left_hip', 'right_hip', 'left_knee', 'right_knee', 'left_ankle', 'right_ankle'],
+    phases: ['standing', 'descending', 'bottom', 'ascending']
+  },
+  dumbbell_fly: {
+    key: 'dumbbell_fly',
+    name: '哑铃飞鸟',
+    category: '上肢力量',
+    level: '中级',
+    accentColor: '#db2777',
+    icon: '💪',
+    keypointsNeeded: ['left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow', 'left_wrist', 'right_wrist', 'left_hip', 'right_hip'],
+    phases: ['closed', 'moving', 'open']
+  },
+  lat_pulldown: {
+    key: 'lat_pulldown',
+    name: '高位下拉',
+    category: '上肢力量',
+    level: '中级',
+    accentColor: '#0891b2',
+    icon: '💪',
+    keypointsNeeded: ['left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow', 'left_wrist', 'right_wrist', 'left_hip', 'right_hip'],
+    phases: ['top', 'moving', 'bottom']
+  },
+  dumbbell_shoulder_press: {
+    key: 'dumbbell_shoulder_press',
+    name: '哑铃推肩',
+    category: '上肢力量',
+    level: '中级',
+    accentColor: '#7c3aed',
+    icon: '💪',
+    keypointsNeeded: ['left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow', 'left_wrist', 'right_wrist', 'left_hip', 'right_hip'],
+    phases: ['rack', 'moving', 'top']
   }
 };
 

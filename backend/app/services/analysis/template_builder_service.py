@@ -25,15 +25,9 @@ _LANDMARK_NAMES = [
     "left_foot_index", "right_foot_index",
 ]
 
-_POSE_CACHE: dict = {"instance": None, "path": None}
-
-
 def _get_pose():
-    """Create or reuse a PoseLandmarker (mp.tasks API)."""
+    """Create a fresh PoseLandmarker for one video extraction."""
     model_path = os.path.expanduser("~/.pose_eval/pose_landmarker.task")
-    if _POSE_CACHE["instance"] is not None and _POSE_CACHE["path"] == model_path:
-        return _POSE_CACHE["instance"]
-
     if not os.path.exists(model_path):
         return None
 
@@ -49,10 +43,7 @@ def _get_pose():
         min_pose_presence_confidence=0.5,
         min_tracking_confidence=0.5,
     )
-    instance = vision.PoseLandmarker.create_from_options(options)
-    _POSE_CACHE["instance"] = instance
-    _POSE_CACHE["path"] = model_path
-    return instance
+    return vision.PoseLandmarker.create_from_options(options)
 
 
 class TemplateBuilderService:
@@ -130,13 +121,15 @@ class TemplateBuilderService:
 
         try:
             frame_index = 0
+            last_timestamp_ms = -1
             while True:
                 ok, frame = capture.read()
                 if not ok:
                     break
 
                 processed_frames += 1
-                timestamp_ms = int(frame_index * 1000 / fps)
+                timestamp_ms = max(last_timestamp_ms + 1, int(round(frame_index * 1000 / fps)))
+                last_timestamp_ms = timestamp_ms
                 keypoints, replay_landmarks = self._extract_keypoints_from_frame(frame, pose, timestamp_ms)
                 frame_index += 1
 
@@ -161,6 +154,9 @@ class TemplateBuilderService:
                 valid_frames += 1
         finally:
             capture.release()
+            close = getattr(pose, "close", None)
+            if callable(close):
+                close()
 
         return {
             "processed_frames": processed_frames,
@@ -170,7 +166,7 @@ class TemplateBuilderService:
         }
 
     @staticmethod
-    def _extract_keypoints_from_frame(frame, pose, timestamp_ms: int) -> dict:
+    def _extract_keypoints_from_frame(frame, pose, timestamp_ms: int) -> tuple[dict, list]:
         if pose is None:
             return {}, []
 

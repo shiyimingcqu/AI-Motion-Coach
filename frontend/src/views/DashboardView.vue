@@ -54,6 +54,9 @@
                 :speed="replaySpeed"
                 :background-image="selectedReplayBackgroundImage"
                 :highlight-instructions="currentHighlights"
+                :upright-depth-correction="selectedReplay?.exercise === 'jumping_jack'"
+                :stable-torso-anchor="selectedReplay?.exercise === 'bench_press'"
+                :torso-width-scale="selectedReplay?.exercise && torsoEnhancedExercises.has(selectedReplay.exercise) ? 1.85 : 1"
                 @frame-change="onReplayFrameChange"
                 @body-part-clicked="on3DBodyPartClicked"
               />
@@ -67,6 +70,10 @@
                 :speed="replaySpeed"
                 :background-image="selectedReplayBackgroundImage"
                 :highlight-instructions="[]"
+                :body-width-scale="1.22"
+                :upright-depth-correction="activeComparisonTemplate?.action === 'jumping_jack'"
+                :stable-torso-anchor="activeComparisonTemplate?.action === 'bench_press'"
+                :torso-width-scale="activeComparisonTemplate?.action && torsoEnhancedExercises.has(activeComparisonTemplate.action) ? 1.85 : 1"
               />
               <div v-if="standardReplayLoading" class="standard-loading">标准数字人加载中...</div>
             </div>
@@ -283,37 +290,6 @@
       </aside>
     </section>
 
-
-    <section class="charts-row">
-      <div class="chart-card">
-        <header class="chart-card-header">
-          <h3>评分趋势</h3>
-          <span class="chart-pill up">近 7 天 · {{ scoreValueForRing }}</span>
-        </header>
-        <div ref="trendChartRef" class="chart-body"></div>
-      </div>
-
-      <div class="chart-card">
-        <header class="chart-card-header">
-          <h3>能力雷达图</h3>
-          <span class="chart-pill">短板：关节活动度</span>
-        </header>
-        <div ref="radarChartRef" class="chart-body"></div>
-        <div class="chart-footer">
-          <span class="cf-badge good">优势：动作流畅度 {{ sideMetrics[0]?.value ?? 0 }}</span>
-          <span class="cf-badge warn">短板：关节活动度 {{ sideMetrics[2]?.value ?? 0 }}</span>
-        </div>
-      </div>
-
-      <div class="chart-card">
-        <header class="chart-card-header">
-          <h3>左右对称性</h3>
-          <span class="chart-pill">左右对比</span>
-        </header>
-        <div ref="symmetryChartRef" class="chart-body"></div>
-      </div>
-    </section>
-
     <section class="bottom-actions">
       <button class="ba-btn">重新评估</button>
       <button class="ba-btn">生成纠正计划</button>
@@ -325,26 +301,41 @@
       <div class="standard-modal">
         <header class="standard-modal-header">
           <div>
-            <p class="eyebrow">Active Templates</p>
+            <p class="eyebrow">Template Library</p>
             <h3>标准视频</h3>
           </div>
           <button type="button" class="standard-close" @click="closeStandardTemplates">×</button>
         </header>
-        <div v-if="standardTemplatesLoading" class="standard-empty">正在加载已启用模板...</div>
+        <div v-if="standardTemplatesLoading" class="standard-empty">正在加载评分模板...</div>
         <div v-else-if="standardTemplates.length === 0" class="standard-empty">
-          暂无已启用评分模板，请先在管理员端启用模板。
+          暂无评分模板，请先在管理员端上传模板视频。
         </div>
         <div v-else class="standard-template-list">
           <article v-for="template in standardTemplates" :key="template.template_id" class="standard-template-card">
             <div>
-              <strong>{{ template.name }}</strong>
+              <div class="standard-template-title">
+                <strong>{{ template.name }}</strong>
+                <em :class="{ active: template.is_enabled }">{{ template.is_enabled ? "已启用" : "未启用" }}</em>
+              </div>
               <span>{{ exerciseNameMap[template.action] || template.action }} · {{ viewName(template.view) }} · {{ template.valid_frames || 0 }} 帧</span>
             </div>
             <div class="standard-actions">
-              <button type="button" class="btn-outline" :disabled="!template.has_video" @click="openTemplateVideo(template)">
+              <button
+                type="button"
+                class="btn-outline"
+                :disabled="!template.has_video"
+                :title="template.has_video ? '查看模板源视频' : '该模板暂无源视频'"
+                @click="openTemplateVideo(template)"
+              >
                 查看视频
               </button>
-              <button type="button" class="btn-primary" :disabled="!template.has_pose_replay" @click="startTemplateComparison(template)">
+              <button
+                type="button"
+                class="btn-primary"
+                :disabled="!template.has_pose_replay"
+                :title="template.has_pose_replay ? '在首页展示台开启 3D 对比' : '该模板暂无 3D 回放数据'"
+                @click="startTemplateComparison(template)"
+              >
                 3D 对比显示
               </button>
             </div>
@@ -366,10 +357,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import * as echarts from "echarts/core";
-import { BarChart, LineChart, RadarChart } from "echarts/charts";
-import { GridComponent, LegendComponent, RadarComponent, TooltipComponent } from "echarts/components";
-import { CanvasRenderer } from "echarts/renderers";
 import { Maximize2, Minimize2, Settings } from "lucide-vue-next";
 import { useAuthStore } from "@/stores/auth";
 import { getDashboardStats } from "../api/dashboard";
@@ -385,17 +372,6 @@ import {
   type HighlightInstruction,
   type BodyPartMapping,
 } from "../types/feedback";
-
-echarts.use([
-  BarChart,
-  LineChart,
-  RadarChart,
-  GridComponent,
-  LegendComponent,
-  RadarComponent,
-  TooltipComponent,
-  CanvasRenderer,
-]);
 
 type Severity = "high" | "medium" | "low";
 
@@ -503,11 +479,6 @@ type VideoItem = { task_id: string; output_uri: string; exercise: string; create
 const completedVideos = ref<VideoItem[]>([]);
 const selectedVideoIndex = ref(0);
 const activeView = ref<"front" | "side">("front");
-
-const trendChartRef = ref<HTMLDivElement | null>(null);
-const radarChartRef = ref<HTMLDivElement | null>(null);
-const symmetryChartRef = ref<HTMLDivElement | null>(null);
-const chartInstances: echarts.ECharts[] = [];
 
 const activeTab = ref<"problems">("problems");
 const selectedProblem = ref<number | null>(0);
@@ -752,10 +723,22 @@ const exerciseNameMap: Record<string, string> = {
   glute_bridge: "臀桥",
   mountain_climber: "登山跑",
   pull_up: "引体向上",
+  bench_press: "卧推",
+  barbell_squat: "杠铃深蹲",
+  dumbbell_fly: "哑铃飞鸟",
+  lat_pulldown: "高位下拉",
   dumbbell_curl: "哑铃弯举",
   dumbbell_press: "哑铃推举",
+  dumbbell_shoulder_press: "哑铃推肩",
   russian_twist: "俄罗斯转体",
 };
+
+const torsoEnhancedExercises = new Set([
+  "bench_press",
+  "dumbbell_fly",
+  "dumbbell_shoulder_press",
+  "lat_pulldown",
+]);
 
 const selectedReplayExerciseName = computed(() => {
   const exercise = selectedReplay.value?.exercise;
@@ -765,7 +748,7 @@ const selectedReplayExerciseName = computed(() => {
 const selectedReplayScore = computed(() => {
   return selectedReplay.value ? Math.round(selectedReplay.value.average_score || 0) : scoreValueForRing.value;
 });
-const comparisonActive = computed(() => Boolean(activeComparisonTemplate.value && standardReplayFrames.value.length > 0));
+const comparisonActive = computed(() => Boolean(activeComparisonTemplate.value));
 const hasReplayPlaybackFrames = computed(() => selectedReplayFrames.value.length > 0 || standardReplayFrames.value.length > 0);
 const replayFrameCountText = computed(() => {
   if (!comparisonActive.value) return `${selectedReplayFrames.value.length} 帧`;
@@ -1199,13 +1182,25 @@ async function loadStandardTemplates() {
     const actions = Object.keys(exerciseNameMap);
     const responses = await Promise.all(
       actions.map((action) =>
-        apiGet<{ template: StandardTemplateItem | null }>(`/exercises/${action}/templates/active`)
-          .catch(() => ({ template: null }))
+        apiGet<{ items: StandardTemplateItem[] }>(`/exercises/${action}/templates`)
+          .catch(() => ({ items: [] }))
       )
     );
+    const seen = new Set<string>();
     standardTemplates.value = responses
-      .map((response) => response.template)
-      .filter((template): template is StandardTemplateItem => Boolean(template));
+      .flatMap((response) => response.items || [])
+      .filter((template): template is StandardTemplateItem => Boolean(template?.template_id))
+      .filter((template) => {
+        if (seen.has(template.template_id)) return false;
+        seen.add(template.template_id);
+        return true;
+      })
+      .sort((a, b) => {
+        if (a.is_enabled !== b.is_enabled) return a.is_enabled ? -1 : 1;
+        const actionCompare = (exerciseNameMap[a.action] || a.action).localeCompare(exerciseNameMap[b.action] || b.action, "zh-Hans-CN");
+        if (actionCompare !== 0) return actionCompare;
+        return a.name.localeCompare(b.name, "zh-Hans-CN");
+      });
   } finally {
     standardTemplatesLoading.value = false;
   }
@@ -1264,165 +1259,6 @@ function closeComparison() {
 
 function encodeFilePath(path: string) {
   return path.replace(/\\/g, "/").split("/").map(encodeURIComponent).join("/");
-}
-
-function disposeCharts() {
-  while (chartInstances.length > 0) {
-    chartInstances.pop()?.dispose();
-  }
-}
-
-function createChart(el: HTMLDivElement, option: echarts.EChartsCoreOption) {
-  const chart = echarts.init(el);
-  chart.setOption(option);
-  chartInstances.push(chart);
-}
-
-function resizeCharts() {
-  chartInstances.forEach((chart) => chart.resize());
-}
-
-function buildCharts() {
-  disposeCharts();
-
-  const trendData = statsData.value?.recent_trend || [];
-  const trendDates = trendData.length ? trendData.map((item: any) => String(item.date).slice(5)) : ["暂无数据"];
-  const trendScores = trendData.length ? trendData.map((item: any) => Number(item.score)) : [0];
-  const score = Number(scoreValue.value ?? 80);
-  const metricValues = sideMetrics.value.map((item) => item.value);
-
-  if (trendChartRef.value) {
-    createChart(trendChartRef.value, {
-      color: ["#5b8cff"],
-      grid: { left: 40, right: 14, top: 12, bottom: 28 },
-      tooltip: {
-        trigger: "axis",
-        backgroundColor: "rgba(255,255,255,0.94)",
-        borderColor: "#cbd5e1",
-        textStyle: { color: "#0f172a" },
-        formatter: (params: any[]) => {
-          const point = params[0];
-          return `${point.axisValue}: ${point.value} 分`;
-        },
-      },
-      xAxis: {
-        type: "category",
-        boundaryGap: false,
-        data: trendDates,
-        axisLine: { lineStyle: { color: "#cbd5e1" } },
-        axisTick: { show: false },
-        axisLabel: { color: "#64748b", fontSize: 11 },
-      },
-      yAxis: {
-        type: "value",
-        min: 60,
-        max: 100,
-        interval: 10,
-        splitLine: { lineStyle: { color: "rgba(203,213,225,0.6)", type: "dashed" } },
-        axisLabel: { color: "#64748b", fontSize: 11 },
-      },
-      series: [
-        {
-          type: "line",
-          smooth: true,
-          symbolSize: 7,
-          lineStyle: { width: 2.5 },
-          areaStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: "rgba(91,140,255,0.2)" },
-              { offset: 1, color: "rgba(91,140,255,0.02)" },
-            ]),
-          },
-          data: trendScores,
-        },
-      ],
-    });
-  }
-
-  if (radarChartRef.value) {
-    createChart(radarChartRef.value, {
-      color: ["#5b8cff"],
-      tooltip: {
-        backgroundColor: "rgba(255,255,255,0.94)",
-        borderColor: "#cbd5e1",
-        textStyle: { color: "#0f172a" },
-      },
-      radar: {
-        center: ["50%", "52%"],
-        radius: "68%",
-        indicator: [
-          { name: "动作流畅度", max: 100 },
-          { name: "动作稳定性", max: 100 },
-          { name: "关节活动度", max: 100 },
-          { name: "左右对称性", max: 100 },
-          { name: "姿态控制力", max: 100 },
-        ],
-        axisName: { color: "#64748b", fontSize: 11 },
-        splitArea: { areaStyle: { color: ["#f8fafc", "#f1f5f9"] } },
-        splitLine: { lineStyle: { color: "#cbd5e1" } },
-        axisLine: { lineStyle: { color: "#cbd5e1" } },
-      },
-      series: [
-        {
-          type: "radar",
-          data: [{ value: metricValues, name: "当前表现" }],
-          areaStyle: { color: "rgba(91,140,255,0.15)" },
-          lineStyle: { color: "#5b8cff", width: 2 },
-          itemStyle: { color: "#5b8cff" },
-          symbolSize: 4,
-        },
-      ],
-    });
-  }
-
-  if (symmetryChartRef.value) {
-    createChart(symmetryChartRef.value, {
-      tooltip: {
-        trigger: "axis",
-        backgroundColor: "rgba(255,255,255,0.94)",
-        borderColor: "#cbd5e1",
-        textStyle: { color: "#0f172a" },
-      },
-      legend: {
-        data: ["左侧", "右侧"],
-        textStyle: { color: "#64748b", fontSize: 10 },
-        top: 0,
-      },
-      grid: { left: 40, right: 14, top: 26, bottom: 28 },
-      xAxis: {
-        type: "category",
-        data: ["髋部", "腿部", "膝关节", "踝关节"],
-        axisLine: { lineStyle: { color: "#cbd5e1" } },
-        axisTick: { show: false },
-        axisLabel: { color: "#64748b", fontSize: 11 },
-      },
-      yAxis: {
-        type: "value",
-        min: 0,
-        max: 100,
-        splitLine: { lineStyle: { color: "rgba(203,213,225,0.6)", type: "dashed" } },
-        axisLabel: { color: "#64748b", fontSize: 11 },
-      },
-      series: [
-        {
-          type: "bar",
-          name: "左侧",
-          data: [score + 5, score, score - 10, score - 3],
-          color: "#5b8cff",
-          barWidth: 14,
-          itemStyle: { borderRadius: [3, 3, 0, 0] },
-        },
-        {
-          type: "bar",
-          name: "右侧",
-          data: [score + 8, score + 3, score - 14, score],
-          color: "#25b87b",
-          barWidth: 14,
-          itemStyle: { borderRadius: [3, 3, 0, 0] },
-        },
-      ],
-    });
-  }
 }
 
 function onVideoMetadata(e: Event) {
@@ -1543,21 +1379,16 @@ onMounted(async () => {
     feedbackItems.value = [];
   } finally {
     statsLoading.value = false;
-    await nextTick();
-    buildCharts();
   }
 
   // Load all completed skeleton videos for the selector
   await loadCompletedVideos();
 
-  window.addEventListener("resize", resizeCharts);
   document.addEventListener("fullscreenchange", syncReplayFullscreenState);
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener("resize", resizeCharts);
   document.removeEventListener("fullscreenchange", syncReplayFullscreenState);
-  disposeCharts();
   if (latestVideoUrl.value && latestVideoUrl.value.startsWith("blob:")) {
     URL.revokeObjectURL(latestVideoUrl.value);
   }
@@ -2956,6 +2787,33 @@ onBeforeUnmount(() => {
 .standard-template-card strong,
 .standard-template-card span {
   display: block;
+}
+
+.standard-template-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.standard-template-title strong {
+  min-width: 0;
+}
+
+.standard-template-title em {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.standard-template-title em.active {
+  background: #dcfce7;
+  color: #166534;
 }
 
 .standard-template-card span {

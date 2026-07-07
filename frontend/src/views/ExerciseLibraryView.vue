@@ -128,14 +128,18 @@ const libraryExercises = computed(() =>
           jumping_jack: t("categories.cardio"), plank: t("categories.core"),
           lunge: t("categories.lower_body"), burpee: t("categories.full_body"),
           mountain_climber: t("categories.core"), pull_up: t("categories.upper_body"),
+          bench_press: t("categories.upper_body"), barbell_squat: t("categories.lower_body"),
+          dumbbell_fly: t("categories.upper_body"), lat_pulldown: t("categories.upper_body"),
           dumbbell_curl: t("categories.upper_body"), dumbbell_press: t("categories.upper_body"),
+          dumbbell_shoulder_press: t("categories.upper_body"),
           high_knees: t("categories.cardio"), russian_twist: t("categories.core"),
           glute_bridge: t("categories.lower_body"),
         };
         const catKeyMap: Record<string, string> = {
           squat: "lower", push_up: "upper", jumping_jack: "cardio", plank: "core",
           lunge: "lower", burpee: "full", mountain_climber: "core", pull_up: "upper",
-          dumbbell_curl: "upper", dumbbell_press: "upper",
+          bench_press: "upper", barbell_squat: "lower", dumbbell_fly: "upper", lat_pulldown: "upper",
+          dumbbell_curl: "upper", dumbbell_press: "upper", dumbbell_shoulder_press: "upper",
           high_knees: "cardio", russian_twist: "core", glute_bridge: "lower",
         };
         const levelMap: Record<string, string> = {
@@ -143,7 +147,10 @@ const libraryExercises = computed(() =>
           jumping_jack: t("exerciseLibrary.level_beginner"), plank: t("exerciseLibrary.level_advanced"),
           lunge: t("exerciseLibrary.level_intermediate"), burpee: t("exerciseLibrary.level_advanced"),
           mountain_climber: t("exerciseLibrary.level_intermediate"), pull_up: t("exerciseLibrary.level_advanced"),
+          bench_press: t("exerciseLibrary.level_intermediate"), barbell_squat: t("exerciseLibrary.level_advanced"),
+          dumbbell_fly: t("exerciseLibrary.level_intermediate"), lat_pulldown: t("exerciseLibrary.level_intermediate"),
           dumbbell_curl: t("exerciseLibrary.level_beginner"), dumbbell_press: t("exerciseLibrary.level_intermediate"),
+          dumbbell_shoulder_press: t("exerciseLibrary.level_intermediate"),
           high_knees: t("exerciseLibrary.level_beginner"), russian_twist: t("exerciseLibrary.level_intermediate"), glute_bridge: t("exerciseLibrary.level_beginner"),
         };
         const levelKeyMap: Record<string, string> = {
@@ -151,13 +158,15 @@ const libraryExercises = computed(() =>
           jumping_jack: "beginner", plank: "advanced",
           lunge: "intermediate", burpee: "advanced",
           mountain_climber: "intermediate", pull_up: "advanced",
-          dumbbell_curl: "beginner", dumbbell_press: "intermediate",
+          bench_press: "intermediate", barbell_squat: "advanced", dumbbell_fly: "intermediate", lat_pulldown: "intermediate",
+          dumbbell_curl: "beginner", dumbbell_press: "intermediate", dumbbell_shoulder_press: "intermediate",
           high_knees: "beginner", russian_twist: "intermediate", glute_bridge: "beginner",
         };
         const emojiMap: Record<string, string> = {
           squat: "🦵", push_up: "💪", jumping_jack: "🔥", plank: "🧘",
           lunge: "🦵", burpee: "🔥", mountain_climber: "⛰️", pull_up: "💪",
-          dumbbell_curl: "💪", dumbbell_press: "💪",
+          bench_press: "💪", barbell_squat: "🦵", dumbbell_fly: "💪", lat_pulldown: "💪",
+          dumbbell_curl: "💪", dumbbell_press: "💪", dumbbell_shoulder_press: "💪",
           high_knees: "🏃", russian_twist: "🧘", glute_bridge: "🦵",
         };
         // 使用真实运动图片 Unsplash
@@ -170,8 +179,13 @@ const libraryExercises = computed(() =>
           burpee: "https://images.unsplash.com/photo-1534258936925-c58bed479fcb?w=800&h=600&fit=crop",
           mountain_climber: "https://images.unsplash.com/photo-1599058917765-a780eda07a3e?w=800&h=600&fit=crop",
           pull_up: "https://images.unsplash.com/photo-1598971639058-abcdab3c3b0a?w=800&h=600&fit=crop",
+          bench_press: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&h=600&fit=crop",
+          barbell_squat: "https://images.unsplash.com/photo-1534367610401-9f5b681c06f6?w=800&h=600&fit=crop",
+          dumbbell_fly: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=800&h=600&fit=crop",
+          lat_pulldown: "https://images.unsplash.com/photo-1534367610401-9f5b681c06f6?w=800&h=600&fit=crop",
           dumbbell_curl: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=800&h=600&fit=crop",
           dumbbell_press: "https://images.unsplash.com/photo-1534367610401-9f5b681c06f6?w=800&h=600&fit=crop",
+          dumbbell_shoulder_press: "https://images.unsplash.com/photo-1534367610401-9f5b681c06f6?w=800&h=600&fit=crop",
           high_knees: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&h=600&fit=crop",
           russian_twist: "https://images.unsplash.com/photo-1566241142559-40e1dab0cec6?w=800&h=600&fit=crop",
           glute_bridge: "https://images.unsplash.com/photo-1574680178050-55c6a6a96e0a?w=800&h=600&fit=crop",

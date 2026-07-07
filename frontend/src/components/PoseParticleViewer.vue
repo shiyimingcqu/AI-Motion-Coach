@@ -34,6 +34,10 @@ const props = defineProps<{
   progress: number;
   backgroundImage?: string;
   highlightInstructions?: HighlightInstruction[];
+  bodyWidthScale?: number;
+  torsoWidthScale?: number;
+  uprightDepthCorrection?: boolean;
+  stableTorsoAnchor?: boolean;
 }>();
 const emit = defineEmits<{
   "update:progress": [value: number];
@@ -136,6 +140,7 @@ let backgroundTexture: THREE.Texture | null = null;
 let backgroundLoadToken = 0;
 let _replayPrevPoints: THREE.Vector3[] | null = null;
 let _replayPrevTime = 0;
+let _torsoAnchorBaseline: THREE.Vector3 | null = null;
 
 let bodyParticles: THREE.Points | null = null;
 let bodyParticleHalo: THREE.Points | null = null;
@@ -447,6 +452,20 @@ function updatePose(frame: PoseReplayFrame | null) {
       if (p) p.z -= hipMidZ;
     }
   }
+  if (props.uprightDepthCorrection) {
+    uprightDepth(points, frame.landmarks);
+  }
+  if (props.stableTorsoAnchor) {
+    stabilizeTorsoAnchor(points, frame.landmarks);
+  }
+
+  // 脚踝深度锁定到髋部 — 消除下蹲时深度抖动导致的脚滑动
+  const ankleLockZ = getMidpointZ(points, frame.landmarks, 23, 24);
+  if (ankleLockZ !== null) {
+    for (const idx of [25, 26, 27, 28, 29, 30, 31, 32]) {
+      if (points[idx]) points[idx].z = ankleLockZ;
+    }
+  }
 
   // One Euro Filter — 静止时强平滑，快速运动时低延迟
   const now = performance.now();
@@ -495,9 +514,7 @@ function updatePose(frame: PoseReplayFrame | null) {
       const l11 = frame.landmarks[11]; const l12 = frame.landmarks[12]; const l23 = frame.landmarks[23]; const l24 = frame.landmarks[24];
       const tb = torsoBindings[torsoIndex]; torsoIndex++;
       if (!p11 || !p12 || !p23 || !p24 || !isVisible(l11) || !isVisible(l12) || !isVisible(l23) || !isVisible(l24)) { hidePoint(bodyBuffer, bufferIndex); hidePoint(bodyHaloBuffer, bufferIndex); return; }
-      const top = new THREE.Vector3().lerpVectors(p11, p12, tb.u);
-      const bottom = new THREE.Vector3().lerpVectors(p23, p24, tb.u);
-      const pos = new THREE.Vector3().lerpVectors(top, bottom, tb.v);
+      const pos = calculateTorsoParticlePosition(p11, p12, p23, p24, tb);
       writePoint(bodyBuffer, bufferIndex, pos);
       writePoint(bodyHaloBuffer, bufferIndex, pos);
     } else if (bone.start === -1) {
@@ -556,7 +573,8 @@ function updatePose(frame: PoseReplayFrame | null) {
 
 function convertLandmark(point: PoseReplayLandmark): THREE.Vector3 {
   const scale = 3.2;
-  return new THREE.Vector3((point.x - 0.5) * scale, -(point.y - 0.5) * scale - 5, (point.z || 0));
+  const widthScale = props.bodyWidthScale ?? 1;
+  return new THREE.Vector3((point.x - 0.5) * scale * widthScale, -(point.y - 0.5) * scale - 5, (point.z || 0));
 }
 
 function getMidpoint(points: THREE.Vector3[], landmarks: PoseReplayLandmark[], idxA: number, idxB: number): THREE.Vector3 | null {
@@ -571,6 +589,42 @@ function getMidpointZ(points: THREE.Vector3[], landmarks: PoseReplayLandmark[], 
   return (points[idxA].z + points[idxB].z) / 2;
 }
 
+function uprightDepth(points: THREE.Vector3[], landmarks: PoseReplayLandmark[]) {
+  const shoulderMid = getMidpoint(points, landmarks, 11, 12);
+  const hipMid = getMidpoint(points, landmarks, 23, 24);
+  if (!shoulderMid || !hipMid) return;
+  const torsoHeight = shoulderMid.y - hipMid.y;
+  if (Math.abs(torsoHeight) < 0.08) return;
+  const depthSlope = (shoulderMid.z - hipMid.z) / torsoHeight;
+  if (!Number.isFinite(depthSlope) || Math.abs(depthSlope) < 0.02) return;
+  for (const point of points) {
+    if (point) point.z -= (point.y - hipMid.y) * depthSlope;
+  }
+}
+
+function getTorsoAnchor(points: THREE.Vector3[], landmarks: PoseReplayLandmark[]) {
+  const shoulderMid = getMidpoint(points, landmarks, 11, 12);
+  const hipMid = getMidpoint(points, landmarks, 23, 24);
+  if (shoulderMid && hipMid) {
+    return new THREE.Vector3().addVectors(shoulderMid, hipMid).multiplyScalar(0.5);
+  }
+  return shoulderMid || hipMid;
+}
+
+function stabilizeTorsoAnchor(points: THREE.Vector3[], landmarks: PoseReplayLandmark[]) {
+  const anchor = getTorsoAnchor(points, landmarks);
+  if (!anchor) return;
+  if (!_torsoAnchorBaseline) {
+    _torsoAnchorBaseline = anchor.clone();
+    return;
+  }
+  const drift = new THREE.Vector3().subVectors(anchor, _torsoAnchorBaseline);
+  if (drift.lengthSq() < 0.000001) return;
+  for (const point of points) {
+    if (point) point.sub(drift);
+  }
+}
+
 function calculateParticlePosition(start: THREE.Vector3, end: THREE.Vector3, t: number, angle: number, radius: number) {
   tempDirection.subVectors(end, start);
   if (tempDirection.lengthSq() < 0.0001) return tempCenter.copy(start);
@@ -580,6 +634,35 @@ function calculateParticlePosition(start: THREE.Vector3, end: THREE.Vector3, t: 
   tempNormalB.crossVectors(tempDirection, tempNormalA).normalize();
   tempCenter.lerpVectors(start, end, t);
   return tempCenter.clone().addScaledVector(tempNormalA, Math.cos(angle) * radius).addScaledVector(tempNormalB, Math.sin(angle) * radius);
+}
+
+function calculateTorsoParticlePosition(
+  leftShoulder: THREE.Vector3,
+  rightShoulder: THREE.Vector3,
+  leftHip: THREE.Vector3,
+  rightHip: THREE.Vector3,
+  binding: TorsoBinding,
+) {
+  const topCenter = new THREE.Vector3().addVectors(leftShoulder, rightShoulder).multiplyScalar(0.5);
+  const bottomCenter = new THREE.Vector3().addVectors(leftHip, rightHip).multiplyScalar(0.5);
+  const center = new THREE.Vector3().lerpVectors(topCenter, bottomCenter, binding.v);
+  const shoulderAxis = new THREE.Vector3().subVectors(rightShoulder, leftShoulder);
+  const hipAxis = new THREE.Vector3().subVectors(rightHip, leftHip);
+  const shoulderWidth = shoulderAxis.length();
+  const hipWidth = hipAxis.length();
+  const widthAxis = shoulderWidth >= 0.04 ? shoulderAxis : hipAxis;
+  if (widthAxis.lengthSq() < 0.0001) {
+    widthAxis.set(1, 0, 0);
+  } else {
+    widthAxis.normalize();
+  }
+  const widthScale = props.torsoWidthScale ?? 1;
+  const naturalWidth = shoulderWidth * (1 - binding.v) + hipWidth * binding.v;
+  const torsoWidth = Math.max(naturalWidth * widthScale, widthScale > 1 ? 0.62 : naturalWidth);
+  const widthOffset = (binding.u - 0.5) * torsoWidth;
+  const edgeFalloff = Math.max(0, 1 - Math.abs(binding.u - 0.5) * 1.65);
+  const depthOffset = (binding.shell - 0.5) * Math.max(0.08, torsoWidth * 0.22) * edgeFalloff;
+  return center.addScaledVector(widthAxis, widthOffset).add(new THREE.Vector3(0, 0, depthOffset));
 }
 
 function getHeadCenter(points: THREE.Vector3[]) {
@@ -867,7 +950,7 @@ function distToSegmentSq(px: number, py: number, ax: number, ay: number, bx: num
   return (px - cx) * (px - cx) + (py - cy) * (py - cy);
 }
 
-watch(() => props.frames, () => { playbackMs = 0; lastTick = 0; emit("update:progress", 0); _replayPrevPoints = null; void nextTick(() => { updatePose(props.frames[0] ?? null); updateHighlightOverlay(); }); });
+watch(() => props.frames, () => { playbackMs = 0; lastTick = 0; emit("update:progress", 0); _replayPrevPoints = null; _torsoAnchorBaseline = null; void nextTick(() => { updatePose(props.frames[0] ?? null); updateHighlightOverlay(); }); });
 watch(() => props.progress, (value) => { if (!props.playing) { playbackMs = value * getDuration(); updatePose(getFrameAt(playbackMs)); } });
 watch(() => props.backgroundImage, (imageUrl) => { updateSceneBackground(imageUrl || ""); });
 watch(() => props.highlightInstructions, () => {

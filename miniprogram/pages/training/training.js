@@ -128,12 +128,18 @@ Page({
   _smoothDt: 0,
   _smoothHistory: [],
 
-  FRAME_INTERVAL: 17,
+  FRAME_INTERVAL: 16,
   FRAME_INTERVALS: {
-    jumping_jack: 17,
-    squat: 17,
-    push_up: 17,
-    plank: 17,
+    jumping_jack: 16,
+    squat: 16,
+    push_up: 16,
+    plank: 16,
+    pull_up: 16,
+    bench_press: 16,
+    barbell_squat: 16,
+    dumbbell_fly: 16,
+    lat_pulldown: 16,
+    dumbbell_shoulder_press: 16,
   },
 
   onLoad(options) {

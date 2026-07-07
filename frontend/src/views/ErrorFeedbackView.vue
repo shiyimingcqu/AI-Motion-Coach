@@ -636,8 +636,13 @@ const exerciseNames: Record<string, string> = {
   burpee: "波比跳",
   mountain_climber: "登山跑",
   pull_up: "引体向上",
+  bench_press: "卧推",
+  barbell_squat: "杠铃深蹲",
+  dumbbell_fly: "哑铃飞鸟",
+  lat_pulldown: "高位下拉",
   dumbbell_curl: "哑铃弯举",
   dumbbell_press: "哑铃推举",
+  dumbbell_shoulder_press: "哑铃推肩",
   russian_twist: "俄罗斯转体",
 };
 
