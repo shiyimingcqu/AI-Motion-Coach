@@ -63,3 +63,4 @@ logs/
 Thumbs.db
 
 db_stdout.txt
+".npm-cache/" 
