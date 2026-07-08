@@ -36,7 +36,6 @@ const props = defineProps<{
   highlightInstructions?: HighlightInstruction[];
   bodyWidthScale?: number;
   torsoWidthScale?: number;
-  uprightDepthCorrection?: boolean;
   stableTorsoAnchor?: boolean;
 }>();
 const emit = defineEmits<{
@@ -452,19 +451,8 @@ function updatePose(frame: PoseReplayFrame | null) {
       if (p) p.z -= hipMidZ;
     }
   }
-  if (props.uprightDepthCorrection) {
-    uprightDepth(points, frame.landmarks);
-  }
   if (props.stableTorsoAnchor) {
     stabilizeTorsoAnchor(points, frame.landmarks);
-  }
-
-  // 脚踝深度锁定到髋部 — 消除下蹲时深度抖动导致的脚滑动
-  const ankleLockZ = getMidpointZ(points, frame.landmarks, 23, 24);
-  if (ankleLockZ !== null) {
-    for (const idx of [25, 26, 27, 28, 29, 30, 31, 32]) {
-      if (points[idx]) points[idx].z = ankleLockZ;
-    }
   }
 
   // One Euro Filter — 静止时强平滑，快速运动时低延迟
@@ -587,19 +575,6 @@ function getMidpointZ(points: THREE.Vector3[], landmarks: PoseReplayLandmark[], 
   const la = landmarks[idxA]; const lb = landmarks[idxB];
   if (!la || !lb || (la.visibility ?? 1) < 0.35 || (lb.visibility ?? 1) < 0.35) return null;
   return (points[idxA].z + points[idxB].z) / 2;
-}
-
-function uprightDepth(points: THREE.Vector3[], landmarks: PoseReplayLandmark[]) {
-  const shoulderMid = getMidpoint(points, landmarks, 11, 12);
-  const hipMid = getMidpoint(points, landmarks, 23, 24);
-  if (!shoulderMid || !hipMid) return;
-  const torsoHeight = shoulderMid.y - hipMid.y;
-  if (Math.abs(torsoHeight) < 0.08) return;
-  const depthSlope = (shoulderMid.z - hipMid.z) / torsoHeight;
-  if (!Number.isFinite(depthSlope) || Math.abs(depthSlope) < 0.02) return;
-  for (const point of points) {
-    if (point) point.z -= (point.y - hipMid.y) * depthSlope;
-  }
 }
 
 function getTorsoAnchor(points: THREE.Vector3[], landmarks: PoseReplayLandmark[]) {

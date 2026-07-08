@@ -12,7 +12,6 @@
     <template v-if="!showAnalysisWorkspace">
       <header class="section-page-header">
         <div>
-          <h1>Video Upload Analysis / 视频上传分析</h1>
           <p>上传训练视频，使用与实时检测相同的姿态识别与分析引擎</p>
         </div>
       </header>

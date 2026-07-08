@@ -1,103 +1,131 @@
 <template>
-  <div class="exercise-library-page">
-    <header class="section-page-header">
-      <div>
-        <h1>{{ $t("exerciseLibrary.title") }}</h1>
-        <p>Browse and learn exercises with proper form guidance</p>
-      </div>
-      <div class="header-actions">
-        <button class="blue-action-button" type="button" @click="showGallery = !showGallery">
-          <component :is="showGallery ? 'Grid' : 'Layers'" :size="20" />
-          {{ showGallery ? 'Grid View' : 'Gallery View' }}
-        </button>
-      </div>
+  <div class="el-page">
+    <!-- 顶部 -->
+    <header class="el-header">
+      <p class="el-subtitle">科学动作，改善姿态，练出更好的自己</p>
     </header>
 
-    <section class="filter-card library-filter-card">
-      <label class="session-search">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input v-model="searchQuery" type="search" :placeholder="$t('exerciseLibrary.search')" />
-      </label>
-      <select v-model="categoryFilter">
-        <option value="">{{ $t("exerciseLibrary.category_all") }}</option>
-        <option value="lower">{{ $t("exerciseLibrary.category_lower") }}</option>
-        <option value="upper">{{ $t("exerciseLibrary.category_upper") }}</option>
-        <option value="core">{{ $t("exerciseLibrary.category_core") }}</option>
-        <option value="full">{{ $t("exerciseLibrary.category_full") }}</option>
-      </select>
-      <select v-model="levelFilter">
-        <option value="">{{ $t("exerciseLibrary.level_all") }}</option>
-        <option value="beginner">{{ $t("exerciseLibrary.level_beginner") }}</option>
-        <option value="intermediate">{{ $t("exerciseLibrary.level_intermediate") }}</option>
-        <option value="advanced">{{ $t("exerciseLibrary.level_advanced") }}</option>
-      </select>
+    <!-- 搜索 + 筛选 -->
+    <section class="el-bar">
+      <div class="el-search">
+        <Search :size="16" />
+        <input v-model="searchQuery" type="search" placeholder="搜索动作名称，如：深蹲、俯卧撑" />
+      </div>
+      <div class="el-tabs">
+        <button
+          v-for="cat in categories"
+          :key="cat.key"
+          type="button"
+          class="el-tab"
+          :class="{ active: categoryFilter === cat.key }"
+          @click="categoryFilter = cat.key"
+        >
+          {{ cat.label }}
+        </button>
+      </div>
     </section>
 
-    <!-- Gallery View -->
-    <section v-if="showGallery" class="gallery-section">
-      <StateDisplay v-if="loading" type="loading" skeleton="cards" :text="$t('exerciseLibrary.loading')" />
-      <StateDisplay v-else-if="galleryItems.length === 0" type="empty" :title="$t('exerciseLibrary.noData')" :text="$t('exerciseLibrary.noDataText')" />
-      <template v-else>
-        <div class="gallery-container">
-          <CircularGallery
-            :items="galleryItems"
-            :bend="3"
-            textColor="#f8fafc"
-            :borderRadius="0.06"
-            font="bold 28px 'Microsoft YaHei', sans-serif"
-            :scrollSpeed="2"
-            :scrollEase="0.05"
-            @on-item-click="handleGalleryClick"
-          />
-        </div>
-        <div class="gallery-footer">
-          <span class="gallery-hint">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
-            Scroll or drag to explore
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-          </span>
-        </div>
-      </template>
-    </section>
+    <!-- 加载/空状态 -->
+    <StateDisplay v-if="loading" type="loading" skeleton="cards" :skeleton-rows="2" text="加载动作库..." />
+    <StateDisplay v-else-if="allExercises.length === 0" type="empty" title="暂无动作数据" text="请检查网络连接后重试" />
 
-    <!-- Grid View -->
-    <section v-else class="library-grid">
-      <StateDisplay v-if="loading" type="loading" skeleton="cards" :text="$t('exerciseLibrary.loading')" />
-      <StateDisplay v-else-if="filteredExercises.length === 0" type="empty" :title="$t('exerciseLibrary.noMatch')" :text="$t('exerciseLibrary.noMatchText')" />
-      <article v-for="exercise in filteredExercises" :key="exercise.name" class="library-card">
-        <div class="exercise-hero">
-          <span>{{ exercise.emoji }}</span>
+    <template v-else>
+      <!-- 推荐给你 -->
+      <section v-if="recommendedExercises.length > 0" class="el-section">
+        <div class="el-section-header">
+          <h2 class="el-section-title">
+            <Star :size="16" class="el-star" />
+            推荐给你
+          </h2>
+          <button class="el-refresh" type="button" @click="refreshRecommended">
+            <RefreshCw :size="14" />
+            换一批
+          </button>
         </div>
-        <div class="library-card-body">
-          <header>
-            <div>
-              <h2>{{ exercise.name }}</h2>
-              <p>{{ exercise.category }}</p>
+        <div class="el-grid">
+          <article
+            v-for="ex in recommendedExercises"
+            :key="ex.key"
+            class="el-card"
+            @click="goToDetail(ex.key)"
+          >
+            <div class="el-card-img" :style="{ background: ex.accent || '#f1f5f9' }">
+              <ExerciseIllustration :key="ex.key" :type="ex.key" />
             </div>
-            <span class="level-pill" :class="exercise.levelKey">{{ exercise.level }}</span>
-          </header>
-          <p>{{ exercise.desc }}</p>
-          <div class="library-meta-grid">
-            <div><span>Duration</span><strong>{{ exercise.duration }}</strong></div>
-            <div><span>Calories</span><strong>{{ exercise.calories }}</strong></div>
-          </div>
-          <div class="key-points-box">
-            <strong>◎ {{ $t("exerciseLibrary.keyPoints") }}</strong>
-            <span v-for="point in exercise.points" :key="point">• {{ point }}</span>
-          </div>
-          <footer>
-            <button class="tutorial-button" type="button" @click="startTraining(exercise.exerciseKey)">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
-              {{ $t("exerciseLibrary.startTraining") }}
-            </button>
-            <button class="details-button" type="button">
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-              Details
-            </button>
-          </footer>
+            <div class="el-card-body">
+              <div class="el-card-top">
+                <h3>{{ ex.name }}</h3>
+                <span class="el-badge" :class="ex.supported ? 'badge-on' : 'badge-off'">
+                  {{ ex.supported ? '已支持' : '测试中' }}
+                </span>
+              </div>
+              <p class="el-card-desc">{{ ex.description }}</p>
+              <div class="el-card-tags">
+                <span class="el-tag">{{ ex.level }}</span>
+                <span class="el-tag" v-if="ex.equipment">{{ ex.equipment }}</span>
+                <span class="el-tag" v-if="ex.camera_view">{{ cameraLabels[ex.camera_view] || ex.camera_view }}拍摄</span>
+              </div>
+              <div class="el-card-actions">
+                <button class="el-btn-detail" type="button" @click.stop="goToDetail(ex.key)">
+                  查看教学
+                </button>
+                <button class="el-btn-train" type="button" @click.stop="startTraining(ex.key)">
+                  开始训练
+                </button>
+              </div>
+            </div>
+          </article>
         </div>
-      </article>
-    </section>
+      </section>
+
+      <!-- 全部动作 -->
+      <section class="el-section">
+        <h2 class="el-section-title">全部动作</h2>
+        <div class="el-grid">
+          <article
+            v-for="ex in filteredExercises"
+            :key="ex.key"
+            class="el-card"
+            @click="goToDetail(ex.key)"
+          >
+            <div class="el-card-img" :style="{ background: ex.accent || '#f1f5f9' }">
+              <ExerciseIllustration :key="ex.key" :type="ex.key" />
+            </div>
+            <div class="el-card-body">
+              <div class="el-card-top">
+                <h3>{{ ex.name }}</h3>
+                <span class="el-badge" :class="ex.supported ? 'badge-on' : 'badge-off'">
+                  {{ ex.supported ? '已支持' : '测试中' }}
+                </span>
+              </div>
+              <p class="el-card-desc">{{ ex.description }}</p>
+              <div class="el-card-tags">
+                <span class="el-tag">{{ ex.level }}</span>
+                <span class="el-tag" v-if="ex.equipment">{{ ex.equipment }}</span>
+                <span class="el-tag" v-if="ex.camera_view">{{ cameraLabels[ex.camera_view] || ex.camera_view }}拍摄</span>
+              </div>
+              <div class="el-card-actions">
+                <button class="el-btn-detail" type="button" @click.stop="goToDetail(ex.key)">
+                  查看教学
+                </button>
+                <button class="el-btn-train" type="button" @click.stop="startTraining(ex.key)">
+                  开始训练
+                </button>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+    </template>
+
+    <!-- 二维码弹窗 -->
+    <TrainQRModal
+      v-if="showQR"
+      :exercise-name="qrExercise.name"
+      :exercise-key="qrExercise.key"
+      :camera-view="qrExercise.cameraView"
+      @close="showQR = false"
+    />
   </div>
 </template>
 
@@ -105,147 +133,149 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import CircularGallery from "@/components/CircularGallery.vue";
-import { useTrainingStore } from "@/stores/training";
-import { getSimpleExercises, type ExerciseLibItem } from "@/api/exercises";
+import { RefreshCw, Search, Star } from "lucide-vue-next";
 import StateDisplay from "@/components/StateDisplay.vue";
+import TrainQRModal from "@/components/TrainQRModal.vue";
+import ExerciseIllustration from "@/components/ExerciseIllustration.vue";
+import { getSimpleExercises, type ExerciseLibItem } from "@/api/exercises";
 
 const { t } = useI18n();
 const router = useRouter();
-const store = useTrainingStore();
-const showGallery = ref(true);
+
 const searchQuery = ref("");
 const categoryFilter = ref("");
-const levelFilter = ref("");
 const loading = ref(true);
+const showQR = ref(false);
+const qrExercise = ref<{ key: string; name: string; cameraView: string }>({ key: "", name: "", cameraView: "front" });
 const backendExercises = ref<ExerciseLibItem[]>([]);
 
-const libraryExercises = computed(() =>
-  backendExercises.value.length > 0
-    ? backendExercises.value.map(e => {
-        const catMap: Record<string, string> = {
-          squat: t("categories.lower_body"), push_up: t("categories.upper_body"),
-          jumping_jack: t("categories.cardio"), plank: t("categories.core"),
-          lunge: t("categories.lower_body"), burpee: t("categories.full_body"),
-          mountain_climber: t("categories.core"), pull_up: t("categories.upper_body"),
-          bench_press: t("categories.upper_body"), barbell_squat: t("categories.lower_body"),
-          dumbbell_fly: t("categories.upper_body"), lat_pulldown: t("categories.upper_body"),
-          dumbbell_curl: t("categories.upper_body"), dumbbell_press: t("categories.upper_body"),
-          dumbbell_shoulder_press: t("categories.upper_body"),
-          high_knees: t("categories.cardio"), russian_twist: t("categories.core"),
-          glute_bridge: t("categories.lower_body"),
-        };
-        const catKeyMap: Record<string, string> = {
-          squat: "lower", push_up: "upper", jumping_jack: "cardio", plank: "core",
-          lunge: "lower", burpee: "full", mountain_climber: "core", pull_up: "upper",
-          bench_press: "upper", barbell_squat: "lower", dumbbell_fly: "upper", lat_pulldown: "upper",
-          dumbbell_curl: "upper", dumbbell_press: "upper", dumbbell_shoulder_press: "upper",
-          high_knees: "cardio", russian_twist: "core", glute_bridge: "lower",
-        };
-        const levelMap: Record<string, string> = {
-          squat: t("exerciseLibrary.level_intermediate"), push_up: t("exerciseLibrary.level_intermediate"),
-          jumping_jack: t("exerciseLibrary.level_beginner"), plank: t("exerciseLibrary.level_advanced"),
-          lunge: t("exerciseLibrary.level_intermediate"), burpee: t("exerciseLibrary.level_advanced"),
-          mountain_climber: t("exerciseLibrary.level_intermediate"), pull_up: t("exerciseLibrary.level_advanced"),
-          bench_press: t("exerciseLibrary.level_intermediate"), barbell_squat: t("exerciseLibrary.level_advanced"),
-          dumbbell_fly: t("exerciseLibrary.level_intermediate"), lat_pulldown: t("exerciseLibrary.level_intermediate"),
-          dumbbell_curl: t("exerciseLibrary.level_beginner"), dumbbell_press: t("exerciseLibrary.level_intermediate"),
-          dumbbell_shoulder_press: t("exerciseLibrary.level_intermediate"),
-          high_knees: t("exerciseLibrary.level_beginner"), russian_twist: t("exerciseLibrary.level_intermediate"), glute_bridge: t("exerciseLibrary.level_beginner"),
-        };
-        const levelKeyMap: Record<string, string> = {
-          squat: "intermediate", push_up: "intermediate",
-          jumping_jack: "beginner", plank: "advanced",
-          lunge: "intermediate", burpee: "advanced",
-          mountain_climber: "intermediate", pull_up: "advanced",
-          bench_press: "intermediate", barbell_squat: "advanced", dumbbell_fly: "intermediate", lat_pulldown: "intermediate",
-          dumbbell_curl: "beginner", dumbbell_press: "intermediate", dumbbell_shoulder_press: "intermediate",
-          high_knees: "beginner", russian_twist: "intermediate", glute_bridge: "beginner",
-        };
-        const emojiMap: Record<string, string> = {
-          squat: "🦵", push_up: "💪", jumping_jack: "🔥", plank: "🧘",
-          lunge: "🦵", burpee: "🔥", mountain_climber: "⛰️", pull_up: "💪",
-          bench_press: "💪", barbell_squat: "🦵", dumbbell_fly: "💪", lat_pulldown: "💪",
-          dumbbell_curl: "💪", dumbbell_press: "💪", dumbbell_shoulder_press: "💪",
-          high_knees: "🏃", russian_twist: "🧘", glute_bridge: "🦵",
-        };
-        // 使用真实运动图片 Unsplash
-        const imgMap: Record<string, string> = {
-          squat: "https://images.unsplash.com/photo-1574680178050-55c6a6a96e0a?w=800&h=600&fit=crop",
-          push_up: "https://images.unsplash.com/photo-1598971639058-fab3c3109a00?w=800&h=600&fit=crop",
-          jumping_jack: "https://images.unsplash.com/photo-1534258936925-c58bed479fcb?w=800&h=600&fit=crop",
-          plank: "https://images.unsplash.com/photo-1566241142559-40e1dab0cec6?w=800&h=600&fit=crop",
-          lunge: "https://images.unsplash.com/photo-1434608519344-49d77a699e1d?w=800&h=600&fit=crop",
-          burpee: "https://images.unsplash.com/photo-1534258936925-c58bed479fcb?w=800&h=600&fit=crop",
-          mountain_climber: "https://images.unsplash.com/photo-1599058917765-a780eda07a3e?w=800&h=600&fit=crop",
-          pull_up: "https://images.unsplash.com/photo-1598971639058-abcdab3c3b0a?w=800&h=600&fit=crop",
-          bench_press: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&h=600&fit=crop",
-          barbell_squat: "https://images.unsplash.com/photo-1534367610401-9f5b681c06f6?w=800&h=600&fit=crop",
-          dumbbell_fly: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=800&h=600&fit=crop",
-          lat_pulldown: "https://images.unsplash.com/photo-1534367610401-9f5b681c06f6?w=800&h=600&fit=crop",
-          dumbbell_curl: "https://images.unsplash.com/photo-1581009146145-b5ef050c2e1e?w=800&h=600&fit=crop",
-          dumbbell_press: "https://images.unsplash.com/photo-1534367610401-9f5b681c06f6?w=800&h=600&fit=crop",
-          dumbbell_shoulder_press: "https://images.unsplash.com/photo-1534367610401-9f5b681c06f6?w=800&h=600&fit=crop",
-          high_knees: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800&h=600&fit=crop",
-          russian_twist: "https://images.unsplash.com/photo-1566241142559-40e1dab0cec6?w=800&h=600&fit=crop",
-          glute_bridge: "https://images.unsplash.com/photo-1574680178050-55c6a6a96e0a?w=800&h=600&fit=crop",
-        };
-        return {
-          name: e.name,
-          category: catMap[e.key] || t("common.all"),
-          categoryKey: catKeyMap[e.key] || "general",
-          level: levelMap[e.key] || t("exerciseLibrary.level_intermediate"),
-          levelKey: levelKeyMap[e.key] || "intermediate",
-          exerciseKey: e.key,
-          emoji: emojiMap[e.key] || "🏋️",
-          desc: e.description || "Exercise with proper form guidance",
-          duration: "3-5 min",
-          calories: "~45 kcal",
-          points: ["Good form", "Full range", "Control"],
-          image: imgMap[e.key] || "https://images.unsplash.com/photo-1574680178050-55c6a6a96e0a?w=800&h=600&fit=crop",
-        };
-      })
-    : []
-);
+const categories = [
+  { key: "", label: "全部" },
+  { key: "lower", label: "下肢" },
+  { key: "upper", label: "上肢" },
+  { key: "core", label: "核心" },
+  { key: "full", label: "全身" },
+  { key: "cardio", label: "心肺" },
+];
 
-const galleryItems = computed(() =>
-  libraryExercises.value.map(e => ({
-    image: e.image,
-    text: e.name.split(" / ")[0],
-    category: e.category,
-    level: e.level,
-    emoji: e.emoji,
-    exerciseKey: e.exerciseKey,
-  }))
-);
+const cameraLabels: Record<string, string> = {
+  side: "侧面",
+  front: "正面",
+  "45deg": "45°",
+};
 
-function startTraining(exerciseKey: string) {
-  store.setExercise(exerciseKey);
-  router.push("/realtime");
-}
+const exerciseMeta: Record<string, {
+  catKey: string;
+  level: string;
+  emoji: string;
+  equipment: string;
+  camera_view: string;
+  supported: boolean;
+  accent: string;
+  recommended: boolean;
+}> = {
+  squat: { catKey: "lower", level: "入门", emoji: "🦵", equipment: "无器械", camera_view: "side", supported: true, accent: "#ecfdf5", recommended: true },
+  push_up: { catKey: "upper", level: "入门", emoji: "💪", equipment: "无器械", camera_view: "side", supported: true, accent: "#fef2f2", recommended: true },
+  jumping_jack: { catKey: "cardio", level: "入门", emoji: "🔥", equipment: "无器械", camera_view: "front", supported: true, accent: "#eff6ff", recommended: true },
+  plank: { catKey: "core", level: "入门", emoji: "🧘", equipment: "瑜伽垫", camera_view: "side", supported: true, accent: "#f5f3ff", recommended: false },
+  lunge: { catKey: "lower", level: "入门", emoji: "🦵", equipment: "无器械", camera_view: "side", supported: true, accent: "#e9f4eb", recommended: false },
+  burpee: { catKey: "full", level: "进阶", emoji: "🔥", equipment: "无器械", camera_view: "front", supported: true, accent: "#f0e4ed", recommended: false },
+  high_knees: { catKey: "cardio", level: "入门", emoji: "🏃", equipment: "无器械", camera_view: "front", supported: true, accent: "#d9e3f0", recommended: false },
+  glute_bridge: { catKey: "lower", level: "入门", emoji: "🦵", equipment: "瑜伽垫", camera_view: "side", supported: true, accent: "#f0dcd8", recommended: false },
+  bench_press: { catKey: "upper", level: "中等", emoji: "💪", equipment: "哑铃/杠铃", camera_view: "side", supported: false, accent: "#fceadf", recommended: false },
+  pull_up: { catKey: "upper", level: "进阶", emoji: "💪", equipment: "单杠", camera_view: "side", supported: false, accent: "#dfdacd", recommended: false },
+  barbell_squat: { catKey: "lower", level: "进阶", emoji: "🦵", equipment: "杠铃", camera_view: "side", supported: false, accent: "#f0e7f8", recommended: false },
+  mountain_climber: { catKey: "cardio", level: "中等", emoji: "⛰️", equipment: "无器械", camera_view: "side", supported: false, accent: "#e6f5f5", recommended: false },
+  dumbbell_fly: { catKey: "upper", level: "中等", emoji: "💪", equipment: "哑铃", camera_view: "side", supported: false, accent: "#e6f5eb", recommended: false },
+  lat_pulldown: { catKey: "upper", level: "中等", emoji: "💪", equipment: "拉力器", camera_view: "side", supported: false, accent: "#e5f0fb", recommended: false },
+  dumbbell_curl: { catKey: "upper", level: "入门", emoji: "💪", equipment: "哑铃", camera_view: "side", supported: false, accent: "#fef6e5", recommended: false },
+  dumbbell_press: { catKey: "upper", level: "中等", emoji: "💪", equipment: "哑铃", camera_view: "side", supported: false, accent: "#fcebea", recommended: false },
+  dumbbell_shoulder_press: { catKey: "upper", level: "中等", emoji: "💪", equipment: "哑铃", camera_view: "side", supported: false, accent: "#e4eef8", recommended: false },
+  russian_twist: { catKey: "core", level: "中等", emoji: "🧘", equipment: "无器械", camera_view: "front", supported: false, accent: "#fefce8", recommended: false },
+};
 
-function handleGalleryClick(index: number) {
-  const item = galleryItems.value[index];
-  if (item?.exerciseKey) {
-    startTraining(item.exerciseKey);
-  }
-}
-
-const filteredExercises = computed(() =>
-  libraryExercises.value.filter(e => {
-    const matchesSearch = !searchQuery.value || e.name.toLowerCase().includes(searchQuery.value.toLowerCase()) || e.category.toLowerCase().includes(searchQuery.value.toLowerCase());
-    const matchesCategory = !categoryFilter.value || e.categoryKey === categoryFilter.value;
-    const matchesLevel = !levelFilter.value || e.levelKey === levelFilter.value;
-    return matchesSearch && matchesCategory && matchesLevel;
+const allExercises = computed(() =>
+  backendExercises.value.map(e => {
+    const meta = exerciseMeta[e.key] || { catKey: "general", level: "入门", emoji: "🏋️", equipment: "无器械", camera_view: "front", supported: false, accent: "#f1f5f9", recommended: false };
+    return {
+      key: e.key,
+      name: e.name,
+      description: e.description || getDefaultDesc(e.key),
+      catKey: meta.catKey,
+      level: meta.level,
+      emoji: meta.emoji,
+      equipment: meta.equipment,
+      camera_view: meta.camera_view,
+      supported: meta.supported,
+      accent: meta.accent,
+      recommended: meta.recommended,
+    };
   })
 );
+
+const recommendedExercises = computed(() =>
+  allExercises.value.filter(e => e.recommended)
+);
+
+const filteredExercises = computed(() => {
+  let list = allExercises.value;
+  if (categoryFilter.value) {
+    list = list.filter(e => e.catKey === categoryFilter.value);
+  }
+  if (searchQuery.value.trim()) {
+    const q = searchQuery.value.trim().toLowerCase();
+    list = list.filter(e =>
+      e.name.toLowerCase().includes(q) || e.description.toLowerCase().includes(q)
+    );
+  }
+  return list;
+});
+
+function goToDetail(key: string) {
+  router.push(`/exercises/${key}`);
+}
+
+function startTraining(key: string) {
+  const ex = allExercises.value.find(e => e.key === key);
+  qrExercise.value = {
+    key,
+    name: ex?.name || key,
+    cameraView: ex?.camera_view || "front",
+  };
+  showQR.value = true;
+}
+
+function refreshRecommended() {}
+
+function getDefaultDesc(key: string): string {
+  const m: Record<string, string> = {
+    squat: "强化下肢力量，改善体态稳定性。",
+    push_up: "增强上肢力量，提升身体控制力。",
+    jumping_jack: "提升心肺耐力，促进全身协调。",
+    plank: "增强核心力量，改善身体稳定性。",
+    lunge: "锻炼腿部力量与平衡，改善体态。",
+    burpee: "全身高强度燃脂，提升心肺功能。",
+    high_knees: "提升心率，锻炼下肢爆发力。",
+    glute_bridge: "激活臀部与核心，改善体态。",
+    bench_press: "胸肌与上肢力量训练。",
+    pull_up: "背部与上肢力量训练。",
+    barbell_squat: "负重深蹲，增强下肢力量。",
+    mountain_climber: "核心与心肺训练。",
+    dumbbell_fly: "胸肌塑形训练。",
+    lat_pulldown: "背部肌群训练。",
+    dumbbell_curl: "肱二头肌训练。",
+    dumbbell_press: "肩部与上肢训练。",
+    dumbbell_shoulder_press: "肩部塑形训练。",
+    russian_twist: "核心旋转稳定性训练。",
+  };
+  return m[key] || "标准动作训练";
+}
 
 onMounted(async () => {
   try {
     const data = await getSimpleExercises();
-    backendExercises.value = data.items;
+    backendExercises.value = data.items || [];
   } catch {
-    // fallback to empty — StateDisplay will show
   } finally {
     loading.value = false;
   }
@@ -253,112 +283,308 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* ── layout ── */
-.exercise-library-page { display: grid; gap: 26px; }
-
-.library-page-header {
-  display: flex; align-items: center; justify-content: space-between; gap: 18px;
+/* ===== 页面容器 ===== */
+.el-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
 
-/* ── gallery section ── */
-.gallery-section { display: grid; gap: 16px; }
+/* ===== 顶部 ===== */
+.el-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
 
-.gallery-container {
-  width: 100%; height: 520px; position: relative;
-  border-radius: 16px;
+.el-subtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin: 4px 0 0;
+}
+
+/* ===== 搜索 + 筛选 ===== */
+.el-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.el-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 480px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  transition: border-color 0.2s;
+}
+
+.el-search:focus-within {
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.08);
+}
+
+.el-search input {
+  border: 0;
+  outline: 0;
+  flex: 1;
+  font-size: 14px;
+  color: #334155;
+  background: transparent;
+}
+
+.el-search input::placeholder {
+  color: #94a3b8;
+}
+
+.el-search svg {
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.el-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.el-tab {
+  padding: 5px 18px;
+  border-radius: 20px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.el-tab:hover {
+  color: #8b5cf6;
+  background: #f5f3ff;
+}
+
+.el-tab.active {
+  background: #8b5cf6;
+  color: #fff;
+  border-color: #8b5cf6;
+}
+
+/* ===== 分区 ===== */
+.el-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.el-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.el-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #101828;
+  margin: 0;
+}
+
+.el-star {
+  color: #f59e0b;
+}
+
+.el-refresh {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 0;
+  color: #8b5cf6;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.el-refresh:hover {
+  color: #6d28d9;
+}
+
+/* ===== 卡片网格：4 列竖版 ===== */
+.el-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 22px;
+}
+
+@media (max-width: 1280px) {
+  .el-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 960px) {
+  .el-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .el-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ===== 竖版卡片 ===== */
+.el-card {
+  position: relative;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 12px 30px rgba(87, 102, 140, 0.08);
   overflow: hidden;
-  background: linear-gradient(180deg, #f8fbff, #ffffff);
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  min-height: 376px;
 }
 
-.gallery-footer {
-  display: flex; justify-content: center;
+.el-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 40px rgba(139, 92, 246, 0.18);
+  border-color: #c4b5fd;
 }
 
-.gallery-hint {
-  display: inline-flex; align-items: center; gap: 10px;
-  padding: 8px 20px;
+.el-card-img {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 370 / 208;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.el-card-body {
+  padding: 16px 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #fff;
+  flex: 1;
+}
+
+.el-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.el-card-top h3 {
+  font-size: 19px;
+  font-weight: 900;
+  color: #101828;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.el-card-desc {
+  font-size: 13px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.el-card-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.el-card-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+/* ===== 通用标签 ===== */
+.el-badge {
+  padding: 4px 12px;
   border-radius: 999px;
-  background: #f1f5f9;
-  color: #64748b; font-size: 13px;
-  border: 1px solid #e2e8f0;
-}
-
-.gallery-hint svg { color: #94a3b8; }
-
-/* ── header ── */
-:deep(.section-page-header) {
-  display: flex; align-items: flex-start; justify-content: space-between; gap: 18px;
-}
-:deep(.section-page-header h1) { color: #0f172a; font-size: 34px; letter-spacing: -0.045em; }
-:deep(.section-page-header p) { margin-top: 5px; color: #64748b; font-size: 15px; }
-
-.header-actions { display: flex; gap: 10px; flex-shrink: 0; }
-
-/* ── filter ── */
-.filter-card {
-  display: grid; grid-template-columns: minmax(360px, 1fr) 180px 140px;
-  gap: 16px; padding: 16px;
-  background: #ffffff; border: 1px solid #e2e8f0;
-  border-radius: 12px; align-items: center;
-}
-.session-search {
-  min-height: 42px; display: flex; align-items: center; gap: 10px;
-  padding: 0 16px; border: 1px solid #e2e8f0;
-  border-radius: 9px; background: #f8fbff; color: #94a3b8;
-}
-.session-search svg { color: #94a3b8; flex-shrink: 0; }
-.session-search input {
-  width: 100%; min-width: 0; border: 0; outline: 0;
-  background: transparent; color: #0f172a; font-size: 14px;
-}
-.session-search input::placeholder { color: #94a3b8; }
-.filter-card select {
-  min-height: 42px; border: 1px solid #e2e8f0;
-  border-radius: 9px; background: #f8fbff;
-  color: #0f172a; padding: 0 14px; font-size: 14px;
-}
-
-/* ── grid cards ── */
-.library-grid { display: grid; grid-template-columns: repeat(3, minmax(280px, 1fr)); gap: 24px; }
-.library-card { overflow: hidden; border-radius: 14px; background: #ffffff; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-.exercise-hero { height: 200px; display: grid; place-items: center; background: linear-gradient(135deg, #5b8cff, #8b5cf6); }
-.exercise-hero span { font-size: 52px; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.1)); }
-.library-card-body { display: grid; gap: 16px; padding: 24px; }
-.library-card-body header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.library-card-body h2 { font-size: 20px; color: #0f172a; margin: 0; }
-.library-card-body p { color: #64748b; margin: 0; font-size: 14px; }
-.level-pill { min-height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
-.level-pill { background: rgba(16,185,129,0.12); color: #25b87b; }
-.level-pill.intermediate { background: rgba(91,140,255,0.12); color: #5b8cff; }
-.level-pill.advanced { background: rgba(239,68,68,0.12); color: #ef4444; }
-.library-meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.library-meta-grid div { display: grid; gap: 6px; padding: 12px; border-radius: 8px; background: #f8fbff; }
-.library-meta-grid span { color: #94a3b8; font-size: 12px; }
-.library-meta-grid strong { color: #0f172a; font-size: 15px; }
-.key-points-box { display: grid; gap: 6px; padding: 14px; border-radius: 8px; background: rgba(91,140,255,0.06); color: #5b8cff; font-size: 13px; border: 1px solid #d6e3ff; }
-.key-points-box strong { font-size: 13px; }
-.library-card footer { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.tutorial-button, .details-button {
-  min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;
-}
-.tutorial-button { border: 0; background: linear-gradient(135deg, #5b8cff, #4f46e5); color: #fff; }
-.details-button { border: 1px solid #e2e8f0; background: #f8fbff; color: #475569; }
-
-.blue-action-button {
-  min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 0 18px; border: 0; border-radius: 9px;
-  background: linear-gradient(135deg, #5b8cff, #4f46e5);
-  color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
   white-space: nowrap;
 }
 
-@media (max-width: 1200px) { .library-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 900px) { .library-grid { grid-template-columns: 1fr; } }
-@media (max-width: 1100px) {
-  .filter-card { grid-template-columns: 1fr; }
-  .gallery-container { height: 380px; }
+.badge-on {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.badge-off {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.el-tag {
+  padding: 5px 12px;
+  border-radius: 9px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ===== 按钮 ===== */
+.el-btn-detail,
+.el-btn-train {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.el-btn-detail {
+  background: #fff;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+
+.el-btn-detail:hover {
+  background: #f1f5f9;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+
+.el-btn-train {
+  background: #8b5cf6;
+  color: #fff;
+}
+
+.el-btn-train:hover {
+  background: #7c3aed;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
 }
 </style>

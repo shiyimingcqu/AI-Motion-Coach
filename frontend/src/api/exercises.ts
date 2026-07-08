@@ -44,3 +44,54 @@ export function updateExercise(key: string, data: Partial<ExerciseItem>) {
 export function deleteExercise(key: string) {
   return apiDelete<{ message: string; key: string }>(`/exercises/${key}`);
 }
+
+export interface ActiveTemplate {
+  template_id: string;
+  action: string;
+  name: string;
+  view: string;
+  version: string;
+  valid_frames: number;
+  source: string;
+  is_enabled: boolean;
+  has_video: boolean;
+  has_pose_replay: boolean;
+}
+
+export interface TemplateReplayFrame {
+  timestamp_ms: number;
+  landmarks: Array<{ x: number; y: number; z: number; visibility?: number }>;
+}
+
+export interface TemplateReplayResponse {
+  frames: TemplateReplayFrame[];
+  total: number;
+  session_id?: string;
+  template_id?: string;
+}
+
+export function getActiveTemplate(exercise: string) {
+  return apiGet<{ template: ActiveTemplate | null }>(`/exercises/${exercise}/templates/active`);
+}
+
+export function getTemplateReplay(template_id: string) {
+  return apiGet<TemplateReplayResponse>(`/templates/${template_id}/replay`);
+}
+
+export async function getActiveTemplateReplay(exercise: string) {
+  const res = await getActiveTemplate(exercise);
+  if (!res.template) return null;
+  const replay = await getTemplateReplay(res.template.template_id);
+  return {
+    template: res.template,
+    frames: replay.frames.map((f) => ({
+      timestamp_ms: f.timestamp_ms,
+      landmarks: f.landmarks.map((lm) => ({
+        x: lm.x,
+        y: lm.y,
+        z: lm.z ?? 0,
+        visibility: lm.visibility ?? 1,
+      })),
+    })),
+  };
+}

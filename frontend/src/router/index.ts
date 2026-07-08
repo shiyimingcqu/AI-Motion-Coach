@@ -1,11 +1,11 @@
 import { createRouter, createWebHistory } from "vue-router";
 import { useAuthStore } from "@/stores/auth";
 
+import HomeView from "../views/HomeView.vue";
 import DashboardView from "../views/DashboardView.vue";
 import RealtimeDetectView from "../views/RealtimeDetectView.vue";
 import VideoUploadView from "../views/VideoUploadView.vue";
 import SessionsView from "../views/SessionsView.vue";
-import ScoreTrendsView from "../views/ScoreTrendsView.vue";
 import ExerciseRulesView from "../views/ExerciseRulesView.vue";
 import ProfileView from "../views/ProfileView.vue";
 import SettingsView from "../views/SettingsView.vue";
@@ -14,6 +14,7 @@ import TrainingResultView from "../views/TrainingResultView.vue";
 import UserManagementView from "../views/UserManagementView.vue";
 import ExportReportsView from "../views/ExportReportsView.vue";
 import ExerciseLibraryView from "../views/ExerciseLibraryView.vue";
+import ExerciseDetailView from "../views/ExerciseDetailView.vue";
 import ErrorFeedbackView from "../views/ErrorFeedbackView.vue";
 import LoginView from "../views/LoginView.vue";
 import AdminDashboardView from "../views/AdminDashboardView.vue";
@@ -24,22 +25,27 @@ import AdminReportsView from "../views/AdminReportsView.vue";
 import AdminTemplatesView from "../views/AdminTemplatesView.vue";
 import AdminSettingsView from "../views/AdminSettingsView.vue";
 
+import StartSelectView from "../views/StartSelectView.vue";
+
 const STANDALONE_PATHS = ["/profile", "/settings"];
 
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: "/login", component: LoginView, meta: { public: true } },
-    { path: "/", component: DashboardView, meta: { userOnly: true } },
+    { path: "/", component: HomeView, meta: { userOnly: true } },
+    { path: "/start", component: StartSelectView, meta: { userOnly: true } },
+    { path: "/start/playback", component: DashboardView, meta: { userOnly: true } },
     { path: "/realtime", component: RealtimeDetectView, meta: { userOnly: true } },
     { path: "/upload", component: VideoUploadView, meta: { userOnly: true } },
     { path: "/feedback", component: ErrorFeedbackView, meta: { userOnly: true } },
     { path: "/sessions", component: SessionsView, meta: { userOnly: true } },
+    { path: "/exercises/:key", component: ExerciseDetailView, meta: { userOnly: true } },
     { path: "/exercises", component: ExerciseLibraryView, meta: { userOnly: true } },
     { path: "/progress", redirect: "/export" },
     { path: "/reports", redirect: "/export" },
     { path: "/motion-quality", redirect: "/export" },
-    { path: "/score-trends", component: ScoreTrendsView, meta: { userOnly: true } },
+    { path: "/score-trends", redirect: "/export" },
     { path: "/export", component: ExportReportsView, meta: { userOnly: true } },
     { path: "/rules", redirect: "/admin/rules" },
     { path: "/users", component: UserManagementView, meta: { adminOnly: true } },

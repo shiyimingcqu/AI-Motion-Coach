@@ -22,8 +22,8 @@ export const LANGUAGE_OPTIONS: { value: AppLanguage; label: string }[] = [
 ];
 
 export const THEME_OPTIONS: { value: ThemeMode; label: string }[] = [
-  { value: "dark", label: "深色（默认）" },
-  { value: "light", label: "浅色（蓝白）" }
+  { value: "light", label: "浅色（默认）" },
+  { value: "dark", label: "深色" }
 ];
 
 export const CAMERA_RESOLUTION_OPTIONS: { value: CameraResolution; label: string }[] = [
@@ -34,7 +34,7 @@ export const CAMERA_RESOLUTION_OPTIONS: { value: CameraResolution; label: string
 ];
 
 const defaultSettings: UserSettings = {
-  theme: "dark",
+  theme: "light",
   language: "zh",
   notificationsEnabled: true,
   trainingCompleteReminder: false,

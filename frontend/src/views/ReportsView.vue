@@ -2,7 +2,6 @@
   <div class="evaluation-page">
     <header class="section-page-header">
       <div>
-        <h1>Evaluation Reports / 评估报告</h1>
         <p>面向健身爱好者与私人教练的专业姿态评估报告 · 单次训练详情与建议</p>
       </div>
       <button

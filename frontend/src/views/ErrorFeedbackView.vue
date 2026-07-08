@@ -2,7 +2,6 @@
   <div class="feedback-page">
     <header class="section-page-header">
       <div>
-        <h1>Error Feedback / 动作错误反馈</h1>
         <p>Real-time error detection and correction suggestions</p>
       </div>
     </header>
