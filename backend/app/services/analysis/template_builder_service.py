@@ -3,8 +3,10 @@ import os
 from pathlib import Path
 from typing import Optional
 
-import cv2
-import mediapipe as mp
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 
 from app.services.analysis.analyzers.registry import ANALYZER_CLASSES, get_analyzer
 from app.services.analysis.exercise_metrics import (
@@ -30,6 +32,8 @@ _POSE_CACHE: dict = {"instance": None, "path": None}
 
 def _get_pose():
     """Create or reuse a PoseLandmarker (mp.tasks API)."""
+    import mediapipe as mp  # lazy import — mediapipe 不支持 Python 3.14
+
     model_path = os.path.expanduser("~/.pose_eval/pose_landmarker.task")
     if _POSE_CACHE["instance"] is not None and _POSE_CACHE["path"] == model_path:
         return _POSE_CACHE["instance"]
@@ -157,6 +161,7 @@ class TemplateBuilderService:
         if pose is None:
             return {}
 
+        import mediapipe as mp  # lazy import
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         result = pose.detect_for_video(mp_image, timestamp_ms)

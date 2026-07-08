@@ -48,10 +48,5 @@
       }
     ]
   },
-  "permission": {
-    "scope.camera": {
-      "desc": "需要使用摄像头进行姿态检测"
-    }
-  },
   "lazyCodeLoading": "requiredComponents"
 }

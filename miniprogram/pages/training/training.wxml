@@ -58,8 +58,10 @@
         <text>LIVE</text>
       </view>
 
-      <!-- 静音图标 -->
-      <view class="mute-icon" wx:if="{{state === 'running'}}">🔇</view>
+      <!-- 语音播报开关 -->
+      <view class="voice-toggle {{voiceEnabled ? 'voice-on' : 'voice-off'}}" wx:if="{{state === 'running'}}" bindtap="toggleVoice">
+        <text>{{voiceEnabled ? '🔊' : '🔇'}}</text>
+      </view>
 
       <!-- 实时反馈气泡 -->
       <view class="feedback-bubbles" wx:if="{{state === 'running' && (issues.length > 0 || feedback.length > 0)}}">

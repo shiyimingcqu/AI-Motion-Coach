@@ -44,8 +44,8 @@
     "disableSWC": true
   },
   "compileType": "miniprogram",
-  "libVersion": "3.3.4",
-  "appid": "wx8e98571b5b5ca71f",
+  "libVersion": "3.16.2",
+  "appid": "wx9cb54e080e2c8526",
   "projectname": "pose-evaluation-miniapp",
   "condition": {},
   "editorSetting": {

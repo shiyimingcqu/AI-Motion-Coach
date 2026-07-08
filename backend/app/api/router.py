@@ -1,4 +1,4 @@
-from app.api.routes import admin, ai_advice, analysis, auth, dashboard, exercises, feedback, files, health, realtime, reference_videos, reports, sessions, videos
+from app.api.routes import admin, ai_advice, analysis, auth, dashboard, exercises, feedback, files, health, realtime, reference_videos, reports, sessions, tts, videos
 
 try:
     from fastapi import APIRouter
@@ -25,4 +25,5 @@ def create_api_router():
     router.include_router(realtime.router)
     router.include_router(reference_videos.router)
     router.include_router(ai_advice.router)
+    router.include_router(tts.router)
     return router

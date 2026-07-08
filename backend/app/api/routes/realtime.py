@@ -20,12 +20,24 @@ from app.services.video.video_analysis_service import video_analysis_service
 logger = logging.getLogger(__name__)
 _pose_engine = None
 
+# HTTP 模式下的有状态分析器（按 session_id 隔离）
+_http_analyzers: dict[str, tuple] = {}  # session_id -> (analyzer, state_dict, replay_frames)
+
 
 def _get_pose_engine():
     global _pose_engine
     if _pose_engine is None:
         _pose_engine = MediaPipePoseEngine()
     return _pose_engine
+
+
+def _get_http_analyzer(session_id: str, exercise_type: str):
+    """获取或创建 HTTP 模式的有状态分析器"""
+    if session_id not in _http_analyzers:
+        analyzer = get_analyzer(exercise_type)
+        analyzer.reset()
+        _http_analyzers[session_id] = (analyzer, {}, [])
+    return _http_analyzers[session_id]
 
 
 def _landmarks_dict_to_array(landmarks_dict: dict) -> list:
@@ -151,6 +163,141 @@ if router:
             results.append(result)
 
         return {"frames": results}
+
+    @router.post("/analyze-full")
+    async def analyze_full(request: Request):
+        """HTTP 回退分析接口 — 当 WebSocket 不可用时使用。
+
+        请求体:
+        {
+            "exercise_type": "squat",
+            "keypoints": {"left_shoulder": {"x":0.5,"y":0.3,"visibility":0.9}, ...},
+            "session_id": "http-session-xxx",
+            "replay_keypoints": [...],  // 可选，33点数组
+            "timestamp_ms": 12345       // 可选
+        }
+
+        返回与 WebSocket analysis 消息相同的结构:
+        {
+            "type": "analysis",
+            "phase": "standing",
+            "count": 0,
+            "valid_count": 0,
+            "score": 85.0,
+            "issues": [...],
+            "feedback": [...],
+            "features": {...},
+            "metrics": {...},
+            "stage": "standing",
+            "errors": [...]
+        }
+        """
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+        exercise_type = body.get("exercise_type", "squat")
+        raw_keypoints = body.get("keypoints", {})
+        session_id = body.get("session_id", "default-http-session")
+        replay_keypoints = body.get("replay_keypoints")
+        timestamp_ms = body.get("timestamp_ms")
+
+        if not raw_keypoints:
+            raise HTTPException(status_code=400, detail="keypoints is required")
+
+        # 获取有状态分析器
+        analyzer, state, replay_frames = _get_http_analyzer(session_id, exercise_type)
+
+        # 如果切换了动作类型，重置分析器
+        if analyzer.exercise_type != exercise_type:
+            analyzer = get_analyzer(exercise_type)
+            analyzer.reset()
+            state.clear()
+            replay_frames.clear()
+            _http_analyzers[session_id] = (analyzer, state, [])
+
+        # 解析关键点
+        named_kps = {}
+        for name, kp in raw_keypoints.items():
+            if isinstance(kp, dict) and "x" in kp and "y" in kp:
+                named_kps[name] = NormalizedKeypoint(
+                    x=kp["x"], y=kp["y"], visibility=kp.get("visibility", 1.0)
+                )
+
+        if not named_kps:
+            return {
+                "type": "analysis",
+                "phase": "",
+                "count": analyzer.count,
+                "valid_count": analyzer.valid_count,
+                "score": 0,
+                "issues": [],
+                "feedback": [],
+                "features": {},
+                "metrics": {},
+                "stage": analyzer.stage,
+                "errors": [],
+            }
+
+        # 记录回放帧
+        if isinstance(replay_keypoints, list) and len(replay_keypoints) >= 33:
+            replay_frames.append({
+                "timestamp_ms": int(timestamp_ms) if timestamp_ms else len(replay_frames) * 100,
+                "landmarks": replay_keypoints[:33],
+            })
+            if len(replay_frames) > 60000:
+                replay_frames[:] = replay_frames[-60000:]
+
+        # 执行完整分析（与 WebSocket 逻辑一致）
+        frame_index = len(replay_frames) - 1 if replay_frames else 0
+        result = analyzer.analyze_frame(named_kps, state, frame_index=frame_index)
+        result["metrics"] = result.get("features", {})
+        result["stage"] = result.get("stage") or result.get("phase", "")
+        result["errors"] = result.get("errors") or result.get("issues", [])
+        result["type"] = "analysis"
+
+        return result
+
+    @router.post("/finish-full")
+    async def finish_full(request: Request):
+        """HTTP 回退结束接口 — 保存训练记录并返回总结。"""
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+        session_id = body.get("session_id", "default-http-session")
+        user_id = body.get("user_id")
+
+        if session_id not in _http_analyzers:
+            raise HTTPException(status_code=404, detail="No active session found")
+
+        analyzer, state, replay_frames = _http_analyzers.pop(session_id)
+        summary = analyzer.get_session_summary()
+
+        # 保存到数据库
+        saved_session = session_service.create_session(
+            exercise=summary["exercise"],
+            duration_seconds=summary["duration_seconds"],
+            total_count=summary["total_count"],
+            valid_count=summary["valid_count"],
+            error_count=summary["error_count"],
+            average_score=summary["average_score"],
+            user_id=user_id,
+            pose_replay_frames=replay_frames,
+            pose_replay_meta={
+                "source": "http_fallback",
+                "sample_interval_ms": 100,
+                "frame_count": len(replay_frames),
+            },
+        )
+
+        return {
+            "type": "summary",
+            "state": "finished",
+            "session": saved_session.to_dict() if saved_session else summary,
+        }
 
     @router.get("/analyzers")
     def list_analyzers(

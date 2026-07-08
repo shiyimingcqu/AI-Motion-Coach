@@ -137,19 +137,28 @@
   letter-spacing: 1rpx;
 }
 
-.mute-icon {
+/* 语音播报开关 */
+.voice-toggle {
   position: absolute;
   top: 20rpx;
   right: 20rpx;
   width: 56rpx;
   height: 56rpx;
-  background: rgba(0, 0, 0, 0.5);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 28rpx;
   z-index: 10;
+  transition: background 0.2s;
+}
+
+.voice-on {
+  background: rgba(79, 140, 255, 0.7);
+}
+
+.voice-off {
+  background: rgba(0, 0, 0, 0.5);
 }
 
 /* 反馈气泡 */

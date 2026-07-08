@@ -4,6 +4,7 @@ const ApiClient = require('../../utils/api');
 const { EXERCISE_CONFIG, getScoreLevel, API_BASE_URL } = require('../../utils/constants');
 const AuthManager = require('../../utils/auth');
 const { showToast } = require('../../utils/util');
+const TTSManager = require('../../utils/tts-manager');
 
 const METRIC_CONFIG = {
   squat: [
@@ -92,6 +93,9 @@ Page({
     debugFrameSize: '',
     showDebug: false,
 
+    // 语音播报
+    voiceEnabled: true,
+
     // 内部
     startTime: 0,
     _trainingFinishedCalled: false,
@@ -127,6 +131,9 @@ Page({
   _prevSmoothedLandmarks: null,
   _smoothDt: 0,
   _smoothHistory: [],
+
+  // TTS 语音播报管理器
+  _tts: null,
 
   FRAME_INTERVAL: 17,
   FRAME_INTERVALS: {
@@ -355,6 +362,21 @@ Page({
           setDataObj.feedback = feedback;
         }
         this.setData(setDataObj);
+
+        // ========== 语音播报 ==========
+        if (this._tts && this.data.voiceEnabled) {
+          if (repFinished && incomingScore >= 90) {
+            // 完美完成 → 立即播报表扬
+            this._tts.speakPraise();
+          } else if (repFinished && incomingScore > 0 && incomingScore < 60) {
+            // 低分完成 → 播报鼓励
+            this._tts.speakEncourage();
+          } else if (repFinished && issues.length > 0) {
+            // rep 完成但有错误 → 带冷却地播报纠正建议
+            const feedbackText = feedback.length > 0 ? feedback[0] : '';
+            this._tts.speakIssue(issues[0], feedbackText);
+          }
+        }
         break;
 
       case 'summary':
@@ -498,6 +520,9 @@ Page({
                   replay_keypoints: replayFrame ? replayFrame.landmarks : undefined
                 });
               }
+            } else {
+              // WebSocket 不可用 → HTTP 回退分析
+              this._httpAnalyze(frameData.keypoints, replayFrame);
             }
           } else if (frameData.error) {
           // 后端返回了错误信息
@@ -532,6 +557,45 @@ Page({
         this._pendingFrame = null;
         setTimeout(() => this.processFrame(nextFrame), 0);
       }
+    }
+  },
+
+  // ========== HTTP 回退分析（WebSocket 不可用时使用） ==========
+  async _httpAnalyze(keypointsArray, replayFrame) {
+    const namedKeypoints = this._convertToNamedKeypoints(keypointsArray);
+    if (Object.keys(namedKeypoints).length === 0) return;
+
+    if (!this._httpSessionId) {
+      this._httpSessionId = 'http-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+    }
+
+    try {
+      const result = await ApiClient.post('/api/realtime/analyze-full', {
+        exercise_type: this.data.exerciseKey,
+        keypoints: namedKeypoints,
+        session_id: this._httpSessionId,
+        replay_keypoints: replayFrame ? replayFrame.landmarks : undefined,
+        timestamp_ms: replayFrame ? replayFrame.timestamp_ms : Date.now(),
+      });
+      this.handleWSMessage(result);
+    } catch (err) {
+      console.warn('[HTTP Analyze] 失败:', err);
+    }
+  },
+
+  async _httpFinish() {
+    if (!this._httpSessionId) return;
+    try {
+      const userInfo = AuthManager.getUserInfo();
+      const result = await ApiClient.post('/api/realtime/finish-full', {
+        session_id: this._httpSessionId,
+        user_id: userInfo ? userInfo.id : null,
+      });
+      this._httpSessionId = null;
+      this.handleWSMessage(result);
+    } catch (err) {
+      console.warn('[HTTP Finish] 失败:', err);
+      this._httpSessionId = null;
     }
   },
 
@@ -1025,6 +1089,17 @@ Page({
       }
     }
 
+    // 初始化语音播报
+    if (!this._tts) {
+      this._tts = new TTSManager();
+    }
+    this._tts.setEnabled(this.data.voiceEnabled);
+    this._tts.precache();
+    this._tts.resetIssueTracking();
+
+    // 重置 HTTP 回退 session
+    this._httpSessionId = null;
+
     // 连接 WebSocket
     this.connectWebSocket();
 
@@ -1096,7 +1171,13 @@ Page({
   _doFinish() {
     this.setData({ state: 'finished' });
     this._finishNavigated = false;
-    this.sendWS({ type: 'finish' });
+
+    if (this._wsReady) {
+      this.sendWS({ type: 'finish' });
+    } else {
+      // WebSocket 不可用 → HTTP 回退结束
+      this._httpFinish();
+    }
 
     if (this._finishTimer) {
       clearTimeout(this._finishTimer);
@@ -1561,6 +1642,18 @@ Page({
     this.setData({ showDebug: !this.data.showDebug });
   },
 
+  // 切换语音播报开关
+  toggleVoice() {
+    const voiceEnabled = !this.data.voiceEnabled;
+    this.setData({ voiceEnabled });
+    if (this._tts) {
+      this._tts.setEnabled(voiceEnabled);
+    }
+    if (voiceEnabled && this._tts) {
+      this._tts.speakImmediately('语音播报已开启');
+    }
+  },
+
   // 切换摄像头
   toggleCamera() {
     if (this.data.state !== 'ready') return;
@@ -1586,6 +1679,9 @@ Page({
 
   cleanup() {
     this._stopDemoPlayback();
+    if (this._tts) {
+      this._tts.destroy();
+    }
     if (this._wsTask) {
       try { this._wsTask.close(); } catch (e) {}
       this._wsTask = null;
