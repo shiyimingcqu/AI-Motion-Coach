@@ -129,10 +129,23 @@
       </div>
     </Stepper>
 
+    <!-- 微信登录 -->
+    <div class="wechat-login-row">
+      <button class="wechat-login-btn" type="button" @click="showWechatLogin = true">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+          <path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.72-1.78 6.22.942 2.453 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.045c.134 0 .24-.11.24-.245 0-.06-.024-.12-.04-.178l-.325-1.233a.492.492 0 0 1 .177-.554C23.028 18.48 24 16.82 24 14.98c0-3.21-2.931-5.837-7.062-6.122zm-2.18 2.908c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982z"/>
+        </svg>
+        <span>微信登录</span>
+      </button>
+    </div>
+
     <!-- 状态提示 -->
     <Transition name="fade">
       <div v-if="msg" class="toast" :class="msgType">{{ msg }}</div>
     </Transition>
+
+    <!-- 微信登录弹窗 -->
+    <WechatLoginModal v-if="showWechatLogin" @close="showWechatLogin = false" />
 
     <!-- 默认账号提示 -->
     <div class="hint">
@@ -151,6 +164,7 @@ import Aurora from '@/components/Aurora.vue';
 import Stepper from '@/components/Stepper.vue';
 import SplitText from '@/components/SplitText.vue';
 import TextType from '@/components/TextType.vue';
+import WechatLoginModal from '@/components/WechatLoginModal.vue';
 
 const { t } = useI18n();
 const router = useRouter();
@@ -160,6 +174,7 @@ const mode = ref('login');
 const busy = ref(false);
 const msg = ref('');
 const msgType = ref<'err'|'ok'>('err');
+const showWechatLogin = ref(false);
 let timer: ReturnType<typeof setTimeout> | null = null;
 
 const login = reactive({ user: '', pass: '' });
@@ -347,6 +362,32 @@ async function submit() {
   line-height: 1.5;
 }
 .hint strong { color: rgba(255,255,255,0.35); font-weight: 600; }
+
+/* ─── 微信登录 ─── */
+.wechat-login-row {
+  position: relative; z-index: 2;
+  display: flex; justify-content: center;
+}
+.wechat-login-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 28px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.7);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.wechat-login-btn:hover {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+  border-color: rgba(255,255,255,0.2);
+}
+.wechat-login-btn svg { color: #22c55e; }
 
 /* ─── 动画 ─── */
 .fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }

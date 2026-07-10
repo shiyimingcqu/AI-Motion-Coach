@@ -11,6 +11,44 @@ const EXERCISE_IMAGES = {
   high_knees: '/assets/fitness/exercise-jumping-jack.png',
 };
 
+const DETAIL_THEME = {
+  squat: {
+    heroGradient: 'linear-gradient(135deg, #4c8ff8 0%, #1f65dd 100%)',
+    shadowColor: 'rgba(31, 101, 221, 0.26)',
+    tagBg: 'rgba(226, 239, 255, 0.24)',
+  },
+  push_up: {
+    heroGradient: 'linear-gradient(135deg, #26b8bd 0%, #088c9c 100%)',
+    shadowColor: 'rgba(8, 140, 156, 0.24)',
+    tagBg: 'rgba(220, 252, 253, 0.24)',
+  },
+  plank: {
+    heroGradient: 'linear-gradient(135deg, #7b61f2 0%, #5840d6 100%)',
+    shadowColor: 'rgba(88, 64, 214, 0.25)',
+    tagBg: 'rgba(237, 233, 254, 0.25)',
+  },
+  jumping_jack: {
+    heroGradient: 'linear-gradient(135deg, #ff9b4f 0%, #f06d2f 100%)',
+    shadowColor: 'rgba(240, 109, 47, 0.24)',
+    tagBg: 'rgba(255, 244, 230, 0.28)',
+  },
+  lunge: {
+    heroGradient: 'linear-gradient(135deg, #4c8ff8 0%, #1f65dd 100%)',
+    shadowColor: 'rgba(31, 101, 221, 0.26)',
+    tagBg: 'rgba(226, 239, 255, 0.24)',
+  },
+  burpee: {
+    heroGradient: 'linear-gradient(135deg, #26b8bd 0%, #088c9c 100%)',
+    shadowColor: 'rgba(8, 140, 156, 0.24)',
+    tagBg: 'rgba(220, 252, 253, 0.24)',
+  },
+  high_knees: {
+    heroGradient: 'linear-gradient(135deg, #ff9b4f 0%, #f06d2f 100%)',
+    shadowColor: 'rgba(240, 109, 47, 0.24)',
+    tagBg: 'rgba(255, 244, 230, 0.28)',
+  },
+};
+
 Page({
   data: {
     exercise: {},
@@ -20,6 +58,11 @@ Page({
   onLoad(options) {
     const key = options.key || 'squat';
     const config = EXERCISE_CONFIG[key] || EXERCISE_CONFIG.squat;
+    const theme = DETAIL_THEME[config.key] || {
+      heroGradient: `linear-gradient(135deg, ${config.accentColor}, ${config.accentColor}cc)`,
+      shadowColor: 'rgba(47, 111, 224, 0.22)',
+      tagBg: 'rgba(255, 255, 255, 0.22)',
+    };
 
     this.setData({
       exercise: {
@@ -30,6 +73,9 @@ Page({
         duration: '约10分钟',
         description: this.getDescription(config.key),
         accentColor: config.accentColor,
+        heroGradient: theme.heroGradient,
+        shadowColor: theme.shadowColor,
+        tagBg: theme.tagBg,
         icon: config.icon,
         image: EXERCISE_IMAGES[config.key] || '',
         modes: ['摄像头实时检测', '视频上传分析'],

@@ -1,45 +1,29 @@
 <template>
   <div class="report-page">
+    <!-- Hero -->
     <header class="report-hero">
       <div class="hero-copy">
-        <h1>我的报告</h1>
-        <p>全面分析你的训练表现，帮助你更科学地进步</p>
+        <h1>来看看你最近练得怎么样 👋</h1>
+        <p>我们帮你把训练情况整理好了，一眼就能看懂</p>
       </div>
-
-      <div class="hero-stats">
-        <div class="hero-stat violet">
-          <div class="hero-stat__icon"><Calendar :size="18" /></div>
-          <div>
-            <span>本月训练</span>
-            <strong>{{ monthSessions }}<small>次</small></strong>
-          </div>
-        </div>
-        <div class="hero-stat orange">
-          <div class="hero-stat__icon"><Flame :size="18" /></div>
-          <div>
-            <span>累计训练</span>
-            <strong>{{ totalDays }}<small>天</small></strong>
-          </div>
-        </div>
-        <div class="hero-stat blue">
-          <div class="hero-stat__icon"><Star :size="18" /></div>
-          <div>
-            <span>平均得分</span>
-            <strong>{{ avgScore }}<small>分</small></strong>
-          </div>
-        </div>
-      </div>
+      <img class="hero-thumb" src="/reports/hero-thumb.png" alt="鼓励插图" />
     </header>
 
+    <!-- Toolbar -->
     <section class="toolbar">
       <div class="toolbar-left">
-        <select v-model="exerciseFilter" class="toolbar-select">
-          <option value="">全部动作</option>
-          <option v-for="(meta, key) in EXERCISE_META" :key="key" :value="key">
-            {{ meta.name }}
-          </option>
-        </select>
-
+        <span class="toolbar-label">选择动作</span>
+        <div class="toolbar-pills">
+          <button
+            v-for="item in exercisePills"
+            :key="item.key"
+            type="button"
+            class="pill-btn"
+            :class="{ active: exerciseFilter === item.key }"
+            @click="exerciseFilter = item.key"
+          >{{ item.label }}</button>
+        </div>
+        <span class="toolbar-label">选择时间</span>
         <div class="toolbar-ranges">
           <button
             v-for="item in ranges"
@@ -48,130 +32,116 @@
             class="range-btn"
             :class="{ active: rangeKey === item.key }"
             @click="rangeKey = item.key"
-          >
-            {{ item.label }}
-          </button>
+          >{{ item.label }}</button>
         </div>
       </div>
-
-      <button class="export-btn" type="button" @click="exportReport">
-        <Download :size="16" />
-        <span>导出报告</span>
-      </button>
     </section>
 
-    <section class="summary-grid">
+    <!-- Top Grid -->
+    <section class="top-grid">
+      <!-- Score Card (Big Purple) -->
       <article class="card score-card">
-        <span class="card-kicker">综合表现</span>
+        <span class="card-kicker">这次整体表现</span>
         <div class="score-main">
-          <div>
-            <div class="score-value">
-              <strong>{{ avgScore }}</strong>
-              <small>分</small>
-            </div>
-            <div class="score-badge">{{ scoreLevel.label }}</div>
-            <p class="score-copy">超过了 {{ outperformPct }}% 的同阶段用户</p>
-            <div class="score-progress">
-              <i :style="{ width: `${Math.min(avgScore, 100)}%` }"></i>
+          <div class="score-value">
+            <strong>{{ avgScore }}</strong><small>分</small>
+          </div>
+          <span class="score-badge">还不错，继续加油</span>
+          <p class="score-copy">{{ scoreEncouragement }}</p>
+          <div class="score-progress"><i :style="{ width: `${Math.min(avgScore, 100)}%` }"></i></div>
+          <p class="score-footnote">超过了 {{ outperformPct }}% 的同阶段用户 👍</p>
+        </div>
+      </article>
+
+      <!-- Stats + Radar Column -->
+      <div class="mid-col">
+        <!-- Stats Row -->
+        <div class="stats-row">
+          <div class="stat-item violet">
+            <div class="stat-icon"><Calendar :size="18" /></div>
+            <div>
+              <span>本月训练</span>
+              <strong>{{ monthSessions }}<small>次</small></strong>
+              <small>比上月 ↑ 12%</small>
             </div>
           </div>
-          <div class="score-figure">
-            <img src="/exercises/squat.png" alt="综合表现示意" />
+          <div class="stat-item orange">
+            <div class="stat-icon"><Flame :size="18" /></div>
+            <div>
+              <span>累计训练</span>
+              <strong>{{ totalDays }}<small>天</small></strong>
+              <small>坚持就是胜利！</small>
+            </div>
           </div>
         </div>
-        <p class="score-footnote">继续保持，你的进步很明显。</p>
-      </article>
 
-      <article class="card radar-card">
-        <header class="section-head">
-          <strong>能力雷达图</strong>
-        </header>
-        <div ref="radarRef" class="radar-chart"></div>
-      </article>
+        <!-- Radar Card -->
+        <article class="card radar-card">
+          <header class="section-head">
+            <strong class="radar-title">
+              你的动作表现
+            </strong>
+          </header>
+          <div ref="radarRef" class="radar-chart"></div>
+        </article>
+      </div>
 
-      <article class="card metrics-card">
+      <!-- Trend Card -->
+      <article class="card trend-card">
         <header class="section-head">
-          <strong>关键数据</strong>
+          <strong>最近变化</strong>
+          <div class="trend-dropdown">
+            <span>得分</span>
+            <ChevronDown :size="14" />
+          </div>
         </header>
-        <ul class="metrics-list">
-          <li v-for="metric in metrics" :key="metric.label">
-            <div class="metrics-icon" :style="{ background: metric.bg, color: metric.color }">
-              <component :is="metric.icon" :size="16" />
-            </div>
-            <span>{{ metric.label }}</span>
-            <strong>{{ metric.value }}<small v-if="metric.unit">{{ metric.unit }}</small></strong>
-          </li>
-        </ul>
+        <div class="trend-score-badge">{{ avgScore }}分</div>
+        <div ref="trendRef" class="trend-chart"></div>
+        <p class="trend-footnote">整体在稳步提升，继续保持！💪</p>
       </article>
     </section>
 
-    <section class="content-grid">
-      <article class="card trend-card">
+    <!-- Bottom Grid -->
+    <section class="bottom-grid">
+      <!-- Exercise Table -->
+      <article class="card exercise-table-card">
         <header class="section-head">
-          <strong>表现趋势</strong>
-        </header>
-        <div ref="trendRef" class="trend-chart"></div>
-      </article>
-
-      <article class="card dist-card">
-        <header class="section-head">
-          <strong>动作训练分布</strong>
-        </header>
-        <div ref="distRef" class="dist-chart"></div>
-        <ul class="dist-list">
-          <li v-for="item in distributionItems" :key="item.name">
-            <span class="dist-dot" :style="{ background: item.color }"></span>
-            <span class="dist-name">{{ item.name }}</span>
-            <span class="dist-pct">{{ item.pct }}%</span>
-            <span class="dist-count">{{ item.count }}次</span>
-          </li>
-        </ul>
-      </article>
-
-      <article class="card analysis-card">
-        <header class="section-head">
-          <div>
-            <strong>动作分析</strong>
-            <span>最近{{ rangeDays }}天表现</span>
+          <strong>你练了哪些动作</strong>
+          <div class="more-dropdown">
+            <span>查看更多动作记录</span>
+            <ChevronDown :size="14" />
           </div>
         </header>
 
-        <ul class="exercise-list">
+        <div class="table-header">
+          <span>动作</span>
+          <span>练了多少次</span>
+          <span>得分</span>
+          <span>表现如何</span>
+          <span>完成度</span>
+          <span>平均时长</span>
+          <span>消耗热量</span>
+        </div>
+
+        <ul class="exercise-list-new">
           <li v-for="item in exerciseAnalysis" :key="item.key">
-            <div class="exercise-cover" :style="{ background: item.accent }">
+            <div class="ex-thumb" :style="{ background: item.accent }">
               <img :src="`/exercises/${item.key}.png`" :alt="item.name" />
             </div>
-
-            <div class="exercise-meta">
-              <div class="exercise-title">
-                <strong>{{ item.name }}</strong>
-                <span>训练 {{ item.count }} 次</span>
-              </div>
-              <div class="exercise-scoreline">
-                <b>{{ item.score }}</b>
-                <small>分</small>
-                <em :class="item.gradeClass">{{ item.grade }}</em>
-              </div>
+            <div class="ex-info">
+              <strong>{{ item.name }}</strong>
+              <span>练了 {{ item.count }} 次</span>
             </div>
-
-            <div class="exercise-stats">
-              <div class="mini-stat">
-                <span>动作完成率</span>
-                <div class="mini-bar">
-                  <i :style="{ width: `${item.completion}%` }"></i>
-                </div>
-                <strong>{{ item.completion }}%</strong>
-              </div>
-              <div class="mini-stat">
-                <span>平均时长</span>
-                <strong>{{ formatTime(item.duration) }}</strong>
-              </div>
-              <div class="mini-stat">
-                <span>消耗热量</span>
-                <strong>{{ item.calories }}<small> 千卡</small></strong>
-              </div>
+            <div class="ex-score">
+              <b>{{ item.score }}</b><small>分</small>
             </div>
-
+            <em :class="item.gradeClass">{{ item.grade }}</em>
+            <div class="ex-completion">
+              <div class="mini-bar"><i :style="{ width: `${item.completion}%` }"></i></div>
+              <strong>{{ item.completion }}%</strong>
+            </div>
+            <span class="ex-duration">{{ formatTime(item.duration) }}</span>
+            <span class="ex-calories">{{ item.calories }} 千卡</span>
             <button class="row-arrow" type="button" @click="router.push('/sessions')">
               <ChevronRight :size="18" />
             </button>
@@ -179,116 +149,35 @@
         </ul>
       </article>
 
-      <article class="card compare-card">
-        <header class="section-head">
-          <strong>深蹲动作对比</strong>
-        </header>
-        <div class="compare-legend">
-          <span><i class="legend-dot purple"></i>你的动作</span>
-          <span><i class="legend-dot green"></i>标准动作</span>
-        </div>
-        <div class="compare-stage">
-          <img src="/exercises/squat.png" alt="深蹲对比示意" />
-        </div>
-        <div class="compare-score">
-          <span>整体相似度</span>
-          <strong>{{ similarityScore }}%</strong>
-        </div>
-        <ul class="compare-points">
-          <li v-for="point in squatPoints" :key="point.title">
-            <span class="point-mark" :class="point.status"></span>
-            <span>{{ point.title }}：{{ point.text }}</span>
+      <!-- Next Training Recommendations -->
+      <aside class="next-col">
+        <header class="next-head"><strong>接下来怎么练</strong></header>
+        <ul class="next-list">
+          <li v-for="(rec, idx) in nextTrainings" :key="idx">
+            <div class="next-icon" :style="{ background: rec.bg, color: rec.color }">
+              <component :is="rec.icon" :size="18" />
+            </div>
+            <div class="next-body">
+              <strong>{{ rec.title }}</strong>
+              <p>{{ rec.desc }}</p>
+            </div>
+            <ChevronRight :size="16" class="next-arrow" />
           </li>
         </ul>
-        <button class="primary-side-btn" type="button" @click="router.push('/sessions')">
-          查看详细对比
-        </button>
-      </article>
+      </aside>
+    </section>
 
-      <article class="card problems-card">
-        <header class="section-head">
-          <strong>常见问题</strong>
-        </header>
-
-        <ul class="problem-list">
-          <li v-for="(problem, index) in commonProblems" :key="problem.title">
-            <div class="problem-index">{{ index + 1 }}</div>
-            <div class="problem-copy">
-              <strong>{{ problem.title }}</strong>
-              <p>{{ problem.desc }}</p>
-            </div>
-            <div class="problem-exercise">
-              <span>建议动作</span>
-              <strong>{{ problem.suggest }}</strong>
-            </div>
-            <button class="problem-btn" type="button" @click="router.push('/exercises')">
-              去练习
-            </button>
-          </li>
-        </ul>
-      </article>
-
-      <article class="card suggest-card">
-        <header class="section-head">
-          <strong>进步建议</strong>
-        </header>
-
-        <ul class="suggest-list">
-          <li v-for="item in suggestions" :key="item.title">
-            <div class="suggest-icon" :style="{ background: item.bg, color: item.fg }">
-              <component :is="item.icon" :size="18" />
-            </div>
-            <div>
-              <strong>{{ item.title }}</strong>
-              <p>{{ item.desc }}</p>
-            </div>
-          </li>
-        </ul>
-
-        <div class="coach-banner">
-          <div class="coach-copy">
-            <span>你已经很棒了！</span>
-            <p>继续保持，节奏稳住，好的变化会越来越明显。</p>
-          </div>
-          <img src="/exercises/high_knees.png" alt="训练鼓励插图" />
-        </div>
-      </article>
-
-      <article class="card goal-card">
-        <header class="section-head">
-          <div>
-            <strong>下一个目标</strong>
-            <span>让我们一起设定新的目标，继续突破自己</span>
-          </div>
-        </header>
-
-        <div class="goal-items">
-          <div class="goal-item">
-            <div class="goal-icon violet"><Calendar :size="18" /></div>
-            <div>
-              <span>训练目标</span>
-              <strong>每周训练 4 次</strong>
-            </div>
-          </div>
-          <div class="goal-item">
-            <div class="goal-icon blue"><Target :size="18" /></div>
-            <div>
-              <span>得分目标</span>
-              <strong>平均得分 85 分</strong>
-            </div>
-          </div>
-          <div class="goal-item">
-            <div class="goal-icon orange"><Timer :size="18" /></div>
-            <div>
-              <span>时长目标</span>
-              <strong>每次 60 分钟</strong>
-            </div>
-          </div>
-          <button class="goal-btn" type="button" @click="router.push('/profile')">
-            设定新目标
-          </button>
-        </div>
-      </article>
+    <!-- Coach Banner -->
+    <section class="coach-banner">
+      <img class="coach-img" src="/reports/coach-fist.png" alt="鼓励插图" />
+      <div class="coach-copy">
+        <span>✨ 你已经很棒了！</span>
+        <p>每一次训练，都是在成为更好的自己。坚持下去，你会看到更大的进步！</p>
+      </div>
+      <button class="continue-btn" type="button" @click="router.push('/sessions')">
+        继续训练
+        <ChevronRight :size="16" />
+      </button>
     </section>
   </div>
 </template>
@@ -300,16 +189,16 @@ import * as echarts from "echarts";
 import {
   Activity,
   Calendar,
+  ChevronDown,
   ChevronRight,
   CircleCheckBig,
-  Download,
   Flame,
   Heart,
+  Moon,
   ShieldCheck,
-  Sparkles,
-  Star,
   Target,
   Timer,
+  Zap,
 } from "lucide-vue-next";
 import { getDashboardStats } from "@/api/dashboard";
 import { getSessions, type SessionRecord } from "@/api/sessions";
@@ -319,19 +208,17 @@ const router = useRouter();
 
 const rangeKey = ref<"7" | "30" | "90">("30");
 const exerciseFilter = ref("");
-const monthSessions = ref(12);
-const totalDays = ref(36);
-const avgScore = ref(78);
-const totalSessions = ref(12);
-const totalHours = ref(6.2);
-const completionRate = ref(92);
-const totalCalories = ref(3260);
-const similarityScore = ref(82);
+const monthSessions = ref(27);
+const totalDays = ref(3);
+const avgScore = ref(64);
+const totalSessions = ref(27);
+const totalHours = ref(10);
+const completionRate = ref(86);
+const totalCalories = ref(1620);
 const sessions = ref<SessionRecord[]>([]);
 
 const radarRef = ref<HTMLElement | null>(null);
 const trendRef = ref<HTMLElement | null>(null);
-const distRef = ref<HTMLElement | null>(null);
 
 let charts: echarts.ECharts[] = [];
 
@@ -341,12 +228,16 @@ const ranges = [
   { key: "90" as const, label: "近90天" },
 ];
 
+const exercisePills = computed(() => [
+  { key: "", label: "全部动作" },
+  ...Object.entries(EXERCISE_META).slice(0, 4).map(([k, m]) => ({ key: k, label: m.name })),
+]);
+
 const rangeDays = computed(() => Number.parseInt(rangeKey.value, 10));
 
 const filteredSessions = computed(() => {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - rangeDays.value);
-
   return sessions.value.filter((item) => {
     const inRange = new Date(item.created_at) >= cutoff;
     const matchedExercise = !exerciseFilter.value || item.exercise === exerciseFilter.value;
@@ -357,51 +248,37 @@ const filteredSessions = computed(() => {
 const scoreLevel = computed(() => getScoreLevel(avgScore.value));
 const outperformPct = computed(() => Math.max(55, Math.min(96, Math.round(avgScore.value * 0.87))));
 
-const metrics = computed(() => [
-  { label: "总训练次数", value: totalSessions.value, unit: "次", icon: Calendar, bg: "#f1ebff", color: "#7c5cff" },
-  { label: "总训练时长", value: totalHours.value, unit: "小时", icon: Timer, bg: "#e9fbef", color: "#22a75a" },
-  { label: "平均得分", value: avgScore.value, unit: "分", icon: Star, bg: "#ebf2ff", color: "#467cf4" },
-  { label: "动作完成率", value: completionRate.value, unit: "%", icon: Target, bg: "#fff4e8", color: "#ff9a2e" },
-  { label: "消耗热量", value: totalCalories.value, unit: "千卡", icon: Flame, bg: "#ffeded", color: "#ff6b4d" },
-]);
+const scoreEncouragement = computed(() => {
+  const s = avgScore.value;
+  if (s >= 85) return "你的动作越来越稳定了，继续保持这个状态！";
+  if (s >= 70) return "你的动作越来越稳定了，深蹲还可以再蹲深一点哦！";
+  return "你的动作越来越稳定了，深蹲还可以再蹲深一点哦！";
+});
 
 const exerciseAnalysis = computed(() => {
   const map = new Map<string, {
-    key: string;
-    name: string;
-    count: number;
-    totalScore: number;
-    totalDuration: number;
-    totalCalories: number;
-    accent: string;
+    key: string; name: string; count: number;
+    totalScore: number; totalDuration: number; totalCalories: number; accent: string;
   }>();
 
   for (const item of filteredSessions.value) {
     const meta = EXERCISE_META[item.exercise] ?? { name: item.exercise, accent: "#f5f7ff" };
     if (!map.has(item.exercise)) {
       map.set(item.exercise, {
-        key: item.exercise,
-        name: meta.name,
-        count: 0,
-        totalScore: 0,
-        totalDuration: 0,
-        totalCalories: 0,
-        accent: meta.accent ?? "#f5f7ff",
+        key: item.exercise, name: meta.name, count: 0,
+        totalScore: 0, totalDuration: 0, totalCalories: 0, accent: meta.accent ?? "#f5f7ff",
       });
     }
-
-    const current = map.get(item.exercise)!;
-    current.count += 1;
-    current.totalScore += item.average_score;
-    current.totalDuration += item.duration_seconds;
-    current.totalCalories += Math.max(60, Math.round(item.duration_seconds / 3));
+    const cur = map.get(item.exercise)!;
+    cur.count += 1;
+    cur.totalScore += item.average_score;
+    cur.totalDuration += item.duration_seconds;
+    cur.totalCalories += Math.max(60, Math.round(item.duration_seconds / 3));
   }
 
   const fallback = [
-    { key: "squat", name: "深蹲", count: 3, score: 82, completion: 95, duration: 80, calories: 320, accent: "#efe9ff" },
-    { key: "push_up", name: "俯卧撑", count: 3, score: 76, completion: 90, duration: 65, calories: 280, accent: "#ecfbff" },
-    { key: "plank", name: "平板支撑", count: 2, score: 79, completion: 92, duration: 75, calories: 260, accent: "#eef7ff" },
-    { key: "jumping_jack", name: "开合跳", count: 2, score: 72, completion: 85, duration: 70, calories: 240, accent: "#fff3e8" },
+    { key: "squat", name: "深蹲", count: 26, score: 63, completion: 75, duration: 1440, calories: 60, accent: "#e8f5e9" },
+    { key: "jumping_jack", name: "开合跳", count: 1, score: 91, completion: 98, duration: 1380, calories: 60, accent: "#e3f2fd" },
   ];
 
   const derived = [...map.values()]
@@ -409,19 +286,9 @@ const exerciseAnalysis = computed(() => {
       const score = Math.round(item.totalScore / item.count);
       const level = getScoreLevel(score);
       return {
-        key: item.key,
-        name: item.name,
-        count: item.count,
-        score,
+        key: item.key, name: item.name, count: item.count, score,
         grade: level.label,
-        gradeClass:
-          level.key === "excellent"
-            ? "grade-excellent"
-            : level.key === "good"
-              ? "grade-good"
-              : level.key === "mid"
-                ? "grade-mid"
-                : "grade-low",
+        gradeClass: level.key === "excellent" ? "grade-excellent" : level.key === "good" ? "grade-good" : level.key === "mid" ? "grade-mid" : "grade-low",
         completion: Math.max(72, Math.min(98, Math.round(score + 12))),
         duration: Math.round(item.totalDuration / item.count),
         calories: Math.round(item.totalCalories / item.count),
@@ -433,79 +300,22 @@ const exerciseAnalysis = computed(() => {
 
   return derived.length > 0 ? derived : fallback.map((item) => {
     const level = getScoreLevel(item.score);
-    return {
-      ...item,
-      grade: level.label,
-      gradeClass:
-        level.key === "excellent"
-          ? "grade-excellent"
-          : level.key === "good"
-            ? "grade-good"
-            : level.key === "mid"
-              ? "grade-mid"
-              : "grade-low",
-    };
+    return { ...item, grade: level.label, gradeClass: level.key === "good" ? "grade-good" : "grade-mid" };
   });
 });
 
-const distributionItems = computed(() => {
-  const counts = new Map<string, number>();
-  for (const item of filteredSessions.value) {
-    counts.set(item.exercise, (counts.get(item.exercise) ?? 0) + 1);
-  }
-
-  const source = [...counts.entries()]
-    .map(([key, count]) => ({
-      key,
-      name: EXERCISE_META[key]?.name ?? key,
-      count,
-    }))
-    .sort((a, b) => b.count - a.count);
-
-  const palette = ["#7c5cff", "#4f8cff", "#43c59e", "#ffad42", "#c9ced9"];
-  const base = source.length > 0 ? source.slice(0, 5) : [
-    { key: "squat", name: "深蹲", count: 3 },
-    { key: "push_up", name: "俯卧撑", count: 3 },
-    { key: "plank", name: "平板支撑", count: 2 },
-    { key: "jumping_jack", name: "开合跳", count: 2 },
-    { key: "other", name: "其他", count: 2 },
-  ];
-
-  const total = base.reduce((sum, item) => sum + item.count, 0) || 1;
-
-  return base.map((item, index) => ({
-    name: item.name,
-    count: item.count,
-    pct: Math.round((item.count / total) * 100),
-    color: palette[index % palette.length],
-  }));
-});
-
-const squatPoints = [
-  { title: "膝盖内扣", status: "mid", text: "轻微" },
-  { title: "下蹲深度", status: "good", text: "良好" },
-  { title: "核心稳定", status: "good", text: "良好" },
-];
-
-const commonProblems = [
-  { title: "下蹲深度不足", desc: "你的下蹲深度偏浅，建议继续加强髋关节活动与下肢控制。", suggest: "深蹲拉伸" },
-  { title: "膝盖内扣", desc: "下蹲时膝盖向内扣，可能增加受伤风险，需要注意膝尖方向。", suggest: "蛙式深蹲" },
-  { title: "核心收紧不足", desc: "核心肌群激活不够，会导致动作过程中的身体稳定性下降。", suggest: "平板支撑" },
-  { title: "手臂发力不均衡", desc: "上肢训练中左右侧输出不稳定，建议做更慢一点的控制练习。", suggest: "跪姿俯卧撑" },
-];
-
-const suggestions = [
-  { title: "保持训练频率", desc: "建议每周进行 3-4 次训练，让动作记忆更稳定。", icon: Activity, bg: "#edf2ff", fg: "#5576ff" },
-  { title: "注意动作质量", desc: "宁可少做一点，也要保证每次动作轨迹清晰标准。", icon: CircleCheckBig, bg: "#ebfbef", fg: "#24a860" },
-  { title: "加强核心训练", desc: "稳定的核心是你所有动作控制和发力质量的基础。", icon: ShieldCheck, bg: "#fff6df", fg: "#d99214" },
-  { title: "合理安排休息", desc: "让身体有足够恢复时间，表现才会继续往上走。", icon: Heart, bg: "#ffedf1", fg: "#ef5a7d" },
-];
+const nextTrainings = computed(() => [
+  { title: "先把深蹲腾得更稳一些", desc: "注意膝盖方向，慢下蹲更稳更稳定", icon: Target, bg: "#ede9fe", color: "#7c3aed" },
+  { title: "每次训练控制在 3-5 组", desc: "循序渐进，效果更好", icon: Zap, bg: "#fff7ed", color: "#ea580c" },
+  { title: "练习时注意膝盖方向", desc: "膝盖不要内扣，保护关节", icon: ShieldCheck, bg: "#ecfdf5", color: "#16a34a" },
+  { title: "休息好，动作会更稳定", desc: "保证睡眠，让身体更有力量", icon: Moon, bg: "#eff6ff", color: "#2563eb" },
+]);
 
 function formatTime(seconds: number) {
   if (seconds <= 0) return "0秒";
   const minutes = Math.floor(seconds / 60);
   const remain = Math.floor(seconds % 60);
-  if (minutes > 0) return `${minutes}分${remain.toString().padStart(2, "0")}秒`;
+  if (minutes > 0) return `${minutes}秒`;
   return `${remain}秒`;
 }
 
@@ -514,28 +324,28 @@ function renderRadar() {
   const chart = echarts.init(radarRef.value);
   chart.setOption({
     radar: {
-      radius: 88,
+      radius: 72,
       indicator: [
-        { name: "核心稳定", max: 100 },
-        { name: "下肢力量", max: 100 },
-        { name: "动作控制", max: 100 },
-        { name: "身体协调", max: 100 },
-        { name: "柔韧性", max: 100 },
+        { name: "稳定性", max: 100 },
+        { name: "协调性", max: 100 },
+        { name: "力量", max: 100 },
+        { name: "节奏", max: 100 },
+        { name: "动作幅度", max: 100 },
       ],
       splitNumber: 4,
-      splitArea: { areaStyle: { color: ["rgba(124,92,255,0.06)", "rgba(124,92,255,0.02)"] } },
-      splitLine: { lineStyle: { color: "rgba(124,92,255,0.14)" } },
-      axisLine: { lineStyle: { color: "rgba(124,92,255,0.16)" } },
-      axisName: { color: "#5a6476", fontSize: 12, fontWeight: 600 },
+      splitArea: { areaStyle: { color: ["rgba(124,92,255,0.05)", "rgba(124,92,255,0.02)"] } },
+      splitLine: { lineStyle: { color: "rgba(124,92,255,0.12)" } },
+      axisLine: { lineStyle: { color: "rgba(124,92,255,0.14)" } },
+      axisName: { color: "#5a6476", fontSize: 11, fontWeight: 600 },
     },
     series: [{
       type: "radar",
       symbol: "circle",
-      symbolSize: 7,
-      lineStyle: { color: "#6e54ff", width: 2.5 },
+      symbolSize: 6,
+      lineStyle: { color: "#6e54ff", width: 2 },
       areaStyle: { color: "rgba(110,84,255,0.2)" },
       itemStyle: { color: "#6e54ff" },
-      data: [{ value: [82, 76, 80, 75, 68] }],
+      data: [{ value: [72, 68, 65, 74, 60] }],
     }],
   });
   charts.push(chart);
@@ -545,117 +355,31 @@ function renderTrend() {
   if (!trendRef.value) return;
   const chart = echarts.init(trendRef.value);
   chart.setOption({
-    tooltip: { trigger: "axis" },
-    legend: {
-      top: 0,
-      left: 0,
-      icon: "circle",
-      itemWidth: 8,
-      itemHeight: 8,
-      textStyle: { color: "#6f7787", fontSize: 12 },
-      data: ["平均得分", "动作完成率", "训练时长(分钟)"],
-    },
-    grid: { top: 52, left: 26, right: 26, bottom: 22, containLabel: true },
+    grid: { top: 12, left: 30, right: 16, bottom: 26, containLabel: true },
     xAxis: {
       type: "category",
       boundaryGap: false,
-      data: ["06/10", "06/15", "06/20", "06/25", "06/30", "07/05", "07/08"],
+      data: ["06/10", "06/17", "06/24", "07/01", "07/08"],
       axisLabel: { color: "#98a2b3", fontSize: 11 },
       axisLine: { lineStyle: { color: "#edf0f7" } },
       axisTick: { show: false },
     },
-    yAxis: [
-      {
-        type: "value",
-        min: 0,
-        max: 100,
-        splitLine: { lineStyle: { color: "#f2f4fa" } },
-        axisLabel: { color: "#98a2b3", fontSize: 11 },
-      },
-      {
-        type: "value",
-        min: 0,
-        max: 100,
-        splitLine: { show: false },
-        axisLabel: { color: "#98a2b3", fontSize: 11 },
-      },
-    ],
-    series: [
-      {
-        name: "平均得分",
-        type: "line",
-        smooth: true,
-        data: [62, 75, 83, 74, 71, 79, 78],
-        symbolSize: 6,
-        lineStyle: { width: 3, color: "#6e54ff" },
-        itemStyle: { color: "#6e54ff" },
-      },
-      {
-        name: "动作完成率",
-        type: "line",
-        smooth: true,
-        yAxisIndex: 1,
-        data: [28, 52, 54, 79, 68, 86, 92],
-        symbolSize: 6,
-        lineStyle: { width: 3, color: "#48c488" },
-        itemStyle: { color: "#48c488" },
-      },
-      {
-        name: "训练时长(分钟)",
-        type: "line",
-        smooth: true,
-        yAxisIndex: 1,
-        data: [36, 25, 44, 35, 49, 60, 53],
-        symbolSize: 6,
-        lineStyle: { width: 3, color: "#ffac3d" },
-        itemStyle: { color: "#ffac3d" },
-      },
-    ],
-  });
-  charts.push(chart);
-}
-
-function renderDist() {
-  if (!distRef.value) return;
-  const chart = echarts.init(distRef.value);
-  chart.setOption({
+    yAxis: {
+      type: "value",
+      min: 0,
+      max: 100,
+      splitLine: { lineStyle: { color: "#f2f4fa" } },
+      axisLabel: { color: "#98a2b3", fontSize: 11 },
+    },
     series: [{
-      type: "pie",
-      radius: ["62%", "82%"],
-      center: ["50%", "50%"],
-      label: { show: false },
-      labelLine: { show: false },
-      data: distributionItems.value.map((item) => ({
-        value: item.count,
-        name: item.name,
-        itemStyle: { color: item.color },
-      })),
+      type: "line",
+      smooth: true,
+      data: [45, 52, 58, 61, 64],
+      symbolSize: 6,
+      lineStyle: { width: 3, color: "#6e54ff" },
+      itemStyle: { color: "#6e54ff" },
+      areaStyle: { color: "rgba(110,84,255,0.08)" },
     }],
-    graphic: [
-      {
-        type: "text",
-        left: "center",
-        top: "41%",
-        style: {
-          text: String(totalSessions.value),
-          fill: "#1a2033",
-          fontWeight: 800,
-          fontSize: 34,
-          textAlign: "center",
-        },
-      },
-      {
-        type: "text",
-        left: "center",
-        top: "56%",
-        style: {
-          text: "总训练",
-          fill: "#8c95a5",
-          fontSize: 13,
-          textAlign: "center",
-        },
-      },
-    ],
   });
   charts.push(chart);
 }
@@ -665,38 +389,6 @@ function renderCharts() {
   charts = [];
   renderRadar();
   renderTrend();
-  renderDist();
-}
-
-function exportReport() {
-  if (sessions.value.length === 0) {
-    window.alert("暂无数据可导出");
-    return;
-  }
-
-  const header = ["动作", "得分", "时长(秒)", "完成率", "日期"];
-  const rows = sessions.value.map((item) => {
-    const completion = item.total_count > 0 ? Math.round((item.valid_count / item.total_count) * 100) : 0;
-    return [
-      EXERCISE_META[item.exercise]?.name ?? item.exercise,
-      item.average_score,
-      item.duration_seconds,
-      `${completion}%`,
-      getDateKey(item.created_at),
-    ];
-  });
-
-  const csv = [header, ...rows]
-    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, "\"\"")}"`).join(","))
-    .join("\n");
-
-  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `report-${new Date().toISOString().slice(0, 10)}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
 async function loadData() {
@@ -773,100 +465,37 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 20px;
   min-height: 100%;
-  padding: 4px 0 28px;
+  padding: 0 0 28px;
 }
 
-.report-hero,
-.toolbar,
-.summary-grid,
-.content-grid {
-  width: 100%;
-}
-
+/* ── Hero ── */
 .report-hero {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 20px;
 }
 
 .hero-copy h1 {
   margin: 0;
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 900;
   color: #131a2e;
 }
 
 .hero-copy p {
-  margin: 8px 0 0;
+  margin: 6px 0 0;
   font-size: 14px;
   color: #6f7787;
 }
 
-.hero-stats {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.hero-thumb {
+  width: 160px;
+  height: auto;
+  object-fit: contain;
 }
 
-.hero-stat {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 150px;
-  padding: 14px 18px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(236, 239, 248, 0.95);
-  border-radius: 18px;
-  box-shadow: 0 14px 34px rgba(130, 139, 171, 0.12);
-}
-
-.hero-stat__icon {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-}
-
-.hero-stat span {
-  display: block;
-  font-size: 12px;
-  color: #7e8798;
-}
-
-.hero-stat strong {
-  display: flex;
-  align-items: baseline;
-  gap: 3px;
-  margin-top: 4px;
-  font-size: 16px;
-  font-weight: 800;
-  color: #1c2235;
-}
-
-.hero-stat strong small {
-  font-size: 12px;
-  color: #8b95a8;
-}
-
-.violet .hero-stat__icon {
-  color: #7c5cff;
-  background: #f1ebff;
-}
-
-.orange .hero-stat__icon {
-  color: #ff7c47;
-  background: #fff0e9;
-}
-
-.blue .hero-stat__icon {
-  color: #467cf4;
-  background: #edf4ff;
-}
-
+/* ── Toolbar ── */
 .toolbar {
   display: flex;
   align-items: center;
@@ -881,96 +510,78 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 
-.toolbar-select {
-  min-width: 150px;
-  height: 42px;
-  padding: 0 40px 0 14px;
-  border: 1px solid #e8ebf4;
-  border-radius: 14px;
+.toolbar-label {
+  font-size: 13px;
+  color: #7e8798;
+  white-space: nowrap;
+}
+
+.toolbar-pills {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pill-btn {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid #ebeefa;
   background: #fff;
-  font-size: 14px;
-  color: #20263a;
-  box-shadow: 0 10px 24px rgba(130, 139, 171, 0.08);
+  color: #626d82;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+.pill-btn.active {
+  color: #7256ff;
+  border-color: rgba(114, 86, 255, 0.35);
+  background: rgba(114, 86, 255, 0.06);
 }
 
 .toolbar-ranges {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-}
-
-.range-btn,
-.export-btn,
-.goal-btn,
-.primary-side-btn,
-.problem-btn {
-  border: none;
-  cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  gap: 8px;
 }
 
 .range-btn {
-  height: 42px;
-  padding: 0 22px;
+  height: 32px;
+  padding: 0 16px;
   border-radius: 999px;
-  background: #fff;
   border: 1px solid #ebeefa;
+  background: #fff;
   color: #626d82;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
-  box-shadow: 0 10px 24px rgba(130, 139, 171, 0.06);
+  cursor: pointer;
+  transition: all 0.18s;
 }
 
 .range-btn.active {
   color: #7256ff;
   border-color: rgba(114, 86, 255, 0.35);
-  background: rgba(114, 86, 255, 0.06);
-  box-shadow: 0 14px 28px rgba(114, 86, 255, 0.16);
+  background: rgba(114, 86, 255, 0.08);
+  box-shadow: 0 4px 14px rgba(114, 86, 255, 0.15);
 }
 
-.export-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  height: 42px;
-  padding: 0 18px;
-  border-radius: 14px;
-  background: #fff;
-  border: 1px solid #ebeefa;
-  color: #6f54ff;
-  font-size: 14px;
-  font-weight: 800;
-  box-shadow: 0 10px 24px rgba(130, 139, 171, 0.08);
-}
-
-.export-btn:hover,
-.goal-btn:hover,
-.primary-side-btn:hover,
-.problem-btn:hover,
-.range-btn:hover {
-  transform: translateY(-1px);
-}
-
+/* ── Cards base ── */
 .card {
   background:
-    radial-gradient(circle at top left, rgba(129, 109, 255, 0.06), transparent 34%),
+    radial-gradient(circle at top left, rgba(129, 109, 255, 0.05), transparent 34%),
     rgba(255, 255, 255, 0.96);
   border: 1px solid rgba(236, 239, 248, 0.92);
-  border-radius: 22px;
-  box-shadow: 0 16px 40px rgba(133, 141, 175, 0.12);
-}
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: 1.15fr 1fr 0.92fr;
-  gap: 18px;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(133, 141, 175, 0.08);
+  padding: 20px 22px 22px;
 }
 
 .section-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
   margin-bottom: 14px;
 }
 
@@ -980,55 +591,63 @@ onBeforeUnmount(() => {
   color: #182033;
 }
 
-.section-head span {
-  font-size: 12px;
-  color: #818a9b;
+.section-head.center {
+  justify-content: center;
 }
 
-.score-card,
-.radar-card,
-.metrics-card,
-.trend-card,
-.analysis-card,
-.problems-card,
-.goal-card,
-.dist-card,
-.compare-card,
-.suggest-card {
-  padding: 18px 18px 20px;
+.section-head span,
+.trend-dropdown,
+.more-dropdown {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #818a9b;
+  cursor: pointer;
+}
+
+/* ── Top Grid ── */
+.top-grid {
+  display: grid;
+  grid-template-columns: 420px 320px 1fr;
+  gap: 20px;
+}
+
+/* Score card — big purple */
+.score-card {
+  background:
+    radial-gradient(circle at 86% 14%, rgba(255, 255, 255, 0.22), transparent 30%),
+    linear-gradient(135deg, #7b58ff 0%, #8f77ff 35%, #a78bff 100%);
+  color: #fff;
+  overflow: hidden;
+  padding: 26px 28px 28px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .card-kicker {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
-  color: rgba(255, 255, 255, 0.88);
-}
-
-.score-card {
-  background:
-    radial-gradient(circle at 86% 16%, rgba(255, 255, 255, 0.28), transparent 28%),
-    linear-gradient(135deg, #7b58ff 0%, #8f77ff 35%, #b79cff 100%);
-  color: #fff;
-  overflow: hidden;
+  opacity: 0.9;
 }
 
 .score-main {
-  display: grid;
-  grid-template-columns: 1fr 160px;
-  align-items: end;
-  gap: 10px;
-  min-height: 222px;
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
 }
 
 .score-value {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  margin-top: 18px;
+  flex-wrap: wrap;
 }
 
 .score-value strong {
-  font-size: 70px;
+  font-size: 76px;
   line-height: 1;
   font-weight: 900;
 }
@@ -1036,27 +655,28 @@ onBeforeUnmount(() => {
 .score-value small {
   font-size: 28px;
   font-weight: 700;
-  opacity: 0.88;
+  opacity: 0.85;
 }
 
 .score-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: block;
+  align-self: flex-start;
   height: 28px;
-  padding: 0 12px;
-  margin-top: 10px;
+  line-height: 28px;
+  padding: 0 14px;
+  margin-top: 8px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.18);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
-.score-copy,
-.score-footnote {
+.score-copy {
   margin: 12px 0 0;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.88);
+  font-size: 14px;
+  opacity: 0.9;
+  line-height: 1.5;
 }
 
 .score-progress {
@@ -1075,243 +695,258 @@ onBeforeUnmount(() => {
   background: #fff;
 }
 
-.score-figure {
-  align-self: end;
-  height: 178px;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
+.score-footnote {
+  margin: 12px 0 0;
+  font-size: 13px;
+  opacity: 0.85;
 }
 
-.score-figure img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  mix-blend-mode: screen;
-  filter: drop-shadow(0 10px 24px rgba(53, 36, 132, 0.16));
-}
-
-.radar-chart,
-.dist-chart,
-.trend-chart {
-  width: 100%;
-}
-
-.radar-chart {
-  height: 270px;
-}
-
-.metrics-list {
+/* Mid column (stats + radar) */
+.mid-col {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  gap: 20px;
 }
 
-.metrics-list li {
+.stats-row {
   display: grid;
-  grid-template-columns: 42px 1fr auto;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.stat-item {
+  display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid #f1f3f8;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(236, 239, 248, 0.9);
+  border-radius: 16px;
+  box-shadow: 0 4px 16px rgba(130, 139, 171, 0.06);
 }
 
-.metrics-list li:last-child {
-  padding-bottom: 0;
-  border-bottom: none;
-}
-
-.metrics-icon,
-.goal-icon,
-.suggest-icon {
+.stat-icon {
   display: grid;
   place-items: center;
   width: 38px;
   height: 38px;
-  border-radius: 14px;
+  border-radius: 12px;
+  flex-shrink: 0;
 }
 
-.metrics-list span {
-  font-size: 14px;
-  color: #596376;
+.violet .stat-icon { color: #7c5cff; background: #f1ebff; }
+.orange .stat-icon { color: #ff7c47; background: #fff0e9; }
+
+.stat-item > div span {
+  display: block;
+  font-size: 12px;
+  color: #7e8798;
 }
 
-.metrics-list strong {
+.stat-item > div strong {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  margin-top: 4px;
   font-size: 19px;
   font-weight: 800;
-  color: #182033;
+  color: #1c2235;
 }
 
-.metrics-list small {
-  margin-left: 3px;
+.stat-item > div strong small {
   font-size: 12px;
-  color: #8a93a6;
+  color: #8b95a8;
 }
 
-.content-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.9fr) minmax(280px, 0.9fr);
-  gap: 18px;
-  align-items: start;
+.stat-item > div small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: #a0a8ba;
 }
 
-.content-main,
-.content-side {
+.radar-card {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+}
+
+.radar-card .section-head {
+  flex-shrink: 0;
+}
+
+.radar-title {
+  font-size: 16px;
+  position: relative;
+  padding-left: 10px;
+}
+.radar-title::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 2px;
+  bottom: 2px;
+  width: 3px;
+  border-radius: 3px;
+  background: #7b58ff;
+}
+
+.radar-chart {
+  width: 100%;
+  flex: 1;
+  min-height: 200px;
+}
+
+/* Trend card */
+.trend-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.trend-score-badge {
+  position: absolute;
+  top: 50px;
+  right: 22px;
+  padding: 4px 12px;
+  border-radius: 10px;
+  background: #7b58ff;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
 }
 
 .trend-chart {
-  height: 260px;
+  width: 100%;
+  flex: 1;
+  min-height: 200px;
+  margin-top: 8px;
 }
 
-.analysis-card .section-head strong,
-.problems-card .section-head strong {
-  font-size: 26px;
-  line-height: 1.1;
+.trend-footnote {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #818a9b;
+  text-align: center;
 }
 
-.analysis-card .section-head span {
-  font-size: 13px;
+/* ── Bottom Grid ── */
+.bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+  align-items: start;
 }
 
-.exercise-list,
-.problem-list,
-.dist-list,
-.suggest-list,
-.compare-points {
+/* Exercise table */
+.exercise-table-card {
+  overflow: hidden;
+}
+
+.table-header {
+  display: grid;
+  grid-template-columns: 100px 90px 70px 120px 80px 80px 90px 28px;
+  gap: 8px;
+  padding: 10px 4px 8px;
+  border-bottom: 1px solid #f0f2f8;
+  font-size: 12px;
+  color: #8b94a6;
+  font-weight: 700;
+}
+
+.exercise-list-new {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.exercise-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.exercise-list li {
+.exercise-list-new li {
   display: grid;
-  grid-template-columns: 84px minmax(0, 1.2fr) minmax(220px, 1fr) 24px;
+  grid-template-columns: 100px 90px 70px 120px 80px 80px 90px 28px;
+  gap: 8px;
   align-items: center;
-  gap: 16px;
-  padding: 14px 0;
-  border-bottom: 1px solid #f0f2f8;
+  padding: 14px 4px;
+  border-bottom: 1px solid #f5f7fa;
 }
 
-.exercise-list li:last-child {
+.exercise-list-new li:last-child {
   border-bottom: none;
-  padding-bottom: 0;
 }
 
-.exercise-cover {
+.ex-thumb {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 84px;
-  height: 62px;
+  width: 52px;
+  height: 42px;
+  border-radius: 12px;
   overflow: hidden;
-  border-radius: 16px;
 }
 
-.exercise-cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.ex-thumb img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
 }
 
-.exercise-title strong {
-  display: block;
-  font-size: 18px;
+.ex-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ex-info strong {
+  font-size: 15px;
+  font-weight: 700;
   color: #1a2033;
 }
 
-.exercise-title span {
-  display: block;
-  margin-top: 5px;
+.ex-info span {
+  font-size: 12px;
+  color: #8a92a4;
+}
+
+.ex-score {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+}
+
+.ex-score b {
+  font-size: 22px;
+  font-weight: 800;
+  color: #11182d;
+}
+
+.ex-score small {
   font-size: 13px;
   color: #8a92a4;
 }
 
-.exercise-scoreline {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.exercise-scoreline b {
-  font-size: 32px;
-  line-height: 1;
-  color: #11182d;
-}
-
-.exercise-scoreline small {
-  font-size: 14px;
-  color: #8a92a4;
-}
-
-.exercise-scoreline em {
+.exercise-list-new em {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 26px;
+  height: 24px;
   padding: 0 10px;
-  margin-left: 6px;
   border-radius: 999px;
   font-style: normal;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
-.grade-excellent,
-.grade-good {
-  color: #1b9e58;
-  background: #e9faef;
-}
+.grade-excellent, .grade-good { color: #1b9e58; background: #e9faef; }
+.grade-mid { color: #de8b16; background: #fff4e2; }
+.grade-low { color: #eb5d63; background: #ffe9ec; }
 
-.grade-mid {
-  color: #de8b16;
-  background: #fff4e2;
-}
-
-.grade-low {
-  color: #eb5d63;
-  background: #ffe9ec;
-}
-
-.exercise-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.mini-stat span {
-  display: block;
-  font-size: 12px;
-  color: #8b94a6;
-}
-
-.mini-stat strong {
-  display: block;
-  margin-top: 8px;
-  font-size: 22px;
-  color: #1a2033;
-}
-
-.mini-stat small {
-  font-size: 12px;
-  color: #8b94a6;
+.ex-completion {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .mini-bar {
-  height: 7px;
-  margin-top: 10px;
+  height: 6px;
   overflow: hidden;
   background: #eef1f7;
   border-radius: 999px;
@@ -1324,6 +959,17 @@ onBeforeUnmount(() => {
   background: linear-gradient(90deg, #6e54ff, #57d2a3);
 }
 
+.ex-completion strong {
+  font-size: 14px;
+  font-weight: 800;
+  color: #1a2033;
+}
+
+.ex-duration, .ex-calories {
+  font-size: 14px;
+  color: #596376;
+}
+
 .row-arrow {
   display: inline-flex;
   align-items: center;
@@ -1333,359 +979,168 @@ onBeforeUnmount(() => {
   color: #a0a8ba;
   background: transparent;
   border: none;
+  cursor: pointer;
 }
 
-.problem-list {
+/* Next training recommendations */
+.next-head {
+  margin-bottom: 12px;
+}
+
+.next-head strong {
+  font-size: 15px;
+  font-weight: 800;
+  color: #182033;
+}
+
+.next-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.problem-list li {
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1.4fr) minmax(120px, 0.7fr) auto;
-  align-items: center;
-  gap: 14px;
-  padding: 16px 0;
-  border-bottom: 1px solid #f0f2f8;
-}
-
-.problem-list li:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.problem-index {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: #fff4e7;
-  color: #ff992e;
-  font-size: 14px;
-  font-weight: 800;
-}
-
-.problem-copy strong,
-.problem-exercise strong {
-  font-size: 18px;
-  color: #1a2033;
-}
-
-.problem-copy p,
-.problem-exercise span,
-.coach-copy p,
-.suggest-list p {
-  margin: 6px 0 0;
-  font-size: 13px;
-  line-height: 1.6;
-  color: #818a9b;
-}
-
-.problem-btn {
-  height: 38px;
-  padding: 0 18px;
-  border-radius: 999px;
-  background: rgba(114, 86, 255, 0.1);
-  color: #6e54ff;
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.goal-items {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-  gap: 14px;
-  align-items: center;
-}
-
-.goal-item {
+.next-list li {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 14px 16px;
-  border-radius: 18px;
   background: #fbfcff;
   border: 1px solid #eef1f7;
-}
-
-.goal-item span {
-  display: block;
-  font-size: 13px;
-  color: #7c8597;
-}
-
-.goal-item strong {
-  display: block;
-  margin-top: 5px;
-  font-size: 16px;
-  color: #192033;
-}
-
-.goal-btn,
-.primary-side-btn {
-  height: 50px;
-  padding: 0 22px;
   border-radius: 16px;
-  background: linear-gradient(135deg, #735bff, #886bff);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 800;
-  box-shadow: 0 16px 28px rgba(114, 86, 255, 0.26);
+  cursor: pointer;
+  transition: box-shadow 0.18s;
 }
 
-.dist-chart {
-  height: 250px;
+.next-list li:hover {
+  box-shadow: 0 6px 20px rgba(130, 139, 171, 0.08);
 }
 
-.dist-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.dist-list li {
+.next-icon {
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  color: #667085;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  flex-shrink: 0;
 }
 
-.dist-dot,
-.legend-dot,
-.point-mark {
-  display: inline-block;
-  border-radius: 50%;
+.next-body {
+  flex: 1;
+  min-width: 0;
 }
 
-.dist-dot {
-  width: 10px;
-  height: 10px;
-}
-
-.dist-name {
-  color: #475062;
-}
-
-.dist-pct,
-.dist-count {
-  color: #8b94a6;
-}
-
-.compare-legend {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  font-size: 13px;
-  color: #677084;
-}
-
-.legend-dot {
-  width: 10px;
-  height: 10px;
-  margin-right: 6px;
-}
-
-.legend-dot.purple {
-  background: #7c5cff;
-}
-
-.legend-dot.green {
-  background: #48c488;
-}
-
-.compare-stage {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 14px;
-  padding: 18px;
-  border-radius: 18px;
-  background:
-    radial-gradient(circle at center, rgba(124, 92, 255, 0.12), transparent 54%),
-    linear-gradient(180deg, #fafbff 0%, #f3f6fd 100%);
-}
-
-.compare-stage img {
-  width: 100%;
-  max-width: 240px;
-  height: auto;
-  object-fit: contain;
-  mix-blend-mode: multiply;
-}
-
-.compare-score {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-top: 16px;
-}
-
-.compare-score span {
-  font-size: 13px;
-  color: #7f8798;
-}
-
-.compare-score strong {
-  font-size: 34px;
-  color: #171f34;
-}
-
-.compare-points {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.compare-points li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  color: #5f687a;
-}
-
-.point-mark {
-  width: 10px;
-  height: 10px;
-}
-
-.point-mark.good {
-  background: #3ec77c;
-}
-
-.point-mark.mid {
-  background: #ff9e2e;
-}
-
-.primary-side-btn {
-  width: 100%;
-  margin-top: 16px;
-}
-
-.suggest-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.suggest-list li {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
-  gap: 12px;
-  align-items: start;
-}
-
-.suggest-list strong {
+.next-body strong {
   display: block;
-  font-size: 16px;
+  font-size: 14px;
+  font-weight: 700;
   color: #1b2134;
 }
 
-.coach-banner {
-  display: grid;
-  grid-template-columns: 1fr 110px;
-  align-items: end;
-  gap: 10px;
-  margin-top: 20px;
-  padding: 18px 18px 0;
+.next-body p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: #818a9b;
+  white-space: nowrap;
   overflow: hidden;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #f5efff 0%, #eef2ff 100%);
+  text-overflow: ellipsis;
+}
+
+.next-arrow {
+  flex-shrink: 0;
+  color: #c0c7d4;
+}
+
+/* ── Coach Banner ── */
+.coach-banner {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 22px 28px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #f5efff 0%, #ede9fe 50%, #eef2ff 100%);
+  border: 1px solid #ebe4ff;
+}
+
+.coach-img {
+  width: 110px;
+  height: auto;
+  flex-shrink: 0;
+}
+
+.coach-copy {
+  flex: 1;
 }
 
 .coach-copy span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 24px;
+  display: block;
+  font-size: 20px;
   font-weight: 900;
   color: #6f54ff;
 }
 
-.coach-banner img {
-  width: 100%;
-  height: auto;
-  object-fit: contain;
+.coach-copy p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #6b7588;
+  line-height: 1.6;
 }
 
-.goal-icon.violet {
-  color: #765bff;
-  background: #f0ebff;
+.continue-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 42px;
+  padding: 0 22px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #7b58ff, #8f77ff);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 10px 28px rgba(114, 86, 255, 0.26);
+  flex-shrink: 0;
+  transition: transform 0.18s, box-shadow 0.18s;
 }
 
-.goal-icon.blue {
-  color: #4784ff;
-  background: #ebf3ff;
+.continue-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 34px rgba(114, 86, 255, 0.34);
 }
 
-.goal-icon.orange {
-  color: #f39c33;
-  background: #fff1df;
-}
-
+/* ── Responsive ── */
 @media (max-width: 1400px) {
-  .summary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .top-grid {
+    grid-template-columns: 1fr 1fr;
   }
-
-  .metrics-card {
-    grid-column: 1 / -1;
-  }
+  .score-card { grid-column: 1 / -1; }
+  .mid-col { grid-column: 1 / -1; flex-direction: row; }
+  .mid-col .stats-row { flex: 1; }
+  .radar-card { flex: 2; }
+  .trend-card { grid-column: 1 / -1; }
 }
 
 @media (max-width: 1200px) {
-  .content-grid {
+  .bottom-grid {
     grid-template-columns: 1fr;
-  }
-
-  .goal-items {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .goal-btn {
-    grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 960px) {
-  .report-hero,
-  .toolbar {
-    flex-direction: column;
-    align-items: stretch;
+  .report-hero { flex-direction: column; align-items: stretch; }
+  .hero-thumb { align-self: center; max-width: 120px; }
+  .toolbar { flex-direction: column; align-items: stretch; }
+  .toolbar-left { flex-wrap: wrap; }
+  .top-grid { grid-template-columns: 1fr; }
+  .stats-row { grid-template-columns: 1fr; }
+  .exercise-list-new li,
+  .table-header {
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 6px;
   }
-
-  .hero-stats {
-    justify-content: flex-start;
-  }
-
-  .summary-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .score-main {
-    grid-template-columns: 1fr;
-  }
-
-  .exercise-list li,
-  .problem-list li {
-    grid-template-columns: 1fr;
-  }
-
-  .exercise-stats {
-    grid-template-columns: 1fr;
-  }
-
-  .row-arrow {
-    display: none;
-  }
-
-  .goal-items {
-    grid-template-columns: 1fr;
-  }
+  .ex-thumb, .row-arrow { display: none; }
 }
 </style>

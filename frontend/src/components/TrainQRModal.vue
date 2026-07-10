@@ -9,150 +9,14 @@
         <h2 class="tqm-title">手机扫码开始训练</h2>
         <p class="tqm-subtitle">使用微信扫描二维码，在小程序中开始 {{ exerciseName }} 评估</p>
 
-        <!-- 二维码 SVG -->
         <div class="tqm-qr-wrap">
-          <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" class="tqm-qr">
-            <!-- 外层边框 -->
-            <rect x="0" y="0" width="200" height="200" rx="12" fill="#fff" />
-
-            <!-- 模拟二维码图案 -->
-            <g fill="#1e293b">
-              <!-- 定位图案 (左上) -->
-              <rect x="16" y="16" width="8" height="8" />
-              <rect x="24" y="16" width="8" height="8" />
-              <rect x="32" y="16" width="8" height="8" />
-              <rect x="40" y="16" width="8" height="8" />
-              <rect x="48" y="16" width="8" height="8" />
-              <rect x="56" y="16" width="8" height="8" />
-              <rect x="64" y="16" width="8" height="8" />
-              <rect x="16" y="24" width="8" height="8" />
-              <rect x="56" y="24" width="8" height="8" />
-              <rect x="64" y="24" width="8" height="8" />
-              <rect x="16" y="32" width="8" height="8" />
-              <rect x="24" y="32" width="8" height="8" />
-              <rect x="32" y="32" width="8" height="8" />
-              <rect x="40" y="32" width="8" height="8" />
-              <rect x="48" y="32" width="8" height="8" />
-              <rect x="56" y="32" width="8" height="8" />
-              <rect x="64" y="32" width="8" height="8" />
-              <rect x="16" y="40" width="8" height="8" />
-              <rect x="64" y="40" width="8" height="8" />
-              <rect x="16" y="48" width="8" height="8" />
-              <rect x="32" y="48" width="8" height="8" />
-              <rect x="48" y="48" width="8" height="8" />
-              <rect x="64" y="48" width="8" height="8" />
-              <rect x="16" y="56" width="8" height="8" />
-              <rect x="24" y="56" width="8" height="8" />
-              <rect x="40" y="56" width="8" height="8" />
-              <rect x="56" y="56" width="8" height="8" />
-              <rect x="64" y="56" width="8" height="8" />
-
-              <!-- 定位图案 (右上) -->
-              <rect x="128" y="16" width="8" height="8" />
-              <rect x="136" y="16" width="8" height="8" />
-              <rect x="144" y="16" width="8" height="8" />
-              <rect x="152" y="16" width="8" height="8" />
-              <rect x="160" y="16" width="8" height="8" />
-              <rect x="168" y="16" width="8" height="8" />
-              <rect x="176" y="16" width="8" height="8" />
-              <rect x="128" y="24" width="8" height="8" />
-              <rect x="168" y="24" width="8" height="8" />
-              <rect x="176" y="24" width="8" height="8" />
-              <rect x="128" y="32" width="8" height="8" />
-              <rect x="136" y="32" width="8" height="8" />
-              <rect x="144" y="32" width="8" height="8" />
-              <rect x="152" y="32" width="8" height="8" />
-              <rect x="160" y="32" width="8" height="8" />
-              <rect x="168" y="32" width="8" height="8" />
-              <rect x="176" y="32" width="8" height="8" />
-              <rect x="128" y="40" width="8" height="8" />
-              <rect x="176" y="40" width="8" height="8" />
-              <rect x="128" y="48" width="8" height="8" />
-              <rect x="144" y="48" width="8" height="8" />
-              <rect x="160" y="48" width="8" height="8" />
-              <rect x="176" y="48" width="8" height="8" />
-              <rect x="128" y="56" width="8" height="8" />
-              <rect x="136" y="56" width="8" height="8" />
-              <rect x="152" y="56" width="8" height="8" />
-              <rect x="168" y="56" width="8" height="8" />
-              <rect x="176" y="56" width="8" height="8" />
-
-              <!-- 定位图案 (左下) -->
-              <rect x="16" y="128" width="8" height="8" />
-              <rect x="24" y="128" width="8" height="8" />
-              <rect x="32" y="128" width="8" height="8" />
-              <rect x="40" y="128" width="8" height="8" />
-              <rect x="48" y="128" width="8" height="8" />
-              <rect x="56" y="128" width="8" height="8" />
-              <rect x="64" y="128" width="8" height="8" />
-              <rect x="16" y="136" width="8" height="8" />
-              <rect x="56" y="136" width="8" height="8" />
-              <rect x="64" y="136" width="8" height="8" />
-              <rect x="16" y="144" width="8" height="8" />
-              <rect x="24" y="144" width="8" height="8" />
-              <rect x="32" y="144" width="8" height="8" />
-              <rect x="40" y="144" width="8" height="8" />
-              <rect x="48" y="144" width="8" height="8" />
-              <rect x="56" y="144" width="8" height="8" />
-              <rect x="64" y="144" width="8" height="8" />
-              <rect x="16" y="152" width="8" height="8" />
-              <rect x="64" y="152" width="8" height="8" />
-              <rect x="16" y="160" width="8" height="8" />
-              <rect x="32" y="160" width="8" height="8" />
-              <rect x="48" y="160" width="8" height="8" />
-              <rect x="64" y="160" width="8" height="8" />
-              <rect x="16" y="168" width="8" height="8" />
-              <rect x="24" y="168" width="8" height="8" />
-              <rect x="40" y="168" width="8" height="8" />
-              <rect x="56" y="168" width="8" height="8" />
-              <rect x="64" y="168" width="8" height="8" />
-
-              <!-- 中间数据区 (模拟) -->
-              <rect x="88" y="16" width="8" height="8" />
-              <rect x="104" y="16" width="8" height="8" />
-              <rect x="96" y="32" width="8" height="8" />
-              <rect x="112" y="40" width="8" height="8" />
-              <rect x="88" y="56" width="8" height="8" />
-              <rect x="104" y="64" width="8" height="8" />
-              <rect x="112" y="80" width="8" height="8" />
-              <rect x="88" y="88" width="8" height="8" />
-              <rect x="96" y="104" width="8" height="8" />
-              <rect x="104" y="112" width="8" height="8" />
-              <rect x="88" y="128" width="8" height="8" />
-              <rect x="104" y="136" width="8" height="8" />
-              <rect x="112" y="152" width="8" height="8" />
-
-              <!-- 更多随机填充 -->
-              <rect x="80" y="72" width="8" height="8" />
-              <rect x="96" y="80" width="8" height="8" />
-              <rect x="80" y="96" width="8" height="8" />
-              <rect x="88" y="120" width="8" height="8" />
-              <rect x="112" y="128" width="8" height="8" />
-              <rect x="80" y="136" width="8" height="8" />
-              <rect x="96" y="144" width="8" height="8" />
-              <rect x="112" y="160" width="8" height="8" />
-
-              <!-- 底部 -->
-              <rect x="128" y="128" width="8" height="8" />
-              <rect x="144" y="136" width="8" height="8" />
-              <rect x="136" y="152" width="8" height="8" />
-              <rect x="160" y="160" width="8" height="8" />
-              <rect x="168" y="144" width="8" height="8" />
-              <rect x="152" y="168" width="8" height="8" />
-              <rect x="176" y="128" width="8" height="8" />
-              <rect x="128" y="160" width="8" height="8" />
-              <rect x="144" y="168" width="8" height="8" />
-              <rect x="176" y="176" width="8" height="8" />
-            </g>
-
-            <!-- 中心 Logo -->
-            <rect x="82" y="82" width="36" height="36" rx="8" fill="#fff" />
-            <rect x="83" y="83" width="34" height="34" rx="7" fill="#8b5cf6" opacity="0.12" />
-            <text x="100" y="105" text-anchor="middle" font-size="16">💪</text>
-          </svg>
+          <img v-if="qrImageUrl" :src="qrImageUrl" alt="小程序码" class="tqm-qr-img" />
+          <div v-else class="tqm-loading">
+            <div class="tqm-spinner"></div>
+            <span>{{ loadingText }}</span>
+          </div>
         </div>
 
-        <!-- 参数信息 -->
         <div class="tqm-params">
           <div class="tqm-param">
             <span>动作</span>
@@ -175,8 +39,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { X } from "lucide-vue-next";
+import { useAuthStore } from "@/stores/auth";
+
+const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
 const props = defineProps<{
   exerciseName: string;
@@ -189,10 +56,34 @@ const emit = defineEmits<{
   (e: "close"): void;
 }>();
 
+const qrImageUrl = ref("");
+const loadingText = ref("生成二维码中...");
+
 const cameraLabel = computed(() => {
   const m: Record<string, string> = { side: "侧面", front: "正面", "45deg": "45°" };
   return m[props.cameraView || ""] || "侧面";
 });
+
+async function loadQrCode() {
+  try {
+    const authStore = useAuthStore();
+    const token = authStore.token || "";
+    const url = `${API_BASE}/qrcode?exercise=${encodeURIComponent(props.exerciseKey)}&view=${encodeURIComponent(props.cameraView || "side")}`;
+    const resp = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || "生成二维码失败");
+    }
+    const blob = await resp.blob();
+    qrImageUrl.value = URL.createObjectURL(blob);
+  } catch (e: any) {
+    loadingText.value = "生成失败，请重试";
+  }
+}
+
+onMounted(loadQrCode);
 </script>
 
 <style scoped>
@@ -269,15 +160,46 @@ const cameraLabel = computed(() => {
 .tqm-qr-wrap {
   display: flex;
   justify-content: center;
+  align-items: center;
   margin-bottom: 20px;
+  min-height: 200px;
 }
 
-.tqm-qr {
+.tqm-qr-img {
   width: 200px;
   height: 200px;
   border-radius: 12px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   border: 2px solid #e2e8f0;
+  object-fit: contain;
+}
+
+.tqm-loading {
+  width: 200px;
+  height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 2px solid #e2e8f0;
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.tqm-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .tqm-params {

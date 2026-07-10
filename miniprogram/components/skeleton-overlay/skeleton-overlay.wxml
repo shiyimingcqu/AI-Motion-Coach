@@ -1,4 +1,3 @@
-<!-- 骨架叠加 Canvas 组件 -->
 <canvas
   type="2d"
   id="skeletonCanvas"

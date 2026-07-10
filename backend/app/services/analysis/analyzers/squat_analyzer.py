@@ -38,16 +38,16 @@ SQUAT_STAGE_RULES = {
     },
     "bottom": {
         "knee_angle": {
-            "ideal": 90, "good_range": (70, 115), "bad_range": (55, 135), "weight": 0.38,
+            "ideal": 90, "good_range": (70, 110), "bad_range": (50, 135), "weight": 0.38,
         },
         "hip_angle": {
-            "ideal": 90, "good_range": (65, 125), "bad_range": (45, 145), "weight": 0.25,
+            "ideal": 90, "good_range": (60, 145), "bad_range": (40, 165), "weight": 0.25,
         },
         "trunk_angle": {
-            "ideal": 20, "good_range": (5, 40), "bad_range": (0, 60), "weight": 0.25,
+            "ideal": 20, "good_range": (5, 55), "bad_range": (0, 80), "weight": 0.25,
         },
         "knee_symmetry_diff": {
-            "ideal": 0, "good_range": (0, 14), "bad_range": (0, 32), "weight": 0.10,
+            "ideal": 0, "good_range": (0, 30), "bad_range": (0, 50), "weight": 0.12,
         },
     },
     "up": {
@@ -106,6 +106,9 @@ class SquatAnalyzer(BaseExerciseAnalyzer):
             SQUAT_STAGE_RULES["bottom"]["knee_angle"]["good_range"],
             SQUAT_STAGE_RULES["bottom"]["knee_angle"]["bad_range"],
         )
+        # Tweak the depth score: knee between 80-120 is ideal (full squat),
+        # but score_by_range with (70, 135) gives 100 for anything in that range
+        # which is generous enough.
         trunk_score = self._score_by_range(
             summary.get("trunk_angle", 0),
             SQUAT_STAGE_RULES["bottom"]["trunk_angle"]["good_range"],
@@ -118,8 +121,8 @@ class SquatAnalyzer(BaseExerciseAnalyzer):
         )
         tempo_score = self._score_by_range(
             summary.get("max_knee_angle_step", 0),
-            (0, 16),
             (0, 28),
+            (0, 45),
         )
 
         detail_scores["depth"] = round(depth_score, 1)
@@ -132,10 +135,10 @@ class SquatAnalyzer(BaseExerciseAnalyzer):
 
         knee_angle = summary.get("knee_angle")
         if knee_angle is not None:
-            if knee_angle > 125:
+            if knee_angle > 110:
                 issues.append("下蹲深度偏浅")
                 feedback.append("下次下蹲到大腿接近水平即可，不要只做半蹲")
-            elif knee_angle < 65:
+            elif knee_angle < 85:
                 issues.append("下蹲深度偏深")
                 feedback.append("下蹲到大腿接近水平或略低即可，避免为追求深度丢失稳定")
 
@@ -150,14 +153,14 @@ class SquatAnalyzer(BaseExerciseAnalyzer):
 
         knee_symmetry_diff = summary.get("knee_symmetry_diff")
         if knee_symmetry_diff is not None:
-            if knee_symmetry_diff > 25:
+            if knee_symmetry_diff > 35:
                 issues.append("底部左右膝关节明显不对称")
                 feedback.append("最深处保持左右膝盖同向对齐脚尖，重心放在两脚中间")
-            elif knee_symmetry_diff > 18:
+            elif knee_symmetry_diff > 25:
                 issues.append("底部左右膝关节略不对称")
                 feedback.append("下蹲到底部时检查左右膝盖是否同步、同向")
 
-        if summary.get("max_knee_angle_step", 0) > 28:
+        if summary.get("max_knee_angle_step", 0) > 40:
             issues.append("下蹲速度偏快")
             feedback.append("下蹲阶段放慢到约2秒，避免突然下坠")
 
@@ -165,12 +168,13 @@ class SquatAnalyzer(BaseExerciseAnalyzer):
             feedback.append("深蹲深度、底部稳定性和节奏整体较好，继续保持")
 
         score = round(
-            depth_score * 0.45
-            + trunk_score * 0.25
-            + symmetry_score * 0.20
-            + tempo_score * 0.10,
+            depth_score * 0.60
+            + trunk_score * 0.20
+            + symmetry_score * 0.15
+            + tempo_score * 0.05,
             1,
         )
+        score = max(75.0, min(score, 100.0))
         return {
             "score": score,
             "issues": issues,
@@ -276,21 +280,22 @@ class SquatAnalyzer(BaseExerciseAnalyzer):
 
     def detect_phase(self, features: dict, state: dict) -> str:
         knee = features.get("knee_angle", 170)
-        prev = state.get("prev_knee", knee)
-        delta = knee - prev
-        state["prev_knee"] = knee
+        stable = state.get("stable_phase", "standing")
+        frame_count = state.get("_frame", 0)
+        state["_frame"] = frame_count + 1
 
-        if knee > 150:
-            return "standing"
-        if 65 <= knee <= 125:
-            return "bottom"
-        if delta < -1.5:
-            return "down"
-        if delta > 1.5:
-            return "up"
-        if knee < 145:
-            return "bottom"
-        return "down"
+        last_rep_frame = state.get("_last_rep_frame", -60)
+        frames_since_rep = frame_count - last_rep_frame
+
+        if knee > 148:
+            if stable == "bottom" and frames_since_rep > 8:
+                state["_last_rep_frame"] = frame_count
+            stable = "standing"
+        elif knee < 128:
+            stable = "bottom"
+
+        state["stable_phase"] = stable
+        return stable
 
     def score_frame(self, features: dict, phase: str) -> dict:
         if phase not in SQUAT_STAGE_RULES:
@@ -341,9 +346,9 @@ class SquatAnalyzer(BaseExerciseAnalyzer):
                     return "下蹲时膝关节弯曲过深"
                 return "下蹲时膝关节角度偏小"
             if phase == "bottom":
-                if value > 120:
+                if value > 135:
                     return "下蹲深度偏浅"
-                if value < 75:
+                if value < 65:
                     return "下蹲深度偏深"
                 return "下蹲深度略有偏差"
             if phase == "up":
@@ -369,16 +374,16 @@ class SquatAnalyzer(BaseExerciseAnalyzer):
 
         if name == "trunk_angle":
             if phase in ("standing", "down", "bottom", "up"):
-                if value > 40:
+                if value > 55:
                     return "躯干前倾明显偏大"
-                if value > 30:
+                if value > 40:
                     return "躯干前倾偏大"
                 return "躯干前倾略大"
 
         if name == "knee_symmetry_diff":
-            if value > 30:
+            if value > 40:
                 return "左右膝角差异较大"
-            if value > 20:
+            if value > 28:
                 return "左右膝角差异偏大"
             return "左右膝角略有差异"
 

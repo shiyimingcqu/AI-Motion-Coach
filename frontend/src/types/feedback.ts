@@ -101,6 +101,34 @@ export function inferMetricFromIssue(issue: string): string | null {
   return null
 }
 
+/**
+ * EXERCISE_KEY_JOINTS — maps each exercise to its key bone pairs.
+ *
+ * These are shown as blue highlights guiding the user to the body parts
+ * that matter most for this movement.
+ *
+ * bonePairs refer to SKELETON_BONES entries in PoseParticleViewer.vue.
+ * Landmark convention: 11/12=shoulders, 13/14=elbows, 15/16=wrists
+ * 23/24=hips, 25/26=knees, 27/28=ankles, 29/30=heels, 31/32=toes
+ */
+export const EXERCISE_KEY_JOINTS: Record<string, Array<[number, number]>> = {
+  squat:           [[23,25],[25,27],[24,26],[26,28],[11,23],[12,24],[23,24]],
+  push_up:         [[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24]],
+  pushup:          [[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24]],
+  jumping_jack:    [[11,12],[23,24],[23,25],[24,26],[25,27],[26,28]],
+  plank:           [[11,23],[12,24],[23,24]],
+  lunge:           [[23,25],[25,27],[24,26],[26,28],[27,31],[28,32]],
+  glute_bridge:    [[23,25],[24,26],[23,24],[25,27],[26,28]],
+  high_knees:      [[23,25],[25,27],[24,26],[26,28]],
+  burpee:          [[11,13],[13,15],[12,14],[14,16],[23,25],[25,27],[24,26],[26,28],[11,23],[12,24]],
+  dumbbell_curl:   [[11,13],[13,15],[12,14],[14,16]],
+  dumbbell_press:  [[11,13],[13,15],[12,14],[14,16],[11,12]],
+  dumbbell_shoulder_press: [[11,13],[13,15],[12,14],[14,16],[11,12]],
+  pull_up:         [[11,13],[13,15],[12,14],[14,16],[11,23],[12,24]],
+  mountain_climber:[[23,25],[25,27],[24,26],[26,28],[11,23],[12,24]],
+  russian_twist:   [[11,23],[12,24],[23,24],[11,12]],
+};
+
 /** Map severity level to highlight color. */
 export function severityToHighlightColor(severity: "high" | "medium" | "low" | string): string {
   switch (severity) {

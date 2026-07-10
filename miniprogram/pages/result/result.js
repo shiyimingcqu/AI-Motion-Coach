@@ -103,6 +103,7 @@ Page({
     validRate: 0,
     levelLabel: '优秀',
     gradeLabel: '',
+    resultHint: '未检测到有效动作，调整角度后再试一次',
     evaluationSummary: '',
     stars: [1, 2, 3, 4, 5],
     scorePercent: 0,
@@ -219,6 +220,7 @@ Page({
       validRate,
       levelLabel: level.label,
       gradeLabel: level.label,
+      resultHint: this.buildResultHint(totalCount, validRate, score),
       scorePercent: scoreVisual.scorePercent,
       scoreColor: scoreVisual.scoreColor,
       stars: this.getStarList(level.label),
@@ -512,6 +514,7 @@ Page({
         : (updates.totalCount > 0 ? Math.round((updates.validCount / updates.totalCount) * 100) : 0);
       updates.levelLabel = level.label;
       updates.gradeLabel = evaluation.grade_label || level.label;
+      updates.resultHint = this.buildResultHint(updates.totalCount, updates.validRate, score);
       const scoreVisual = this.buildScoreVisual(score);
       updates.scorePercent = scoreVisual.scorePercent;
       updates.scoreColor = scoreVisual.scoreColor;
@@ -543,6 +546,11 @@ Page({
       const level = getScoreLevel(updates.averageScore);
       updates.levelLabel = level.label;
       updates.gradeLabel = updates.gradeLabel || level.label;
+      updates.resultHint = this.buildResultHint(
+        updates.totalCount != null ? updates.totalCount : this.data.totalCount,
+        updates.validRate != null ? updates.validRate : this.data.validRate,
+        updates.averageScore,
+      );
       const scoreVisual = this.buildScoreVisual(updates.averageScore);
       updates.scorePercent = scoreVisual.scorePercent;
       updates.scoreColor = scoreVisual.scoreColor;
@@ -1055,6 +1063,16 @@ Page({
       scorePercent: Math.min(100, Math.max(0, Math.round(Number(score) || 0))),
       scoreColor: level.color,
     };
+  },
+
+  buildResultHint(totalCount, validRate, score) {
+    const total = Number(totalCount || 0);
+    const rate = Number(validRate || 0);
+    const value = Number(score || 0);
+    if (total <= 0) return '未检测到有效动作，调整角度后再试一次';
+    if (rate < 50 || value < 60) return '先放慢节奏，优先完成标准动作';
+    if (rate < 80 || value < 80) return '继续保持节奏，下一次会更稳';
+    return '动作完成度不错，保持当前训练状态';
   },
 
   buildAiAdvicePreview(text) {

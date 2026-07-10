@@ -5,47 +5,51 @@
       <view class="back-btn" bindtap="goBack">
         <text class="back-arrow">‹</text>
       </view>
-      <text class="top-title">评估报告</text>
+      <text class="top-title">训练结果</text>
       <view class="top-bar-placeholder"></view>
     </view>
   </view>
 
   <scroll-view class="result-scroll" scroll-y enhanced show-scrollbar="{{false}}">
-    <!-- 1. 评分概览（圆环 + 精简数据） -->
+    <!-- 1. 紧凑成绩卡 -->
     <view class="score-panel section-card">
-      <view class="score-panel-body">
-        <view class="score-ring-box">
-          <view
-            class="score-ring"
-            style="background: conic-gradient({{scoreColor}} 0 {{scorePercent}}%, #eef2f7 {{scorePercent}}% 100%);"
-          >
-            <view class="score-ring-inner">
-              <text class="score-ring-num">{{averageScore}}</text>
-            </view>
-          </view>
-          <text class="score-ring-grade" style="color: {{scoreColor}};">{{gradeLabel || levelLabel}}</text>
-        </view>
-        <view class="score-panel-side">
+      <view class="score-panel-head">
+        <view class="score-title-group">
+          <text class="score-eyebrow">本次训练</text>
           <text class="score-exercise-name">{{exerciseName || '训练'}}</text>
-          <view class="score-stat-chips">
-            <view class="score-chip">
-              <text class="chip-num">{{totalCount}}</text>
-              <text class="chip-label">总次</text>
-            </view>
-            <view class="score-chip chip-good">
-              <text class="chip-num">{{validCount}}</text>
-              <text class="chip-label">有效</text>
-            </view>
-            <view class="score-chip chip-warn">
-              <text class="chip-num">{{errorCount}}</text>
-              <text class="chip-label">错误</text>
-            </view>
-            <view class="score-chip">
-              <text class="chip-num">{{validRate}}%</text>
-              <text class="chip-label">正确率</text>
-            </view>
+        </view>
+        <text class="score-time-line">{{durationText}}</text>
+      </view>
+
+      <view class="score-ring-box">
+        <view
+          class="score-ring"
+          style="background: conic-gradient({{scoreColor}} 0 {{scorePercent}}%, #edf2f8 {{scorePercent}}% 100%);"
+        >
+          <view class="score-ring-inner">
+            <text class="score-ring-num">{{averageScore}}</text>
+            <text class="score-ring-unit">分</text>
           </view>
-          <text class="score-time-line">{{durationText}} · {{finishedAt}}</text>
+        </view>
+      </view>
+
+      <view class="score-verdict">
+        <text class="score-ring-grade" style="background: {{scoreColor}};">{{gradeLabel || levelLabel}}</text>
+        <text class="score-mood">{{resultHint}}</text>
+      </view>
+
+      <view class="score-stat-chips">
+        <view class="score-chip">
+          <text class="chip-num">{{totalCount}}</text>
+          <text class="chip-label">总次数</text>
+        </view>
+        <view class="score-chip chip-good">
+          <text class="chip-num">{{validCount}}</text>
+          <text class="chip-label">有效</text>
+        </view>
+        <view class="score-chip">
+          <text class="chip-num">{{validRate}}%</text>
+          <text class="chip-label">正确率</text>
         </view>
       </view>
     </view>

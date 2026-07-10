@@ -139,6 +139,10 @@
 
           <p class="tr-modal-summary">{{ detail.evaluation.summary }}</p>
 
+          <button class="tr-modal-replay-btn" type="button" @click="openPlayback">
+            查看 3D 动作回放
+          </button>
+
           <div class="tr-modal-charts">
             <div ref="detailRadarRef" class="tr-modal-chart" />
             <div ref="detailRepRef" class="tr-modal-chart" />
@@ -220,6 +224,7 @@ const selectedDateKey = ref<string | null>(null);
 const showDetail = ref(false);
 const detailLoading = ref(false);
 const detail = ref<ReportDetail | null>(null);
+const detailSessionId = ref("");
 const detailRadarRef = ref<HTMLElement | null>(null);
 const detailRepRef = ref<HTMLElement | null>(null);
 let detailCharts: echarts.ECharts[] = [];
@@ -374,6 +379,7 @@ function renderDetailCharts(data: ReportDetail) {
   }
 }
 async function openDetail(sessionId: string) {
+  detailSessionId.value = sessionId;
   showDetail.value = true;
   detailLoading.value = true;
   detail.value = null;
@@ -392,6 +398,10 @@ function closeDetail() {
   showDetail.value = false;
   detail.value = null;
   disposeDetailCharts();
+}
+function openPlayback() {
+  if (!detailSessionId.value) return;
+  router.push({ path: "/start/playback", query: { replay: detailSessionId.value } });
 }
 function gradeClass(grade?: string) {
   if (grade === "A") return "grade-a";
@@ -751,6 +761,26 @@ onBeforeUnmount(disposeDetailCharts);
   background: #f7f8fc;
   border-radius: 8px;
 }
+
+.tr-modal-replay-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+}
+.tr-modal-replay-btn:hover { opacity: 0.92; }
+.tr-modal-replay-btn:active { transform: scale(0.99); }
 
 .tr-modal-charts {
   display: grid;

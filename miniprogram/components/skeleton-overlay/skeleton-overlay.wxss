@@ -1,8 +1,64 @@
-/* 骨架叠加 Canvas */
+:host {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.skeleton-cover {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 60;
+  pointer-events: none;
+}
+
+.skeleton-line {
+  position: absolute;
+  height: 6rpx;
+  border-radius: 999rpx;
+  background: #f59e0b;
+  transform-origin: 0 50%;
+  box-shadow: 0 0 10rpx rgba(255, 255, 255, 0.85), 0 0 16rpx rgba(79, 140, 255, 0.7);
+}
+
+.skeleton-line.arm {
+  background: #3b82f6;
+}
+
+.skeleton-line.leg {
+  background: #22c55e;
+}
+
+.skeleton-point {
+  position: absolute;
+  width: 14rpx;
+  height: 14rpx;
+  margin-left: -7rpx;
+  margin-top: -7rpx;
+  border-radius: 999rpx;
+  background: #fff;
+  border: 3rpx solid #3b82f6;
+  box-shadow: 0 0 10rpx rgba(255, 255, 255, 0.95), 0 0 14rpx rgba(59, 130, 246, 0.75);
+}
+
+.skeleton-point.is-important {
+  width: 18rpx;
+  height: 18rpx;
+  margin-left: -9rpx;
+  margin-top: -9rpx;
+}
+
 .skeleton-canvas {
   position: absolute;
   top: 0;
   left: 0;
-  z-index: 10;
+  z-index: 20;
+  display: block;
   pointer-events: none;
 }

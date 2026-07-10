@@ -56,7 +56,6 @@
   position: relative;
   overflow: hidden;
   min-height: 220rpx;
-  box-shadow: 0 20rpx 46rpx rgba(47, 111, 224, 0.22);
 }
 
 .detail-hero::before {
@@ -106,7 +105,6 @@
 .detail-tag {
   font-size: 22rpx;
   color: rgba(255, 255, 255, 0.95);
-  background: rgba(255, 255, 255, 0.22);
   padding: 6rpx 18rpx;
   border-radius: var(--radius-full);
 }

@@ -192,9 +192,17 @@ class BaseExerciseAnalyzer:
         if rep_completed and self._last_rep_completed_count == self.count + 1:
             rep_completed = False
 
+        # TEMPORARY: always use score_rep result as the displayed score once a rep finishes
         frame_issues: list[str] = []
         frame_feedback: list[str] = []
         frame_score = score_result["score"]
+        # For bottom phase, show at least a reasonable real-time score
+        if phase == "bottom":
+            knee = features.get("knee_angle", 170)
+            if 70 <= knee <= 110:
+                frame_score = max(frame_score, 85)
+            elif knee <= 125:
+                frame_score = max(frame_score, 70)
         self._record_frame_score(frame_score)
         score_source = "rule"
         template_score_payload: dict | None = None

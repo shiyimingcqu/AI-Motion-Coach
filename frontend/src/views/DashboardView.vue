@@ -1,416 +1,392 @@
 <template>
   <div class="review-page">
-    <!-- 顶部：标题 + 选择记录 + 统计卡 -->
-    <header class="review-top">
-      <div class="review-top-left">
-        <h1 v-if="selectedSession">
-          你正在查看：{{ exerciseLabels[selectedSession.exercise] || selectedSession.exercise }} 评估
-          <span class="rep-link" @click="onSessionChange">逐次查看</span>
-        </h1>
-        <h1 v-else>动作回放</h1>
-        <div class="session-select" v-if="selectedSession">
-          <Calendar :size="14" />
-          <select v-model="selectedSessionId" @change="onSessionChange">
-            <option v-for="s in sessions" :key="s.session_id" :value="s.session_id">
-              {{ formatDateOnly(s.created_at) }} {{ formatTimeOnly(s.created_at) }} — {{ exerciseLabels[s.exercise] || s.exercise }}
-            </option>
-          </select>
-        </div>
-      </div>
-      <div class="review-top-stats">
-        <div class="top-stat">
-          <div class="top-stat-icon green"><Calendar :size="18" /></div>
-          <div>
-            <span>今日训练</span>
-            <strong>{{ todaySessions }}<small>次</small></strong>
-          </div>
-        </div>
-        <div class="top-stat">
-          <div class="top-stat-icon violet"><Star :size="18" /></div>
-          <div>
-            <span>平均得分</span>
-            <strong>{{ todayAvgScore }}<small>分</small></strong>
-          </div>
-        </div>
-        <div class="top-stat">
-          <div class="top-stat-icon orange"><Flame :size="18" /></div>
-          <div>
-            <span>最近练习</span>
-            <strong>{{ lastExerciseLabel }}</strong>
-          </div>
-        </div>
-        <div class="top-user">
-          <button class="top-bell" type="button"><Bell :size="18" /></button>
-          <div class="top-user-info">
-            <UserAvatar size="sm" />
-            <ChevronDown :size="14" />
-          </div>
-        </div>
-      </div>
-    </header>
-
-    <!-- 未选择记录时显示选择面板 -->
     <div v-if="!selectedSession" class="session-picker">
       <header class="picker-header">
         <h2>选择训练记录</h2>
-        <p>从最近训练中选择一条，查看 3D 回放与动作对比</p>
+        <p>从最近训练中挑一条记录，查看动作回放、标准参考和 3D 对比。</p>
       </header>
-      <StateDisplay v-if="sessionsLoading" type="loading" skeleton="table" :skeleton-rows="4" text="加载训练记录..." />
+      <StateDisplay
+        v-if="sessionsLoading"
+        type="loading"
+        skeleton="table"
+        :skeleton-rows="4"
+        text="正在加载训练记录..."
+      />
       <div v-else-if="sessions.length === 0" class="picker-empty">
-        <StateDisplay type="empty" title="暂无训练记录" text="完成训练后，记录将在此显示" />
+        <StateDisplay
+          type="empty"
+          title="暂无训练记录"
+          text="完成一次训练后，这里会自动展示可回放的记录。"
+        />
       </div>
       <div v-else class="picker-list">
         <article
-          v-for="s in sessions"
-          :key="s.session_id"
+          v-for="session in sessions"
+          :key="session.session_id"
           class="picker-card"
-          @click="selectedSessionId = s.session_id"
+          @click="selectedSessionId = session.session_id"
         >
           <div class="picker-card-top">
             <div class="picker-date">
-              <strong>{{ formatDateOnly(s.created_at) }}</strong>
-              <span>{{ formatTimeOnly(s.created_at) }}</span>
+              <strong>{{ formatDateOnly(session.created_at) }}</strong>
+              <span>{{ formatTimeOnly(session.created_at) }}</span>
             </div>
-            <span class="picker-exercise-tag">{{ exerciseLabels[s.exercise] || s.exercise }}</span>
+            <span class="picker-exercise-tag">{{ exerciseLabel(session.exercise) }}</span>
           </div>
           <div class="picker-card-stats">
             <div>
               <span>得分</span>
-              <b :class="scoreTextClass(s.average_score)">{{ s.average_score }}</b>
+              <b :class="scoreTextClass(session.average_score)">{{ session.average_score }}</b>
             </div>
             <div>
               <span>时长</span>
-              <b>{{ formatDurationSimple(s.duration_seconds) }}</b>
+              <b>{{ formatDurationSimple(session.duration_seconds) }}</b>
             </div>
             <div>
               <span>完成</span>
-              <b>{{ s.valid_count }}/{{ s.total_count }}</b>
+              <b>{{ session.valid_count }}/{{ session.total_count }}</b>
             </div>
           </div>
         </article>
       </div>
     </div>
 
-    <!-- 已选择：3 栏布局 -->
-    <div v-else class="review-layout">
-      <!-- 主内容 -->
-      <main class="review-main">
-        <!-- 3D 对比区 -->
-        <section class="replay-card">
-          <div class="replay-tabs">
-            <button type="button" :class="{ active: activeTab === 'user' }" @click="activeTab = 'user'">用户动作</button>
-            <button type="button" :class="{ active: activeTab === 'standard' }" @click="activeTab = 'standard'">标准动作</button>
-            <button type="button" :class="{ active: activeTab === 'compare' }" @click="activeTab = 'compare'">3D 对比</button>
-            <button type="button" class="replay-extra" @click="rotateView">
-              <RefreshCw :size="14" />
-              <span>切换视角</span>
-            </button>
-          </div>
+    <template v-else>
+      <header class="review-top">
+        <div class="review-title-block">
+          <h1>让我们看看哪次动作需要调整 👋</h1>
+          <p>我们已为你分析整组动作，挑出需要改进的地方，一起变得更好。</p>
+        </div>
+        <div class="review-top-figure" aria-hidden="true">
+          <img class="review-coach-figure" :src="dashboardSelectCoachImg" alt="" />
+        </div>
+      </header>
 
-          <div v-show="activeTab === 'compare'" class="stage stage-compare">
-            <div class="stage-legend">
-              <strong>3D 对比模式</strong>
-              <span><i class="dot blue"></i>你的动作</span>
-              <span><i class="dot green"></i>标准动作</span>
-            </div>
-            <div class="compare-3d-left">
-              <PoseParticleViewer v-if="userFrames.length > 0" :frames="currentUserFrames" :playing="playing" :speed="playSpeed" :progress="playProgress" @update:progress="playProgress = $event" :rotation-offset="rotationOffset" />
-            </div>
-            <div class="compare-3d-right">
-              <PoseParticleViewer v-if="standardFrames.length > 0" :frames="standardFrames" :playing="playing" :speed="playSpeed" :progress="playProgress" @update:progress="playProgress = $event" :rotation-offset="rotationOffset" />
-            </div>
-            <div class="stage-split"></div>
-            <div class="view-buttons">
-              <button :class="{ active: viewMode === 'front' }" @click="setView('front')"><User :size="14" /> 正面</button>
-              <button :class="{ active: viewMode === 'side' }" @click="setView('side')"><User :size="14" /> 侧面</button>
-              <button :class="{ active: viewMode === '45deg' }" @click="setView('45deg')"><User :size="14" /> 45°侧</button>
-              <button :class="{ active: viewMode === 'top' }" @click="setView('top')"><Eye :size="14" /> 俯视</button>
-              <button class="fullscreen" @click="toggleFullscreen"><Maximize2 :size="14" /> 全屏</button>
-            </div>
+      <section class="session-select-hero">
+        <div class="session-select-intro">
+          <div class="session-select-icon">
+            <Calendar :size="26" />
           </div>
-
-          <div v-show="activeTab === 'user'" class="stage">
-            <div class="stage-legend"><span><i class="dot blue"></i>你的动作</span></div>
-            <PoseParticleViewer v-if="userFrames.length > 0" :frames="currentUserFrames" :playing="playing" :speed="playSpeed" :progress="playProgress" @update:progress="playProgress = $event" :rotation-offset="rotationOffset" />
-            <StateDisplay v-else type="empty" title="暂无回放数据" text="该训练记录没有动作回放数据" />
-          </div>
-
-          <div v-show="activeTab === 'standard'" class="stage">
-            <div class="stage-legend"><span><i class="dot green"></i>标准动作</span></div>
-            <PoseParticleViewer v-if="standardFrames.length > 0" :frames="standardFrames" :playing="playing" :speed="playSpeed" :progress="playProgress" @update:progress="playProgress = $event" :rotation-offset="rotationOffset" />
-            <StateDisplay v-else type="empty" title="暂无标准动作" text="该动作还没有标准动作模板数据" />
-          </div>
-
-          <!-- 播放控制 -->
-          <div class="player-row">
-            <button type="button" class="play-btn" @click="togglePlay">
-              <Play v-if="!playing" :size="20" fill="currentColor" />
-              <Pause v-else :size="20" fill="currentColor" />
-            </button>
-            <div class="progress" @click="seekProgress">
-              <i :style="{ width: playProgress * 100 + '%' }"></i>
-            </div>
-            <span class="time-text">{{ formatPlayTime }}</span>
-            <select v-model="playSpeed" class="speed-select">
-              <option :value="0.5">0.5x</option>
-              <option :value="1">1x</option>
-              <option :value="1.5">1.5x</option>
-              <option :value="2">2x</option>
-            </select>
-          </div>
-        </section>
-
-        <!-- 逐次回放（次数卡） -->
-        <section v-if="repSegments.length > 0" class="attempts-section">
-          <header>
-            <strong>逐次查看</strong>
-            <span>(共 {{ repSegments.length }} 次)</span>
-            <small>点击卡片查看对应动作问题与建议</small>
-          </header>
-          <div class="attempts-row">
-            <button type="button" class="attempt-nav" @click="prevRep"><ChevronLeft :size="20" /></button>
-            <article
-              v-for="(rep, i) in repSegments"
-              :key="i"
-              :class="['attempt-card', { active: currentRepIndex === i }]"
-              @click="selectRep(i)"
-            >
-              <strong>第 {{ i + 1 }} 次</strong>
-              <b>{{ rep.score ?? '—' }} 分</b>
-              <span v-if="rep.score != null" :class="scoreTone(rep.score)">{{ scoreLabel(rep.score) }}</span>
-              <small v-if="currentRepIndex === i">当前查看</small>
-            </article>
-            <button type="button" class="attempt-nav" @click="nextRep"><ChevronRight :size="20" /></button>
-          </div>
-        </section>
-
-        <!-- 第 N 次动作流程（时间线） -->
-        <section v-if="currentRepIndex >= 0" class="flow-section">
-          <header><strong>第 {{ currentRepIndex + 1 }} 次动作流程</strong></header>
-          <ol class="flow-list">
-            <li v-for="(step, idx) in flowSteps" :key="idx" :class="{ active: idx <= flowActive }">
-              <div class="flow-circle">
-                <span>{{ idx + 1 }}</span>
-                <span v-if="idx === 0" class="flow-person">🧍</span>
-                <span v-else-if="idx === 1" class="flow-person">🏋️</span>
-                <span v-else-if="idx === 2" class="flow-person">🔻</span>
-                <span v-else class="flow-person">⏫</span>
-              </div>
-              <div class="flow-text">
-                <strong>{{ step.title }}</strong>
-                <small>{{ step.time }}</small>
-              </div>
-              <CheckCircle2 v-if="idx === flowSteps.length - 1 && flowActive === flowSteps.length - 1" :size="18" class="flow-check" />
-            </li>
-          </ol>
-          <div class="flow-progress">
-            <button class="flow-play" @click="togglePlay">
-              <Play v-if="!playing" :size="16" fill="currentColor" />
-              <Pause v-else :size="16" fill="currentColor" />
-            </button>
-            <div class="flow-bar">
-              <i :style="{ width: playProgress * 100 + '%' }"></i>
-            </div>
-            <span class="flow-time">{{ formatPlayShort }}</span>
-          </div>
-        </section>
-
-        <!-- 标准动作对比区 -->
-        <section v-if="standardFrames.length > 0" class="compare-section">
-          <div class="compare-left">
-            <h4>标准动作对比</h4>
-            <p>查看标准深蹲动作要点</p>
-            <button class="compare-btn" type="button" @click="activeTab = 'standard'">
-              <Play :size="14" />
-              查看标准动作
-            </button>
-          </div>
-          <div class="compare-center">
-            <div class="compare-step-mini">
-              <span>①</span>
-              <img :src="`/exercises/${selectedSession.exercise}.png`" :alt="exerciseLabels[selectedSession.exercise]" />
-              <span>→</span>
-              <img :src="`/exercises/${selectedSession.exercise}.png`" :alt="exerciseLabels[selectedSession.exercise]" />
-              <span>→</span>
-              <img :src="`/exercises/${selectedSession.exercise}.png`" :alt="exerciseLabels[selectedSession.exercise]" />
-            </div>
-          </div>
-          <div class="compare-right">
-            <h4>标准动作要点</h4>
-            <ul>
-              <li v-for="(point, i) in standardPoints" :key="i">
-                <CheckCircle2 :size="14" />
-                <span>{{ point }}</span>
-              </li>
-            </ul>
-          </div>
-        </section>
-
-        <!-- 底部小贴士 + 动作库小贴士 -->
-        <section class="tip-row">
-          <div class="tip-card">
-            <header>
-              <Lightbulb :size="16" color="#d97706" />
-              <strong>小贴士</strong>
-            </header>
-            <p>每次专注改善 1-2 个要点，比追求完美更有效！建议每周训练 3-4 次，效果更佳。</p>
-          </div>
-          <div class="tip-card">
-            <header>
-              <Lightbulb :size="16" color="#6C3BFF" />
-              <strong>{{ exerciseLabels[selectedSession.exercise] }}训练小贴士</strong>
-            </header>
-            <ul>
-              <li>• 热身 5-10 分钟，激活髋膝</li>
-              <li>• 选择合适重量，保证动作标准</li>
-              <li>• 训练后拉伸腿部臀部肌群</li>
-            </ul>
-          </div>
-        </section>
-      </main>
-
-      <!-- 右侧栏：当前查看问题 + 纠正建议 -->
-      <aside class="review-side">
-        <section class="side-card current-rep-card">
-          <header>
-            <div>
-              <strong>当前查看</strong>：第 <span class="rep-num">{{ currentRepIndex + 1 }}</span> 次
-            </div>
-            <span class="rep-hint">问题仅针对本次动作</span>
-          </header>
-          <ul class="issue-list">
-            <li v-for="(issue, i) in currentIssues" :key="i" class="issue-item">
-              <div class="issue-num">{{ i + 1 }}</div>
-              <div class="issue-body">
-                <div class="issue-head">
-                  <strong>{{ issue.title }}</strong>
-                  <span v-if="issue.severity" :class="['issue-tag', issue.severity]">{{ issue.severity === 'high' ? '高' : issue.severity === 'mid' ? '中' : '低' }}</span>
-                </div>
-                <div class="issue-thumb">
-                  <img :src="`/exercises/${selectedSession.exercise}.png`" :alt="issue.title" />
-                </div>
-                <p class="issue-desc">{{ issue.description }}</p>
-                <p class="issue-suggest"><strong>建议：</strong>{{ issue.suggestion }}</p>
-                <a class="issue-link" @click.stop>查看示例</a>
-              </div>
-            </li>
-          </ul>
-          <p v-if="currentIssues.length === 0" class="empty-issues">以上问题均为第 {{ currentRepIndex + 1 }} 次动作识别结果</p>
-        </section>
-
-        <section class="side-card correction-card">
-          <header>
-            <div>
-              <strong>针对第 {{ currentRepIndex + 1 }} 次的纠正建议</strong>
-            </div>
-            <button class="rep-toggle" type="button" @click="onSessionChange">
-              <RefreshCw :size="12" />
-              <span>换一条</span>
-            </button>
-          </header>
-          <div class="correction-body">
-            <div class="correction-coach">
-              <div class="coach-avatar">👨‍🏫</div>
-            </div>
-            <ol class="correction-list">
-              <li v-for="(item, i) in correctionList" :key="i">
-                <span class="correct-num">{{ i + 1 }}</span>
-                <span>{{ item }}</span>
-              </li>
-            </ol>
-          </div>
-          <div class="encourage-banner">
-            <span class="emoji">⭐</span>
-            <span>动作越来越标准了！继续加油 💪</span>
-          </div>
-        </section>
-
-        <section class="side-card video-card">
           <div>
-            <strong>想了解更多？</strong>
-            <p>去动作库看看深蹲教学视频</p>
-            <button type="button" @click="router.push('/exercises')">
-              <Clapperboard :size="14" />
-              去动作库
-            </button>
+            <strong>先选你想看的这次训练</strong>
+            <p>挑一条训练记录，我们帮你看看哪几次动作需要注意。</p>
           </div>
-          <div class="video-icon">
-            <Clapperboard :size="48" />
-          </div>
-        </section>
-      </aside>
-    </div>
+        </div>
+        <div class="session-select-actions">
+          <label class="session-select-box">
+            <Calendar :size="18" />
+            <select v-model="selectedSessionId" @change="onSessionChange">
+              <option v-for="session in sessions" :key="session.session_id" :value="session.session_id">
+                {{ formatDateOnly(session.created_at) }} {{ formatTimeOnly(session.created_at) }} · {{ exerciseLabel(session.exercise) }}
+              </option>
+            </select>
+          </label>
+          <button class="session-switch-btn" type="button" @click="pickAnotherSession">
+            <RefreshCw :size="16" />
+            <span>换一条</span>
+          </button>
+        </div>
+      </section>
+
+      <div class="review-layout">
+        <main class="review-main">
+          <section class="replay-card">
+            <div class="replay-tabs">
+              <button type="button" :class="{ active: activeTab === 'user' }" @click="activeTab = 'user'">动作回放</button>
+              <button type="button" :class="{ active: activeTab === 'standard' }" @click="activeTab = 'standard'">标准参考</button>
+              <button type="button" :class="{ active: activeTab === 'compare' }" @click="activeTab = 'compare'">3D 对比</button>
+            </div>
+
+            <div v-if="activeTab === 'compare'" class="stage stage-compare">
+              <div class="stage-legend">
+                <span><i class="dot blue"></i>你的动作</span>
+              </div>
+              <button type="button" class="stage-switch-view" @click="rotateView">
+                <RefreshCw :size="15" />
+                <span>切换视角</span>
+              </button>
+              <div class="compare-3d-left">
+                <PoseParticleViewer
+                  v-if="userFrames.length > 0"
+                  :frames="currentUserFrames"
+                  :playing="playing"
+                  :speed="compareMasterSpeed"
+                  :progress="playProgress"
+                  :rotation-offset="rotationOffset"
+                  :key-joint-highlights="keyJointHighlights"
+                  :highlight-instructions="currentHighlights"
+                  @update:progress="syncPlayProgress('compare-user', $event)"
+                />
+              </div>
+              <div class="compare-3d-right">
+                <div class="stage-legend compare-standard-legend">
+                  <span><i class="dot green"></i>标准动作</span>
+                </div>
+                <PoseParticleViewer
+                  v-if="standardFrames.length > 0"
+                  :frames="standardFrames"
+                  :playing="currentRepIndex < 0 ? playing : false"
+                  :speed="playSpeed"
+                  :progress="playProgress"
+                  :rotation-offset="rotationOffset"
+                  @update:progress="syncPlayProgress('compare-standard', $event)"
+                />
+              </div>
+              <div class="stage-split"></div>
+            </div>
+
+            <div v-else-if="activeTab === 'user'" class="stage">
+              <div class="stage-legend">
+                <span><i class="dot violet"></i>视角：{{ viewModeLabel }}</span>
+              </div>
+              <button type="button" class="stage-switch-view" @click="rotateView">
+                <RefreshCw :size="15" />
+                <span>切换视角</span>
+              </button>
+              <PoseParticleViewer
+                v-if="userFrames.length > 0"
+                :frames="currentUserFrames"
+                :playing="playing"
+                :speed="playSpeed"
+                :progress="playProgress"
+                :rotation-offset="rotationOffset"
+                :key-joint-highlights="keyJointHighlights"
+                :highlight-instructions="currentHighlights"
+                @update:progress="syncPlayProgress('user', $event)"
+              />
+              <StateDisplay v-else type="empty" title="暂无回放数据" text="这条训练记录还没有动作回放数据。" />
+            </div>
+
+            <div v-else-if="activeTab === 'standard'" class="stage">
+              <div class="stage-legend">
+                <span><i class="dot green"></i>标准参考动作</span>
+              </div>
+              <button type="button" class="stage-switch-view" @click="rotateView">
+                <RefreshCw :size="15" />
+                <span>切换视角</span>
+              </button>
+              <PoseParticleViewer
+                v-if="standardFrames.length > 0"
+                :frames="standardFrames"
+                :playing="playing"
+                :speed="playSpeed"
+                :progress="playProgress"
+                :rotation-offset="rotationOffset"
+                @update:progress="syncPlayProgress('standard', $event)"
+              />
+              <StateDisplay v-else type="empty" title="暂无标准动作" text="当前动作还没有可用的标准模板。" />
+            </div>
+
+            <div class="player-row">
+              <button type="button" class="play-btn" @click="togglePlay">
+                <Play v-if="!playing" :size="20" fill="currentColor" />
+                <Pause v-else :size="20" fill="currentColor" />
+              </button>
+              <div class="progress" @click="seekProgress">
+                <i :style="{ width: `${playProgress * 100}%` }"></i>
+              </div>
+              <span class="time-text">{{ formatPlayTime }}</span>
+              <select v-model="playSpeed" class="speed-select">
+                <option :value="0.5">0.5x</option>
+                <option :value="1">1x</option>
+                <option :value="1.5">1.5x</option>
+                <option :value="2">2x</option>
+              </select>
+              <button type="button" class="expand-btn" @click="toggleFullscreen">
+                <Maximize2 :size="16" />
+              </button>
+            </div>
+          </section>
+
+          <section v-if="repSegments.length > 0" class="attempts-section">
+            <header class="attempts-header">
+              <div>
+                <strong>单次动作回放</strong>
+                <span>点击卡片快速切换到对应动作</span>
+              </div>
+            </header>
+
+            <div class="attempts-row">
+              <button type="button" class="attempt-nav" @click="prevRep">
+                <ChevronLeft :size="18" />
+              </button>
+
+              <div class="attempts-track">
+                <article
+                  :class="['attempt-card', 'attempt-card-all', { active: currentRepIndex === -1 }]"
+                  @click="selectRep(-1)"
+                >
+                  <div class="attempt-card-head">
+                    <strong>全部运动</strong>
+                    <span class="attempt-status best">完整</span>
+                  </div>
+                  <div class="attempt-time">{{ allReplayDuration }}</div>
+                  <div class="attempt-line">
+                    <i class="attempt-line-dot ok"></i>
+                  </div>
+                  <button type="button" class="attempt-play-btn">
+                    <Play :size="14" fill="currentColor" />
+                    <span>回放</span>
+                  </button>
+                </article>
+
+                <article
+                  v-for="(rep, index) in repSegments"
+                  :key="index"
+                  :class="['attempt-card', { active: currentRepIndex === index }]"
+                  @click="selectRep(index)"
+                >
+                  <div class="attempt-card-head">
+                    <strong>第 {{ index + 1 }} 次</strong>
+                    <span :class="['attempt-status', hasRealRepIssues(rep) ? 'warn' : 'best']">
+                      {{ hasRealRepIssues(rep) ? "需调整" : "正常" }}
+                    </span>
+                  </div>
+                  <div class="attempt-time">{{ formatRepDuration(rep, index) }}</div>
+                  <div class="attempt-line">
+                    <i :class="['attempt-line-dot', hasRealRepIssues(rep) ? 'warn' : 'ok']"></i>
+                  </div>
+                  <button type="button" class="attempt-play-btn">
+                    <Play :size="14" fill="currentColor" />
+                    <span>回放</span>
+                  </button>
+                </article>
+              </div>
+
+              <button type="button" class="attempt-nav" @click="nextRep">
+                <ChevronRight :size="18" />
+              </button>
+            </div>
+          </section>
+        </main>
+
+        <aside class="review-side">
+          <section class="issue-summary-card">
+            <div class="issue-summary-head">
+              <div>
+                <strong>有问题的动作次数</strong>
+                <p>共发现 {{ problematicAttempts.length }} 次动作需要注意</p>
+              </div>
+              <img :src="dashboardSelectHeartImg" alt="" />
+            </div>
+
+            <div v-if="problematicAttempts.length > 0" class="issue-summary-list">
+              <article
+                v-for="(item, index) in problematicAttempts"
+                :key="`${item.repIndex}-${item.title}-${index}`"
+                class="issue-attempt-card"
+                @click="selectRep(item.repIndex)"
+              >
+                <div class="issue-attempt-head">
+                  <div class="issue-attempt-title">
+                    <span class="issue-attempt-index">{{ index + 1 }}</span>
+                    <strong>第 {{ item.repIndex + 1 }} 次：{{ item.title }}</strong>
+                  </div>
+                  <span :class="['issue-pill', item.severity]">
+                    {{ item.severity === "high" ? "需调整" : "注意" }}
+                  </span>
+                </div>
+
+                <div class="issue-attempt-body">
+                  <div class="issue-attempt-text">
+                    <p v-if="item.suggestion"><strong>建议：</strong>{{ item.suggestion }}</p>
+                    <p v-if="item.metric || item.valueText" class="issue-attempt-meta">
+                      <span v-if="item.metric">{{ item.metric }}</span>
+                      <span v-if="item.valueText">{{ item.valueText }}</span>
+                    </p>
+                  </div>
+                </div>
+              </article>
+            </div>
+            <div v-else class="issue-summary-empty">
+              <strong>本次没有明显问题动作</strong>
+              <p>当前回放分段没有低于阈值或带有问题标记的次数。</p>
+            </div>
+          </section>
+
+          <section class="encourage-card">
+            <img :src="dashboardSelectEncourageImg" alt="" />
+          </section>
+
+          <section class="video-card">
+            <div>
+              <strong>想了解更多？</strong>
+              <p>去动作库看看 {{ currentExerciseLabel }} 的教学内容。</p>
+              <button type="button" @click="router.push('/exercises')">
+                <Clapperboard :size="14" />
+                <span>去动作库</span>
+              </button>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
-  Bell,
   Calendar,
-  CheckCircle2,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clapperboard,
-  Eye,
-  Flame,
-  Lightbulb,
   Maximize2,
   Pause,
   Play,
   RefreshCw,
-  Star,
-  User,
 } from "lucide-vue-next";
 import StateDisplay from "../components/StateDisplay.vue";
-import UserAvatar from "../components/UserAvatar.vue";
 import PoseParticleViewer from "../components/PoseParticleViewer.vue";
-import { getSessions, getSessionReplay, type SessionRecord, type PoseReplayFrame, type PoseReplaySegment } from "../api/sessions";
+import {
+  EXERCISE_KEY_JOINTS,
+  METRIC_BODY_PART_MAP,
+  inferMetricFromIssue,
+  severityToHighlightColor,
+  severityToPulseSpeed,
+  type HighlightInstruction,
+} from "../types/feedback";
+import {
+  getSessions,
+  getSessionReplay,
+  type PoseReplayFrame,
+  type PoseReplaySegment,
+  type SessionRecord,
+} from "../api/sessions";
 import { getActiveTemplateReplay } from "../api/exercises";
-import { getDashboardStats } from "../api/dashboard";
+import dashboardSelectCoachImg from "../assets/dashboard-select-coach.png";
+import dashboardSelectHeartImg from "../assets/dashboard-select-heart.png";
+import dashboardSelectEncourageImg from "../assets/dashboard-select-encourage.png";
 
 const router = useRouter();
 
-const activeTab = ref<"user" | "standard" | "compare">("compare");
-
-/* 播放控制 */
+const activeTab = ref<"user" | "standard" | "compare">("user");
 const playing = ref(false);
 const playSpeed = ref(1);
 const playProgress = ref(0);
-const viewMode = ref<"front" | "side" | "45deg" | "top">("side");
+const viewMode = ref<"front" | "side" | "45deg">("front");
 const rotationOffset = ref(0);
 
-/* 顶栏数据 */
-const todaySessions = ref(0);
-const todayAvgScore = ref(0);
-const lastExerciseLabel = ref("深蹲");
-
-/* 训练记录 */
 const sessions = ref<SessionRecord[]>([]);
 const sessionsLoading = ref(true);
 const selectedSessionId = ref("");
 const selectedSession = computed(() =>
-  sessions.value.find((s) => s.session_id === selectedSessionId.value) ?? null
+  sessions.value.find((session) => session.session_id === selectedSessionId.value) ?? null
 );
 
-/* 回放数据 */
 const userReplayFrames = ref<PoseReplayFrame[]>([]);
-const repSegments = ref<PoseReplaySegment[]>([]);
-const currentRepIndex = ref(0);
 const standardFrames = ref<PoseReplayFrame[]>([]);
+const repSegments = ref<PoseReplaySegment[]>([]);
+const currentRepIndex = ref(-1);
+const currentHighlights = ref<HighlightInstruction[]>([]);
 
-const userFrames = computed(() => userReplayFrames.value);
-
-const currentUserFrames = computed(() => {
-  if (repSegments.value.length === 0) return userFrames.value;
-  const seg = repSegments.value[currentRepIndex.value];
-  if (!seg) return userFrames.value;
-  return userFrames.value.slice(seg.start_frame_index, seg.end_frame_index + 1);
+const keyJointHighlights = computed<Array<[number, number]>>(() => {
+  const exercise = selectedSession.value?.exercise;
+  if (!exercise) return [];
+  return EXERCISE_KEY_JOINTS[exercise] || EXERCISE_KEY_JOINTS[exercise.replace(/_/g, '')] || [];
 });
 
-/* 练习标签 */
 const exerciseLabels: Record<string, string> = {
   squat: "深蹲",
   push_up: "俯卧撑",
@@ -422,90 +398,261 @@ const exerciseLabels: Record<string, string> = {
   glute_bridge: "臀桥",
   pull_up: "引体向上",
   bench_press: "卧推",
-  barbell_squat: "杠铃深蹲",
+  mountain_climber: "登山跑",
+  dumbbell_press: "哑铃推举",
+  dumbbell_curl: "哑铃弯举",
   dumbbell_fly: "哑铃飞鸟",
-  lat_pulldown: "高位下拉",
   dumbbell_shoulder_press: "哑铃推肩",
+  lat_pulldown: "高位下拉",
+  barbell_squat: "杠铃深蹲",
 };
 
-const flowSteps = [
-  { title: "站立", time: "00:00" },
-  { title: "下蹲", time: "00:01" },
-  { title: "最低点", time: "00:02" },
-  { title: "起身", time: "00:04" },
-];
+const userFrames = computed(() => userReplayFrames.value);
 
-const flowActive = computed(() => {
-  if (!playing.value && playProgress.value === 0) return 0;
-  return Math.min(flowSteps.length - 1, Math.floor(playProgress.value * flowSteps.length));
+const currentExerciseLabel = computed(() => {
+  return exerciseLabel(selectedSession.value?.exercise || "squat");
 });
 
-const standardPoints = [
-  "膝盖与脚尖方向一致",
-  "臀部向后坐，背部挺直",
-  "下蹲至大腿接近平行地面",
-  "核心收紧，保持稳定",
-];
+const currentUserFrames = computed(() => {
+  if (currentRepIndex.value < 0 || repSegments.value.length === 0) return userFrames.value;
+  const range = getExpandedRepFrameRange(currentRepIndex.value);
+  if (!range) return userFrames.value;
+  return userFrames.value.slice(range.start, range.end + 1);
+});
 
-const correctionList = [
-  "保持膝盖与脚尖方向一致",
-  "下蹲时臀部向后坐",
-  "控制下蹲节奏，缓慢下蹲",
-  "训练后充分拉伸放松",
-];
+const currentUserDurationMs = computed(() => getFramesDurationMs(currentUserFrames.value));
 
-/* 当前第 N 次识别出的问题 */
+const standardDurationMs = computed(() => getFramesDurationMs(standardFrames.value));
+
+const compareDurationMs = computed(() => {
+  return Math.max(currentUserDurationMs.value, standardDurationMs.value, 1000);
+});
+
+const activePlaybackDurationMs = computed(() => {
+  if (activeTab.value === "compare") return compareDurationMs.value;
+  if (activeTab.value === "standard") return Math.max(standardDurationMs.value, 1000);
+  return Math.max(currentUserDurationMs.value, 1000);
+});
+
+const allReplayDuration = computed(() => {
+  const durationMs = getFramesDurationMs(userFrames.value);
+  return formatClockTime(Math.max(1, Math.ceil(durationMs / 1000)));
+});
+
+const compareMasterSpeed = computed(() => {
+  const userDuration = Math.max(currentUserDurationMs.value, 1);
+  return playSpeed.value * (userDuration / compareDurationMs.value);
+});
+
+const viewModeLabel = computed(() => {
+  if (viewMode.value === "front") return "正面";
+  if (viewMode.value === "side") return "侧面";
+  return "45°";
+});
+
 const currentIssues = computed(() => {
-  const seg = repSegments.value[currentRepIndex.value];
-  if (!seg) {
-    return [
-      { title: "膝盖内扣", severity: "high", description: "下蹲时膝盖向内，可能增加受伤风险", suggestion: "注意膝盖与脚尖方向一致，向外打开" },
-      { title: "下蹲深度不足", severity: "low", description: "继续下蹲，让大腿接近平行地面", suggestion: "臀部继续向下，保持胸椎挺直" },
-    ];
-  }
-  if (seg.issues && seg.issues.length > 0) {
-    return seg.issues.map((iss) => ({
-      title: iss.issue || "动作异常",
-      severity: iss.severity === "high" || iss.severity === "critical" ? "high" : iss.severity === "mid" || iss.severity === "medium" ? "mid" : "low",
-      description: iss.value ? `当前数值 ${iss.value.toFixed(1)}` : "本帧检测到的问题",
-      suggestion: iss.suggestion || "继续保持正确姿势",
+  if (currentRepIndex.value < 0) return [];
+  const segment = repSegments.value[currentRepIndex.value];
+  if (segment?.issues?.length) {
+    return segment.issues.map((issue) => ({
+      title: issue.issue || "动作异常",
+      severity:
+        issue.severity === "high" || issue.severity === "critical"
+          ? "high"
+          : issue.severity === "mid" || issue.severity === "medium"
+            ? "mid"
+            : "low",
+      description: issue.value != null ? `当前数值 ${issue.value.toFixed(1)}` : "本次识别到姿态偏差",
+      suggestion: issue.suggestion || "继续保持稳定发力和正确姿态。",
     }));
   }
+
   return [
-    { title: "膝盖内扣", severity: "high", description: "下蹲时膝盖向内，可能增加受伤风险", suggestion: "注意膝盖与脚尖方向一致，向外打开" },
-    { title: "下蹲深度不足", severity: "low", description: "继续下蹲，让大腿接近平行地面", suggestion: "臀部继续向下，保持胸椎挺直" },
+    {
+      title: "膝盖内扣",
+      severity: "high",
+      description: "下蹲时膝盖向内，会增加关节压力。",
+      suggestion: "保持膝盖与脚尖方向一致，主动向外打开。",
+    },
+    {
+      title: "下蹲不够深",
+      severity: "mid",
+      description: "重心后坐不足，大腿还没有接近平行地面。",
+      suggestion: "收紧核心，臀部继续向后向下坐。",
+    },
   ];
 });
 
+const issueImageRules = [
+  {
+    exercise: "squat",
+    keywords: ["膝", "内扣", "不对称"],
+    image: "/detail/squat-knees-in.jpg",
+  },
+  {
+    exercise: "squat",
+    keywords: ["前倾", "躯干", "重心"],
+    image: "/detail/squat-lean.jpg",
+  },
+  {
+    exercise: "squat",
+    keywords: ["深度", "下蹲", "不够深", "偏浅", "不足"],
+    image: "/detail/squat-depth.jpg",
+  },
+  {
+    exercise: "squat",
+    keywords: ["脊柱", "腰背", "背部", "塌腰"],
+    image: "/detail/squat-spine.jpg",
+  },
+  {
+    exercise: "squat",
+    keywords: ["脚跟", "足跟", "抬脚", "离地"],
+    image: "/detail/squat-heel.jpg",
+  },
+  {
+    exercise: "push_up",
+    keywords: ["下降", "幅度", "深度", "过浅", "不足"],
+    image: "/detail/pushup-depth.jpg",
+  },
+  {
+    exercise: "push_up",
+    keywords: ["手臂", "肘", "伸直"],
+    image: "/detail/pushup-arm.jpg",
+  },
+  {
+    exercise: "push_up",
+    keywords: ["塌腰", "下榻", "弯腰", "撅臀", "身体直线", "核心", "髋"],
+    image: "/detail/pushup-body-line.jpg",
+  },
+];
+
+function getIssueImage(exercise: string, issueTitle: string) {
+  const title = issueTitle || "";
+  const rule = issueImageRules.find((item) =>
+    item.exercise === exercise && item.keywords.some((keyword) => title.includes(keyword))
+  );
+  return rule?.image || `/exercises/${exercise || "squat"}.png`;
+}
+
+const problematicAttempts = computed(() => {
+  return repSegments.value
+    .map((rep, index) => ({ rep, index }))
+    .filter(({ rep }) => (rep.issues?.length ?? 0) > 0)
+    .map(({ rep, index }) => {
+      const issue = rep.issues?.find((item) => item.issue || item.suggestion || item.metric);
+      const severity =
+        issue?.severity === "high" || issue?.severity === "critical"
+          ? "high"
+          : issue?.severity === "mid" || issue?.severity === "medium"
+            ? "mid"
+            : "low";
+
+      return {
+        repIndex: index,
+        title: issue?.issue || issue?.metric || "未命名问题",
+        severity,
+        suggestion: issue?.suggestion || "",
+        metric: issue?.metric || "",
+        valueText: typeof issue?.value === "number" && Number.isFinite(issue.value)
+          ? `当前值：${issue.value.toFixed(1)}`
+          : "",
+      };
+    })
+    .filter((item) => item.title !== "未命名问题" || item.suggestion || item.metric || item.valueText);
+});
+
+function exerciseLabel(key: string) {
+  return exerciseLabels[key] || key;
+}
+
 function formatDateOnly(iso: string) {
   if (!iso) return "-";
-  const d = new Date(iso);
-  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+  const date = new Date(iso);
+  return `${date.getFullYear()}年${String(date.getMonth() + 1).padStart(2, "0")}月${String(date.getDate()).padStart(2, "0")}日`;
 }
 
 function formatTimeOnly(iso: string) {
   if (!iso) return "-";
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const date = new Date(iso);
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
-function formatDurationSimple(sec: number) {
-  if (!sec || sec <= 0) return "0秒";
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return m > 0 ? `${m}分${s}秒` : `${s}秒`;
+function formatDurationSimple(seconds: number) {
+  if (!seconds || seconds <= 0) return "0秒";
+  const minute = Math.floor(seconds / 60);
+  const second = seconds % 60;
+  return minute > 0 ? `${minute}分${second}秒` : `${second}秒`;
 }
 
-function scoreTone(score: number) {
-  if (score >= 80) return "best";
-  if (score >= 60) return "good";
-  return "warn";
+function formatClockTime(seconds: number) {
+  const safeSeconds = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
 }
 
-function scoreLabel(score: number) {
-  if (score >= 80) return "优秀";
-  if (score >= 60) return "良好";
-  return "需改进";
+function getFramesDurationMs(frames: PoseReplayFrame[]) {
+  if (frames.length < 2) return 0;
+  const first = frames[0]?.timestamp_ms ?? 0;
+  const last = frames[frames.length - 1]?.timestamp_ms ?? first;
+  return Math.max(0, last - first);
+}
+
+function clampFrameIndex(index: number) {
+  const lastIndex = Math.max(0, userFrames.value.length - 1);
+  return Math.max(0, Math.min(lastIndex, index));
+}
+
+function getRepCenterFrameIndex(index: number) {
+  const segment = repSegments.value[index];
+  if (!segment) return null;
+  const start = clampFrameIndex(Number(segment.start_frame_index) || 0);
+  const end = clampFrameIndex(Number(segment.end_frame_index) || start);
+  return Math.round((start + end) / 2);
+}
+
+function getExpandedRepFrameRange(index: number) {
+  if (index < 0 || userFrames.value.length === 0) return null;
+
+  const currentCenter = getRepCenterFrameIndex(index);
+  if (currentCenter == null) return null;
+
+  const previousCenter = getRepCenterFrameIndex(index - 1);
+  const nextCenter = getRepCenterFrameIndex(index + 1);
+  const lastFrameIndex = userFrames.value.length - 1;
+
+  const start = previousCenter == null
+    ? 0
+    : clampFrameIndex(Math.floor((previousCenter + currentCenter) / 2) + 1);
+  const end = nextCenter == null
+    ? lastFrameIndex
+    : clampFrameIndex(Math.ceil((currentCenter + nextCenter) / 2));
+
+  if (end <= start) {
+    const segment = repSegments.value[index];
+    return {
+      start: clampFrameIndex(Number(segment?.start_frame_index) || 0),
+      end: clampFrameIndex(Number(segment?.end_frame_index) || 0),
+    };
+  }
+
+  return { start, end };
+}
+
+function formatRepDuration(rep: PoseReplaySegment, index?: number) {
+  const range = typeof index === "number" ? getExpandedRepFrameRange(index) : null;
+  if (range) {
+    return formatClockTime(Math.max(1, Math.ceil(getFramesDurationMs(userFrames.value.slice(range.start, range.end + 1)) / 1000)));
+  }
+
+  const durationMs = Math.max(0, (rep.end_timestamp_ms ?? 0) - (rep.start_timestamp_ms ?? 0));
+  if (durationMs > 0) return formatClockTime(Math.max(1, Math.ceil(durationMs / 1000)));
+  const frames = Math.max(1, rep.end_frame_index - rep.start_frame_index + 1);
+  return formatClockTime(Math.max(1, Math.ceil(frames / 30)));
+}
+
+function hasRealRepIssues(rep: PoseReplaySegment) {
+  return Boolean(rep.issues?.some((issue) => issue.issue || issue.suggestion || issue.metric));
 }
 
 function scoreTextClass(score: number) {
@@ -515,68 +662,119 @@ function scoreTextClass(score: number) {
 }
 
 const formatPlayTime = computed(() => {
-  const totalFrames = currentUserFrames.value.length || standardFrames.value.length || 1;
-  const current = Math.round(playProgress.value * totalFrames);
-  const total = totalFrames;
-  return `${String(Math.floor(current / 60)).padStart(2, "0")}:${String(current % 60).padStart(2, "0")} / ${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-});
-
-const formatPlayShort = computed(() => {
-  const totalFrames = currentUserFrames.value.length || standardFrames.value.length || 1;
-  const current = Math.round(playProgress.value * totalFrames);
-  const total = totalFrames;
-  return `${String(Math.floor(current / 60)).padStart(2, "0")}:${String(current % 60).padStart(2, "0")} / ${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+  const totalMs = activePlaybackDurationMs.value;
+  const totalSeconds = Math.max(1, Math.ceil(totalMs / 1000));
+  const currentSeconds = Math.min(totalSeconds, Math.floor(playProgress.value * totalMs / 1000));
+  return `${formatClockTime(currentSeconds)} / ${formatClockTime(totalSeconds)}`;
 });
 
 function togglePlay() {
   playing.value = !playing.value;
 }
 
-function seekProgress(e: MouseEvent) {
-  const bar = e.currentTarget as HTMLElement;
+function syncPlayProgress(source: "user" | "standard" | "compare-user" | "compare-standard", value: number) {
+  const shouldSync =
+    (activeTab.value === "user" && source === "user") ||
+    (activeTab.value === "standard" && source === "standard") ||
+    (activeTab.value === "compare" && source === "compare-user");
+
+  if (shouldSync) {
+    playProgress.value = Math.max(0, Math.min(1, value));
+  }
+}
+
+function seekProgress(event: MouseEvent) {
+  const bar = event.currentTarget as HTMLElement;
   const rect = bar.getBoundingClientRect();
-  playProgress.value = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  playProgress.value = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
 }
 
 function prevRep() {
-  if (currentRepIndex.value > 0) currentRepIndex.value--;
+  if (repSegments.value.length === 0) return;
+  currentRepIndex.value = currentRepIndex.value > -1 ? currentRepIndex.value - 1 : repSegments.value.length - 1;
+  playProgress.value = 0;
+  applyHighlightsForRep(currentRepIndex.value);
 }
 
 function nextRep() {
-  if (currentRepIndex.value < repSegments.value.length - 1) currentRepIndex.value++;
+  if (repSegments.value.length === 0) return;
+  currentRepIndex.value = currentRepIndex.value < repSegments.value.length - 1 ? currentRepIndex.value + 1 : -1;
+  playProgress.value = 0;
+  applyHighlightsForRep(currentRepIndex.value);
+}
+
+function applyHighlightsForRep(index: number) {
+  if (index < 0) {
+    currentHighlights.value = [];
+    return;
+  }
+
+  const segment = repSegments.value[index];
+  if (segment?.issues?.length) {
+    const hls: HighlightInstruction[] = [];
+    for (const issue of segment.issues) {
+      const metric = issue.metric || inferMetricFromIssue(issue.issue || "");
+      if (!metric) continue;
+      const mapping = METRIC_BODY_PART_MAP[metric];
+      if (!mapping) continue;
+      const severity = (issue.severity === "critical" || issue.severity === "high") ? "high"
+        : issue.severity === "mid" || issue.severity === "medium" ? "medium" : "low";
+      hls.push({
+        bonePairs: mapping.bones,
+        color: severityToHighlightColor(severity),
+        pulseSpeed: severityToPulseSpeed(severity),
+      });
+    }
+    currentHighlights.value = hls;
+  } else {
+    currentHighlights.value = [];
+  }
 }
 
 function selectRep(index: number) {
   currentRepIndex.value = index;
   playProgress.value = 0;
+  applyHighlightsForRep(index);
 }
 
 function rotateView() {
-  rotationOffset.value = (rotationOffset.value + Math.PI / 2) % (Math.PI * 2);
+  const nextMode = viewMode.value === "front" ? "side" : viewMode.value === "side" ? "45deg" : "front";
+  setView(nextMode);
 }
 
-function setView(mode: typeof viewMode.value) {
+function setView(mode: "front" | "side" | "45deg") {
   viewMode.value = mode;
-  const map = { front: 0, side: Math.PI / 2, "45deg": Math.PI / 4, top: 0 };
-  rotationOffset.value = map[mode];
+  const rotationMap = {
+    front: 0,
+    side: Math.PI / 2,
+    "45deg": Math.PI / 4,
+  };
+  rotationOffset.value = rotationMap[mode];
 }
 
 function toggleFullscreen() {
-  const el = document.documentElement;
-  if (!document.fullscreenElement) el.requestFullscreen?.();
-  else document.exitFullscreen?.();
+  const element = document.documentElement;
+  if (!document.fullscreenElement) {
+    element.requestFullscreen?.();
+  } else {
+    document.exitFullscreen?.();
+  }
 }
 
-/* 加载训练记录 */
+function pickAnotherSession() {
+  if (sessions.value.length <= 1 || !selectedSessionId.value) return;
+  const index = sessions.value.findIndex((session) => session.session_id === selectedSessionId.value);
+  const nextIndex = index >= 0 ? (index + 1) % sessions.value.length : 0;
+  selectedSessionId.value = sessions.value[nextIndex].session_id;
+}
+
 async function loadSessions() {
   sessionsLoading.value = true;
   try {
     const data = await getSessions({ limit: 50 });
     sessions.value = data.items || [];
+
     if (sessions.value.length > 0 && !selectedSessionId.value) {
-      // 优先从 query.replay 读取
-      const route = (window.location.pathname);
-      void route;
       selectedSessionId.value = sessions.value[0].session_id;
     }
   } catch {
@@ -586,30 +784,12 @@ async function loadSessions() {
   }
 }
 
-async function loadDashboardStats() {
-  try {
-    const stats = await getDashboardStats();
-    todaySessions.value = stats.today_sessions;
-    todayAvgScore.value = Math.round(stats.average_score);
-  } catch {
-    todaySessions.value = 8;
-    todayAvgScore.value = 64;
-  }
-}
-
-watch(selectedSession, (s) => {
-  if (s) {
-    const key = s.exercise;
-    lastExerciseLabel.value = exerciseLabels[key] || key;
-  }
-});
-
-/* 选择训练记录 */
 async function onSessionChange() {
   if (!selectedSessionId.value) return;
+
   playing.value = false;
   playProgress.value = 0;
-  currentRepIndex.value = 0;
+  currentRepIndex.value = -1;
 
   const session = selectedSession.value;
   if (!session) return;
@@ -629,19 +809,28 @@ async function onSessionChange() {
   } catch {
     standardFrames.value = [];
   }
+
+  // 有骨架帧时自动开始播放
+  if (userReplayFrames.value.length > 0) {
+    playProgress.value = 0;
+    await nextTick();
+    playing.value = true;
+  }
 }
 
-watch(selectedSessionId, (val, old) => {
-  if (val && val !== old) onSessionChange();
+watch(selectedSessionId, (value, oldValue) => {
+  if (value && value !== oldValue) {
+    void onSessionChange();
+  }
 });
 
 onMounted(() => {
-  loadSessions();
-  loadDashboardStats();
-  // 读取 query.replay
+  void loadSessions();
   const url = new URL(window.location.href);
   const replay = url.searchParams.get("replay");
-  if (replay) selectedSessionId.value = replay;
+  if (replay) {
+    selectedSessionId.value = replay;
+  }
 });
 
 onBeforeUnmount(() => {
@@ -653,193 +842,246 @@ onBeforeUnmount(() => {
 .review-page {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
   padding: 0 0 24px;
 }
 
-/* ===== 顶栏 ===== */
-.review-top {
+.session-picker {
+  display: grid;
+  gap: 20px;
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.picker-header {
+  text-align: center;
+}
+
+.picker-header h2 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 900;
+  color: #15172a;
+}
+
+.picker-header p {
+  margin: 10px 0 0;
+  font-size: 15px;
+  color: #667085;
+}
+
+.picker-list {
+  display: grid;
+  gap: 14px;
+}
+
+.picker-card {
+  display: grid;
+  gap: 12px;
+  padding: 18px 22px;
+  background: #ffffff;
+  border: 1px solid #eceffd;
+  border-radius: 18px;
+  box-shadow: 0 10px 30px rgba(81, 61, 168, 0.08);
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.picker-card:hover {
+  transform: translateY(-2px);
+  border-color: #cdbdff;
+  box-shadow: 0 16px 34px rgba(108, 59, 255, 0.12);
+}
+
+.picker-card-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
-  flex-wrap: wrap;
+  gap: 14px;
 }
 
-.review-top-left h1 {
-  margin: 0;
-  font-size: 22px;
+.picker-date {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.picker-date strong {
+  font-size: 17px;
   font-weight: 800;
-  color: #15172A;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  color: #161827;
 }
 
-.rep-link {
+.picker-date span {
+  font-size: 14px;
+  color: #8b94a8;
+}
+
+.picker-exercise-tag {
   display: inline-flex;
   align-items: center;
-  height: 24px;
-  padding: 0 10px;
-  background: #f1ecff;
-  color: #6C3BFF;
+  padding: 6px 14px;
   border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.session-select {
-  margin-top: 8px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #ffffff;
-  border: 1px solid #eef0f6;
-  border-radius: 10px;
-  padding: 4px 8px 4px 12px;
-  color: #98a2b3;
-}
-
-.session-select select {
-  border: 0;
-  outline: 0;
-  background: transparent;
+  background: #f1ecff;
+  color: #6c3bff;
   font-size: 13px;
-  color: #15172A;
-  font-weight: 600;
-  cursor: pointer;
-  min-width: 280px;
-  padding: 6px 4px;
+  font-weight: 700;
 }
 
-.review-top-stats {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.top-stat {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  height: 64px;
-  padding: 0 16px;
-  background: #ffffff;
-  border: 1px solid #eef0f6;
-  border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(45, 35, 90, 0.04);
-  flex-shrink: 0;
-}
-
-.top-stat > div { display: flex; flex-direction: column; line-height: 1.2; }
-
-.top-stat span { font-size: 11px; color: #98a2b3; }
-.top-stat strong { font-size: 16px; font-weight: 800; color: #15172A; }
-.top-stat strong small { font-size: 11px; color: #667085; font-weight: 500; margin-left: 1px; }
-
-.top-stat-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+.picker-card-stats {
   display: grid;
-  place-items: center;
-  flex-shrink: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
 }
-.top-stat-icon.green { background: #dcfce7; color: #16a34a; }
-.top-stat-icon.violet { background: #f1ecff; color: #6C3BFF; }
-.top-stat-icon.orange { background: #ffedd5; color: #f97316; }
 
-.top-user {
-  display: inline-flex;
+.picker-card-stats div {
+  display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.top-bell {
-  width: 36px;
-  height: 36px;
+.picker-card-stats span {
+  color: #8b94a8;
+  font-size: 14px;
+}
+
+.picker-card-stats b {
+  font-size: 15px;
+  color: #15172a;
+}
+
+.review-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 330px;
+  align-items: end;
+  gap: 24px;
+}
+
+.review-title-block h1 {
+  margin: 0;
+  font-size: 44px;
+  line-height: 1.18;
+  font-weight: 900;
+  color: #101223;
+}
+
+.review-title-block p {
+  margin: 14px 0 0;
+  font-size: 18px;
+  line-height: 1.7;
+  color: #6b7280;
+}
+
+.review-top-figure {
+  position: relative;
+  min-height: 150px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+}
+
+.review-coach-figure {
+  width: 500px;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.session-select-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  padding: 26px 28px;
+  background: #ffffff;
+  border: 2px solid #aa8bff;
+  border-radius: 28px;
+  box-shadow: 0 14px 42px rgba(98, 75, 177, 0.08);
+}
+
+.session-select-intro {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.session-select-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
   display: grid;
   place-items: center;
-  border: 1px solid #eef0f6;
+  background: linear-gradient(180deg, #8258ff 0%, #6934ff 100%);
+  color: #ffffff;
+  box-shadow: 0 16px 28px rgba(108, 59, 255, 0.24);
+  flex-shrink: 0;
+}
+
+.session-select-intro strong {
+  display: block;
+  font-size: 22px;
+  font-weight: 900;
+  color: #101223;
+}
+
+.session-select-intro p {
+  margin: 8px 0 0;
+  font-size: 15px;
+  color: #6b7280;
+}
+
+.session-select-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.session-select-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 420px;
+  height: 58px;
+  padding: 0 18px;
   background: #ffffff;
-  color: #98a2b3;
-  border-radius: 10px;
+  border: 1px solid #e7e9f3;
+  border-radius: 18px;
+  color: #667085;
+}
+
+.session-select-box select {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f2937;
   cursor: pointer;
 }
 
-.top-user-info {
+.session-switch-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 10px 4px 4px;
-  background: #ffffff;
-  border: 1px solid #eef0f6;
-  border-radius: 999px;
+  gap: 8px;
+  height: 58px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #703dff 0%, #5d28ed 100%);
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 800;
   cursor: pointer;
-  color: #98a2b3;
+  box-shadow: 0 14px 26px rgba(108, 59, 255, 0.24);
 }
 
-/* ===== 选择面板 ===== */
-.session-picker {
-  display: grid;
-  gap: 20px;
-  max-width: 720px;
-  margin: 0 auto;
-  width: 100%;
-}
-
-.picker-header { text-align: center; }
-.picker-header h2 { margin: 0; font-size: 22px; font-weight: 900; color: #15172A; }
-.picker-header p { margin: 6px 0 0; color: #667085; font-size: 14px; }
-
-.picker-list { display: grid; gap: 12px; max-height: 60vh; overflow-y: auto; }
-
-.picker-card {
-  padding: 16px 20px;
-  border: 1px solid #eef0f6;
-  border-radius: 14px;
-  background: #ffffff;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 16px rgba(45, 35, 90, 0.04);
-  display: grid;
-  gap: 10px;
-}
-
-.picker-card:hover { border-color: #c4b5fd; box-shadow: 0 8px 24px rgba(108, 59, 255, 0.12); }
-
-.picker-card-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.picker-date { display: flex; align-items: baseline; gap: 8px; }
-.picker-date strong { font-size: 16px; font-weight: 700; color: #15172A; }
-.picker-date span { font-size: 13px; color: #98a2b3; }
-
-.picker-exercise-tag {
-  padding: 4px 12px;
-  border-radius: 20px;
-  background: #f1ecff;
-  color: #6C3BFF;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.picker-card-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-.picker-card-stats div { display: flex; align-items: center; gap: 6px; }
-.picker-card-stats span { color: #98a2b3; font-size: 13px; }
-.picker-card-stats b { font-size: 14px; font-weight: 700; color: #15172A; }
-
-/* ===== 三栏布局 ===== */
 .review-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) 344px;
+  gap: 22px;
   align-items: start;
-}
-
-@media (max-width: 1200px) {
-  .review-layout { grid-template-columns: 1fr; }
 }
 
 .review-main,
@@ -850,751 +1092,683 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-/* ===== 3D 卡片 ===== */
-.replay-card {
+.replay-card,
+.attempts-section,
+.issue-summary-card,
+.video-card {
   background: #ffffff;
-  border: 1px solid #eef0f6;
-  border-radius: 16px;
-  box-shadow: 0 8px 30px rgba(45, 35, 90, 0.06);
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  border: 1px solid #eceffd;
+  border-radius: 24px;
+  box-shadow: 0 12px 34px rgba(81, 61, 168, 0.07);
+}
+
+.replay-card {
+  padding: 16px 16px 12px;
 }
 
 .replay-tabs {
   display: flex;
   align-items: center;
-  gap: 0;
-  width: 100%;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .replay-tabs button {
-  height: 38px;
-  padding: 0 18px;
+  height: 48px;
+  padding: 0 22px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 14px;
   background: transparent;
-  color: #667085;
-  font-size: 14px;
-  font-weight: 600;
+  color: #2f3446;
+  font-size: 17px;
+  font-weight: 800;
   cursor: pointer;
-  transition: all 0.18s;
 }
-
-.replay-tabs button:hover { color: #6C3BFF; }
 
 .replay-tabs button.active {
-  background: #f1ecff;
-  color: #6C3BFF;
-  font-weight: 700;
+  color: #6c3bff;
+  box-shadow: inset 0 -4px 0 #6c3bff;
+  border-radius: 0;
 }
-
-.replay-extra {
-  margin-left: auto !important;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: #ffffff !important;
-  color: #667085 !important;
-  border: 1px solid #eef0f6 !important;
-}
-
-.replay-extra:hover { color: #6C3BFF !important; border-color: #c4b5fd !important; }
 
 .stage {
   position: relative;
   width: 100%;
-  height: 420px;
+  height: 380px;
   overflow: hidden;
-  border-radius: 14px;
-  background: #01040a;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #02040c 0%, #040915 100%);
 }
 
-.stage-legend {
+.stage-compare .compare-3d-left,
+.stage-compare .compare-3d-right {
   position: absolute;
-  z-index: 3;
-  left: 14px;
-  top: 14px;
-  display: grid;
-  gap: 6px;
-  padding: 10px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  background: rgba(6, 13, 34, 0.76);
-  color: #dfe9ff;
-  font-size: 12px;
-  pointer-events: none;
+  top: 0;
+  width: 50%;
+  height: 100%;
 }
 
-.stage-legend strong { color: #e9efff; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-.stage-legend span { display: flex; align-items: center; gap: 8px; }
+.stage-compare .compare-3d-left {
+  left: 0;
+}
 
-.dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.dot.blue { background: #17b8ff; }
-.dot.green { background: #64e985; }
+.stage-compare .compare-3d-right {
+  right: 0;
+}
+
+.compare-standard-legend {
+  left: 18px;
+  top: 18px;
+}
 
 .stage-split {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 50%;
+  border-left: 1px dashed rgba(134, 147, 255, 0.45);
   z-index: 2;
-  border-left: 1px dashed rgba(126, 149, 255, 0.4);
 }
 
-.compare-3d-left,
-.compare-3d-right {
+.stage-legend {
   position: absolute;
-  top: 0;
-  width: 50%;
-  height: 100%;
-}
-.compare-3d-left { left: 0; }
-.compare-3d-right { right: 0; }
-
-.view-buttons {
-  position: absolute;
+  left: 18px;
+  top: 18px;
   z-index: 4;
-  right: 14px;
-  top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.view-buttons button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  background: rgba(6, 13, 34, 0.76);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  color: #dfe9ff;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.18s;
+  gap: 14px;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: rgba(15, 20, 33, 0.88);
+  color: #eef2ff;
+  font-size: 14px;
+  font-weight: 700;
 }
 
-.view-buttons button:hover { background: rgba(108, 59, 255, 0.3); }
-.view-buttons button.active { background: #6C3BFF; border-color: #6C3BFF; color: #ffffff; }
-.view-buttons .fullscreen { margin-top: 4px; }
+.stage-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
 
-/* 播放控制 */
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.dot.blue {
+  background: #49bcff;
+}
+
+.dot.green {
+  background: #61e48f;
+}
+
+.dot.violet {
+  background: #9f84ff;
+}
+
+.stage-switch-view {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(15, 20, 33, 0.88);
+  color: #f5f7ff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .player-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 4px;
+  gap: 14px;
+  padding: 12px 6px 2px;
 }
 
 .play-btn {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 50%;
+  border-radius: 999px;
+  background: #6c3bff;
   color: #ffffff;
-  background: #6C3BFF;
   cursor: pointer;
+  box-shadow: 0 10px 22px rgba(108, 59, 255, 0.28);
   flex-shrink: 0;
-  box-shadow: 0 8px 18px rgba(108, 59, 255, 0.25);
 }
-
-.play-btn:hover { background: #5B2BE8; }
 
 .progress {
   flex: 1;
   height: 6px;
   border-radius: 999px;
-  background: #e6e8f4;
+  background: #e5e9f6;
   cursor: pointer;
-  position: relative;
+  overflow: hidden;
 }
 
 .progress i {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: #6C3BFF;
-  transition: width 0.1s linear;
+  background: #7a49ff;
 }
 
 .time-text {
-  font-size: 12px;
-  color: #98a2b3;
+  min-width: 92px;
+  font-size: 14px;
+  color: #7b8498;
   font-variant-numeric: tabular-nums;
-  min-width: 80px;
-  text-align: right;
+}
+
+.speed-select,
+.expand-btn {
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid #e6e9f4;
+  background: #ffffff;
+  color: #2f3446;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .speed-select {
-  height: 32px;
-  padding: 0 10px;
-  border: 1px solid #eef0f6;
-  border-radius: 8px;
-  background: #ffffff;
-  color: #475569;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
+  padding: 0 14px;
 }
 
-/* ===== 逐次回放 ===== */
-.attempts-section {
-  background: #ffffff;
-  border: 1px solid #eef0f6;
-  border-radius: 16px;
-  box-shadow: 0 8px 30px rgba(45, 35, 90, 0.06);
-  padding: 18px 22px;
-}
-
-.attempts-section header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.attempts-section header strong { font-size: 16px; font-weight: 700; color: #15172A; }
-.attempts-section header span { color: #98a2b3; }
-.attempts-section header small { color: #98a2b3; font-size: 12px; margin-left: auto; }
-
-.attempts-row { display: flex; align-items: center; gap: 10px; }
-
-.attempt-nav {
-  width: 32px;
-  height: 64px;
+.expand-btn {
+  width: 40px;
   display: grid;
   place-items: center;
-  border: 0;
-  background: transparent;
-  color: #c4b5fd;
   cursor: pointer;
-  flex-shrink: 0;
+}
+
+.attempts-section {
+  padding: 18px 18px 20px;
+}
+
+.attempts-header {
+  margin-bottom: 16px;
+}
+
+.attempts-header strong {
+  display: block;
+  font-size: 18px;
+  font-weight: 900;
+  color: #121528;
+}
+
+.attempts-header span {
+  display: block;
+  margin-top: 6px;
+  font-size: 14px;
+  color: #8b94a8;
+}
+
+.attempts-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 32px;
+  gap: 12px;
+  align-items: center;
+}
+
+.attempts-track {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.attempt-nav {
+  align-self: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: #f5f3ff;
+  color: #7a49ff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
 }
 
 .attempt-card {
-  flex: 1;
-  min-width: 96px;
-  min-height: 80px;
   display: grid;
-  place-items: center;
-  align-content: center;
-  gap: 4px;
-  padding: 8px;
-  border: 1px solid #eef0f6;
-  border-radius: 12px;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px 16px 14px;
+  border: 1px solid #eceffd;
+  border-radius: 18px;
   background: #ffffff;
-  box-shadow: 0 4px 12px rgba(45, 35, 90, 0.04);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.attempt-card:hover { border-color: #c4b5fd; }
+.attempt-card:hover {
+  transform: translateY(-2px);
+  border-color: #cfbfff;
+}
 
 .attempt-card.active {
-  border-color: #6C3BFF;
-  background: #faf9ff;
-  box-shadow: 0 8px 20px rgba(108, 59, 255, 0.18);
+  border-color: #8c68ff;
+  box-shadow: 0 12px 26px rgba(108, 59, 255, 0.14);
 }
 
-.attempt-card strong { font-size: 13px; font-weight: 700; color: #475569; }
-.attempt-card b { font-size: 20px; font-weight: 800; color: #15172A; }
-.attempt-card span { padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; }
-.attempt-card small { color: #6C3BFF; font-weight: 700; font-size: 11px; }
-
-.good { background: #dcfce7; color: #16a34a; }
-.warn { background: #ffedd5; color: #f97316; }
-.best { background: #ede9fe; color: #6d4df6; }
-
-/* ===== 动作流程时间线 ===== */
-.flow-section {
-  background: #ffffff;
-  border: 1px solid #eef0f6;
-  border-radius: 16px;
-  box-shadow: 0 8px 30px rgba(45, 35, 90, 0.06);
-  padding: 18px 22px;
-}
-
-.flow-section header { margin-bottom: 12px; }
-.flow-section header strong { font-size: 15px; font-weight: 700; color: #15172A; }
-
-.flow-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.attempt-card-head {
   display: flex;
   align-items: center;
-  gap: 0;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-.flow-list li {
-  display: flex;
+.attempt-card-head strong {
+  font-size: 15px;
+  font-weight: 900;
+  color: #131727;
+}
+
+.attempt-status {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  position: relative;
+  justify-content: center;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
 }
 
-.flow-list li:not(:last-child)::after {
-  content: "→";
-  color: #c4b5fd;
-  font-size: 18px;
+.attempt-status.best,
+.attempt-status.good {
+  background: #ddf9e7;
+  color: #17a34a;
+}
+
+.attempt-status.warn {
+  background: #ffe7e4;
+  color: #ff5b57;
+}
+
+.attempt-time {
+  font-size: 14px;
   font-weight: 700;
-  margin: 0 14px;
+  color: #596275;
 }
 
-.flow-circle {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: #f1f3f9;
-  color: #98a2b3;
+.attempt-line {
+  position: relative;
+  height: 3px;
+  border-radius: 999px;
+  background: repeating-linear-gradient(
+    to right,
+    #dde2ef 0,
+    #dde2ef 8px,
+    transparent 8px,
+    transparent 14px
+  );
+}
+
+.attempt-line-dot {
+  position: absolute;
+  top: 50%;
+  right: 12%;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  transform: translateY(-50%);
+}
+
+.attempt-line-dot.ok {
+  background: #1fbe64;
+}
+
+.attempt-line-dot.warn {
+  background: #ff5b57;
+}
+
+.attempt-play-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 42px;
+  border: 1px solid #ebdfff;
+  border-radius: 14px;
+  background: #faf6ff;
+  color: #6c3bff;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.issue-summary-card {
+  padding: 18px;
+}
+
+.issue-summary-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.issue-summary-head strong {
+  display: block;
+  font-size: 18px;
+  font-weight: 900;
+  color: #111425;
+}
+
+.issue-summary-head p {
+  margin: 8px 0 0;
+  font-size: 15px;
+  color: #7b8498;
+}
+
+.issue-summary-head img {
+  width: 62px;
+  height: auto;
+  flex-shrink: 0;
+}
+
+.issue-summary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 460px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+.issue-summary-list::-webkit-scrollbar { width: 6px; }
+.issue-summary-list::-webkit-scrollbar-thumb { background: #c7cbe0; border-radius: 3px; }
+.issue-summary-list::-webkit-scrollbar-track { background: transparent; }
+
+.issue-summary-empty {
+  padding: 18px;
+  border-radius: 18px;
+  background: #f7fbf7;
+  border: 1px solid #dff4e5;
+}
+
+.issue-summary-empty strong {
+  display: block;
+  font-size: 16px;
+  font-weight: 900;
+  color: #16703a;
+}
+
+.issue-summary-empty p {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.65;
+  color: #5f7467;
+}
+
+.issue-attempt-card {
+  padding: 16px;
+  border: 1px solid #eef1fa;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+}
+
+.issue-attempt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.issue-attempt-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.issue-attempt-index {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
   display: grid;
   place-items: center;
-  position: relative;
-  font-weight: 700;
+  background: linear-gradient(180deg, #ff654f 0%, #ff4d42 100%);
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 900;
+  flex-shrink: 0;
 }
 
-.flow-list li.active .flow-circle {
-  background: #f1ecff;
-  color: #6C3BFF;
+.issue-attempt-title strong {
+  font-size: 16px;
+  font-weight: 900;
+  color: #161a2d;
 }
 
-.flow-person {
-  position: absolute;
-  font-size: 26px;
-  bottom: 4px;
-}
-
-.flow-text { display: flex; flex-direction: column; line-height: 1.2; }
-.flow-text strong { font-size: 13px; color: #15172A; font-weight: 700; }
-.flow-text small { font-size: 11px; color: #98a2b3; }
-
-.flow-check { color: #10b981; }
-
-.flow-progress {
-  display: flex;
+.issue-pill {
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.issue-pill.high {
+  background: #ffe7e4;
+  color: #ff5b57;
+}
+
+.issue-pill.mid,
+.issue-pill.low {
+  background: #fff1d9;
+  color: #d97706;
+}
+
+.issue-attempt-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   margin-top: 14px;
 }
 
-.flow-play {
-  width: 32px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  border: 0;
-  border-radius: 50%;
-  background: #6C3BFF;
-  color: #fff;
-  cursor: pointer;
+.issue-attempt-text p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.75;
+  color: #596275;
 }
 
-.flow-bar {
-  flex: 1;
-  height: 6px;
-  border-radius: 999px;
-  background: #e6e8f4;
-  position: relative;
-  overflow: hidden;
+.issue-attempt-text strong {
+  color: #6c3bff;
 }
 
-.flow-bar i {
-  display: block;
-  height: 100%;
-  background: #6C3BFF;
-  border-radius: inherit;
-}
-
-.flow-time { font-size: 11px; color: #98a2b3; min-width: 70px; text-align: right; font-variant-numeric: tabular-nums; }
-
-/* ===== 标准动作对比 ===== */
-.compare-section {
-  display: grid;
-  grid-template-columns: 1fr 1.4fr 1fr;
-  gap: 16px;
-  background: #ffffff;
-  border: 1px solid #eef0f6;
-  border-radius: 16px;
-  box-shadow: 0 8px 30px rgba(45, 35, 90, 0.06);
-  padding: 18px 22px;
-  align-items: center;
-}
-
-@media (max-width: 900px) {
-  .compare-section { grid-template-columns: 1fr; }
-}
-
-.compare-left h4 { margin: 0 0 4px; font-size: 15px; font-weight: 700; color: #15172A; }
-.compare-left p { margin: 0 0 10px; font-size: 12px; color: #667085; }
-
-.compare-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 36px;
-  padding: 0 14px;
-  background: #6C3BFF;
-  color: #ffffff;
-  border: 0;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.compare-btn:hover { background: #5B2BE8; }
-
-.compare-center {
-  display: grid;
-  place-items: center;
-}
-
-.compare-step-mini {
+.issue-attempt-meta {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px;
-  background: #faf9ff;
-  border-radius: 12px;
-}
-
-.compare-step-mini span {
-  font-size: 18px;
-  color: #c4b5fd;
-  font-weight: 700;
-}
-
-.compare-step-mini img {
-  width: 56px;
-  height: 40px;
-  object-fit: contain;
-  background: #fff;
-  border-radius: 6px;
-  padding: 2px;
-}
-
-.compare-right h4 { margin: 0 0 10px; font-size: 14px; font-weight: 700; color: #15172A; }
-.compare-right ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-
-.compare-right li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: #475569;
-}
-
-.compare-right li :deep(svg) { color: #10b981; flex-shrink: 0; }
-
-/* ===== 底部小贴士 ===== */
-.tip-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-
-@media (max-width: 720px) {
-  .tip-row { grid-template-columns: 1fr; }
-}
-
-.tip-card {
-  background: #ffffff;
-  border: 1px solid #eef0f6;
-  border-radius: 16px;
-  padding: 16px 20px;
-  box-shadow: 0 8px 30px rgba(45, 35, 90, 0.06);
-}
-
-.tip-card header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-  color: #d97706;
-}
-
-.tip-card:nth-child(2) header { color: #6C3BFF; }
-
-.tip-card strong { font-size: 14px; color: #15172A; }
-
-.tip-card p { margin: 0; font-size: 13px; color: #475569; line-height: 1.7; }
-
-.tip-card ul { margin: 0; padding-left: 0; list-style: none; }
-.tip-card li { font-size: 13px; color: #475569; line-height: 1.7; }
-
-/* ===== 右侧栏 ===== */
-.review-side { position: sticky; top: 16px; }
-
-.side-card {
-  background: #ffffff;
-  border: 1px solid #eef0f6;
-  border-radius: 16px;
-  padding: 18px 22px;
-  box-shadow: 0 8px 30px rgba(45, 35, 90, 0.06);
-}
-
-.side-card header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  gap: 8px;
   flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px !important;
 }
 
-.side-card header strong { font-size: 14px; font-weight: 700; color: #15172A; }
-
-.rep-num {
-  color: #6C3BFF;
-  font-size: 18px;
-  font-weight: 800;
-}
-
-.rep-hint {
-  font-size: 11px;
-  color: #98a2b3;
-}
-
-.rep-toggle {
+.issue-attempt-meta span {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  background: transparent;
-  border: 0;
-  color: #6C3BFF;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-/* 问题列表 */
-.issue-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.issue-item {
-  display: flex;
-  gap: 12px;
-  padding: 14px;
-  background: #faf9ff;
-  border: 1px solid #f1ecff;
-  border-radius: 12px;
-}
-
-.issue-num {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  background: #f97316;
-  color: #ffffff;
-  display: grid;
-  place-items: center;
-  font-weight: 800;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #f5f3ff;
+  color: #6c3bff;
   font-size: 13px;
-  flex-shrink: 0;
-}
-
-.issue-body { flex: 1; min-width: 0; }
-
-.issue-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-  gap: 8px;
-}
-
-.issue-head strong { font-size: 14px; font-weight: 700; color: #15172A; }
-
-.issue-tag {
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  padding: 0 8px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.issue-tag.high { background: #fee2e2; color: #dc2626; }
-.issue-tag.mid  { background: #fef3c7; color: #d97706; }
-.issue-tag.low  { background: #dcfce7; color: #16a34a; }
-
-.issue-thumb {
-  width: 100%;
-  aspect-ratio: 16/9;
-  background: #ffffff;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  margin-bottom: 8px;
-  overflow: hidden;
-  border: 1px solid #eef0f6;
-}
-
-.issue-thumb img { width: 80%; height: 80%; object-fit: contain; }
-
-.issue-desc {
-  margin: 0 0 6px;
-  font-size: 12px;
-  color: #475569;
-  line-height: 1.6;
-}
-
-.issue-suggest {
-  margin: 0 0 8px;
-  font-size: 12px;
-  color: #475569;
-  line-height: 1.6;
-}
-
-.issue-suggest strong { color: #6C3BFF; }
-
-.issue-link {
-  display: inline-block;
-  font-size: 12px;
-  font-weight: 600;
-  color: #6C3BFF;
-  cursor: pointer;
-  text-decoration: none;
-}
-
-.empty-issues {
-  margin: 0;
-  font-size: 12px;
-  color: #98a2b3;
-  text-align: center;
-  padding: 8px;
-  background: #f7f8fc;
-  border-radius: 8px;
-}
-
-/* 纠正建议 */
-.correction-card {
-  background: linear-gradient(135deg, #f1ecff 0%, #faf8ff 100%);
-  border-color: #e6dbff;
-}
-
-.correction-body {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.coach-avatar {
-  width: 80px;
-  height: 80px;
-  background: #fff;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  font-size: 40px;
-  flex-shrink: 0;
-  border: 1px solid #e6dbff;
-}
-
-.correction-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  counter-reset: num;
-}
-
-.correction-list li {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 12px;
-  color: #475569;
-  line-height: 1.6;
-}
-
-.correct-num {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #6C3BFF;
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-size: 10px;
   font-weight: 800;
-  flex-shrink: 0;
-  margin-top: 2px;
 }
 
-.encourage-banner {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: #ffffff;
-  border: 1px solid #fde68a;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #92400e;
-  text-align: center;
-  justify-content: center;
+.encourage-card {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
 }
 
-.encourage-banner .emoji { font-size: 14px; }
+.encourage-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0;
+}
 
-/* 视频卡片 */
 .video-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #faf9ff;
+  padding: 18px 20px;
 }
 
-.video-card strong { display: block; font-size: 14px; margin-bottom: 4px; color: #15172A; }
-.video-card p { color: #667085; font-size: 12px; margin: 0 0 10px; }
+.video-card strong {
+  display: block;
+  font-size: 18px;
+  font-weight: 900;
+  color: #111425;
+}
+
+.video-card p {
+  margin: 8px 0 14px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #7b8498;
+}
 
 .video-card button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 14px;
+  gap: 8px;
+  height: 42px;
+  padding: 0 16px;
   border: 0;
-  border-radius: 8px;
-  background: #6C3BFF;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #703dff 0%, #5d28ed 100%);
   color: #ffffff;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 800;
   cursor: pointer;
 }
 
-.video-card button:hover { background: #5B2BE8; }
-
-.video-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
-  background: #f1ecff;
-  color: #6C3BFF;
-  display: grid;
-  place-items: center;
+.text-green {
+  color: #16a34a;
 }
 
-.text-green { color: #16a34a; }
-.text-blue { color: #2563eb; }
-.text-orange { color: #f97316; }
+.text-blue {
+  color: #2563eb;
+}
+
+.text-orange {
+  color: #f97316;
+}
+
+@media (max-width: 1380px) {
+  .review-top {
+    grid-template-columns: minmax(0, 1fr) 290px;
+  }
+
+  .review-title-block h1 {
+    font-size: 38px;
+  }
+
+  .session-select-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .session-select-actions {
+    width: 100%;
+  }
+
+  .session-select-box {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .attempts-track {
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  }
+}
+
+@media (max-width: 1200px) {
+  .review-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .review-side {
+    order: 2;
+  }
+}
+
+@media (max-width: 900px) {
+  .review-top {
+    grid-template-columns: 1fr;
+  }
+
+  .review-top-figure {
+    justify-content: center;
+  }
+
+  .review-title-block h1 {
+    font-size: 32px;
+  }
+
+  .session-select-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .issue-attempt-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .picker-card-top,
+  .picker-card-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .picker-card-top {
+    display: grid;
+  }
+
+  .stage {
+    height: 300px;
+  }
+
+  .player-row {
+    flex-wrap: wrap;
+  }
+
+  .attempts-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .attempt-nav {
+    display: none;
+  }
+
+  .attempts-track {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

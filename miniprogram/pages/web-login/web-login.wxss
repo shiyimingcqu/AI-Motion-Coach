@@ -1,0 +1,65 @@
+.wl-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f7fb;
+  padding: 24px;
+  box-sizing: border-box;
+}
+.wl-box {
+  width: 100%;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 32px 24px;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+}
+.wl-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+  text-align: center;
+}
+.wl-desc {
+  font-size: 13px;
+  color: #64748b;
+  text-align: center;
+  margin-bottom: 8px;
+}
+.wl-input {
+  padding: 14px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+  font-size: 18px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 4px;
+  color: #1e293b;
+}
+.wl-btn {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.wl-status {
+  text-align: center;
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.wl-status.success {
+  background: #dcfce7;
+  color: #16a34a;
+}
+.wl-status.fail {
+  background: #fee2e2;
+  color: #dc2626;
+}

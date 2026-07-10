@@ -418,18 +418,8 @@ onMounted(async () => {
   min-height: 250px;
   overflow: hidden;
   border-radius: 24px;
-  background:
-    linear-gradient(90deg, rgba(232, 235, 255, 0.98) 0%, rgba(238, 244, 255, 0.96) 42%, rgba(224, 236, 255, 0.96) 100%);
+  background: #f7f9ff;
   box-shadow: inset 0 0 0 1px rgba(207, 220, 255, 0.64);
-}
-
-.assessment-banner::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(90deg, transparent 0 58%, rgba(232, 238, 255, 0.42) 72%, transparent 100%);
 }
 
 .assessment-copy {
@@ -479,10 +469,7 @@ onMounted(async () => {
   height: 100%;
   object-fit: cover;
   object-position: center right;
-  mix-blend-mode: multiply;
   opacity: 0.92;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 18%, #000 100%);
-  mask-image: linear-gradient(90deg, transparent 0%, #000 18%, #000 100%);
 }
 
 .home-content-grid {

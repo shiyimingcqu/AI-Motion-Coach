@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="layout-stage">
     <Transition
       :name="layoutTransitionName"
@@ -26,7 +26,7 @@
               >
                 姿态棱镜
               </GradientText>
-              <small>{{ authStore.isAdmin ? "系统管理中心" : "你的姿态教练" }}</small>
+              <small>{{ authStore.isAdmin ? "系统管理中心" : "你的专属动作教练" }}</small>
             </div>
           </div>
 
@@ -78,21 +78,7 @@
           <header v-if="showShellTopbar" class="topbar">
             <div class="topbar-title-block">
               <strong>{{ pageTitle }}</strong>
-              <span>坚持每一次训练，身体会给你最好的回报！</span>
-            </div>
-            <div v-if="!authStore.isAdmin" class="topbar-coach-stats" aria-label="今日训练概览">
-              <div class="coach-stat green">
-                <span>今日训练</span>
-                <strong>{{ todaySessions }}<small>次</small></strong>
-              </div>
-              <div class="coach-stat blue">
-                <span>平均得分</span>
-                <strong>{{ todayAvgScore }}<small>分</small></strong>
-              </div>
-              <div class="coach-stat violet">
-                <span>最近练习</span>
-                <strong>深蹲</strong>
-              </div>
+              <span>坚持每一次训练，身体会给你最好的回报。</span>
             </div>
           </header>
 
@@ -129,7 +115,6 @@ import GradientText from "./components/GradientText.vue";
 import SidebarTipCarousel from "./components/SidebarTipCarousel.vue";
 import { useAuthStore } from "./stores/auth";
 import { useSettingsStore } from "./stores/settings";
-import { getDashboardStats } from "./api/dashboard";
 
 const route = useRoute();
 const router = useRouter();
@@ -138,7 +123,11 @@ useSettingsStore();
 
 const standalonePaths = ["/profile", "/settings"];
 const isStandalonePage = computed(() => standalonePaths.includes(route.path));
-const showShellTopbar = computed(() => authStore.isAdmin || !["/", "/start/playback", "/sessions", "/export"].includes(route.path));
+const showShellTopbar = computed(() => {
+  if (authStore.isAdmin) return true;
+  if (route.path.startsWith("/exercises/")) return false;
+  return !["/", "/start/playback", "/sessions", "/export"].includes(route.path);
+});
 const layoutTransitionName = computed(() => route.meta.layoutTransition ?? "layout-instant");
 
 function lockPageScroll() {
@@ -175,7 +164,7 @@ const pageTitleMap: Record<string, string> = {
 
 const pageTitle = computed(() => pageTitleMap[route.path] ?? "姿态棱镜");
 
-const roleText = computed(() => (authStore.isAdmin ? "管理员" : "学生用户"));
+const roleText = computed(() => (authStore.isAdmin ? "管理员" : "学员用户"));
 const userInitial = computed(() => (authStore.username ? authStore.username.charAt(0).toUpperCase() : "?"));
 
 const baseNavItems = [
@@ -198,27 +187,6 @@ const adminNavItems = [
 ];
 
 const navItems = computed(() => (authStore.isAdmin ? adminNavItems : baseNavItems));
-const todaySessions = ref(0);
-const todayAvgScore = ref(0);
-
-async function fetchTodayStats() {
-  try {
-    const stats = await getDashboardStats();
-    todaySessions.value = stats.today_sessions;
-    todayAvgScore.value = Math.round(stats.average_score);
-  } catch (error) {
-    console.warn("[App] dashboard stats unavailable", error);
-  }
-}
-
-watch(
-  () => authStore.isAuthenticated,
-  (authenticated) => {
-    if (authenticated) fetchTodayStats();
-  },
-  { immediate: true },
-);
-
 function goToProfile() {
   router.push("/profile");
 }

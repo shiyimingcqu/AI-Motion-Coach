@@ -1,56 +1,70 @@
 <!-- 登录页 -->
 <view class="login-page">
-  <view class="login-content">
-    <!-- Logo 区域 -->
-    <view class="logo-section">
-      <view class="logo-icon">🏋️</view>
-      <text class="app-name">运动姿态评估</text>
-      <text class="app-desc">智能运动姿态分析与纠错系统</text>
+  <!-- 顶部渐变区域 -->
+  <view class="login-header">
+    <!-- Logo 图片 -->
+    <image
+      class="logo-image"
+      src="/assets/fitness/logo-login-bg.png"
+      mode="aspectFit"
+    />
+    <text class="app-name">姿态棱镜</text>
+    <text class="app-desc">智能运动姿态分析系统</text>
+  </view>
+
+  <!-- 白色卡片区域 -->
+  <view class="login-card">
+    <!-- 微信一键登录 -->
+    <button class="wechat-login-btn" bindtap="handleWechatLogin">
+      微信一键登录
+    </button>
+
+    <!-- 分割线 -->
+    <view class="divider">
+      <view class="divider-line"></view>
+      <text class="divider-text">其他登录方式</text>
+      <view class="divider-line"></view>
     </view>
 
-    <!-- 微信一键登录 -->
-    <view class="login-buttons">
-      <button class="btn btn-primary btn-lg wechat-login-btn" bindtap="handleWechatLogin">
-        微信一键登录
+    <!-- 账号密码登录（折叠） -->
+    <view class="account-login" wx:if="{{showAccountLogin}}">
+      <view class="form-group">
+        <input
+          class="input"
+          type="text"
+          placeholder="用户名"
+          value="{{username}}"
+          bindinput="onUsernameInput"
+        />
+      </view>
+      <view class="form-group">
+        <input
+          class="input"
+          type="password"
+          placeholder="密码"
+          value="{{password}}"
+          bindinput="onPasswordInput"
+        />
+      </view>
+      <button class="account-login-btn" bindtap="handleAccountLogin" loading="{{loading}}">
+        登录
       </button>
+    </view>
 
-      <view class="other-login-divider">
-        <text class="divider-text">其他登录方式</text>
-      </view>
-
-      <!-- 账号密码登录（折叠） -->
-      <view class="account-login" wx:if="{{showAccountLogin}}">
-        <view class="form-group">
-          <input
-            class="input"
-            type="text"
-            placeholder="用户名"
-            value="{{username}}"
-            bindinput="onUsernameInput"
-          />
-        </view>
-        <view class="form-group">
-          <input
-            class="input"
-            type="password"
-            placeholder="密码"
-            value="{{password}}"
-            bindinput="onPasswordInput"
-          />
-        </view>
-        <button class="btn btn-outline btn-lg" bindtap="handleAccountLogin" loading="{{loading}}">
-          登录
-        </button>
-      </view>
-
-      <view class="toggle-account" bindtap="toggleAccountLogin">
-        <text>{{showAccountLogin ? '收起' : '账号密码登录'}}</text>
-      </view>
+    <!-- 切换账号登录 -->
+    <view class="toggle-account" bindtap="toggleAccountLogin">
+      <text>{{showAccountLogin ? '收起' : '账号密码登录'}}</text>
     </view>
   </view>
 
-  <!-- 底部提示 -->
+  <!-- 底部间距占位 -->
+  <view class="login-spacer"></view>
+
+  <!-- 底部协议提示 -->
   <view class="footer-tip">
-    <text>登录即表示同意《用户协议》和《隐私政策》</text>
+    <text>登录即表示同意</text>
+    <text class="link-text" bindtap="onAgreementTap">《用户协议》</text>
+    <text>和</text>
+    <text class="link-text" bindtap="onPrivacyTap">《隐私政策》</text>
   </view>
 </view>

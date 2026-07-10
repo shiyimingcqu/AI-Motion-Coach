@@ -62,6 +62,10 @@
         <view class="live-dot"></view>
         <text>LIVE</text>
       </view>
+      <view class="perf-badge" wx:if="{{state === 'running'}}">
+        <text>FPS {{debugFps}}</text>
+        <text>骨架 {{debugKeypointCount}}/33</text>
+      </view>
 
       <!-- 静音图标 -->
       <view class="mute-icon" wx:if="{{state === 'running'}}">🔇</view>
@@ -81,6 +85,7 @@
       <!-- 骨架叠加 -->
       <skeleton-overlay
         id="skeleton"
+        class="skeleton-layer"
         keypoints="{{currentKeypoints}}"
         mirrored="{{cameraPosition === 'front'}}"
         canvas-width="{{cameraWidth}}"
@@ -99,7 +104,11 @@
     <view class="debug-row">
       <text>帧发送: {{debugFrames}}</text>
       <text>帧有效: {{debugOkFrames}}</text>
+      <text>关键点: {{debugKeypointCount}}/33</text>
       <text>错误: {{debugErrors}}</text>
+    </view>
+    <view class="debug-row" wx:if="{{debugNoBody > 0}}">
+      <text class="debug-error">⚠ 未检测到人体 {{debugNoBody}} 次</text>
     </view>
     <view class="debug-row" wx:if="{{debugLastError}}">
       <text class="debug-error">{{debugLastError}}</text>
@@ -169,6 +178,7 @@
 
   <!-- 调试按钮（训练前） -->
   <view class="debug-buttons" wx:if="{{state === 'ready'}}">
+    <button class="debug-btn" bindtap="startSimTest">🤖 模拟测试</button>
     <button class="debug-btn" bindtap="startDemoMode">📹 演示模式</button>
   </view>
 </view>

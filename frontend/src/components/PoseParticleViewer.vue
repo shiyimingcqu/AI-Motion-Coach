@@ -14,6 +14,8 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { PoseReplayFrame, PoseReplayLandmark } from "../api/sessions";
 import type { HighlightInstruction } from "../types/feedback";
 
+const RING_GLOW_SIZE = 1.2; // moderate joint glow
+
 type ParticleBinding = {
   boneIndex: number;
   t: number;
@@ -34,6 +36,7 @@ const props = defineProps<{
   progress: number;
   backgroundImage?: string;
   highlightInstructions?: HighlightInstruction[];
+  keyJointHighlights?: Array<[number, number]>;
   bodyWidthScale?: number;
   torsoWidthScale?: number;
   stableTorsoAnchor?: boolean;
@@ -150,6 +153,15 @@ let highlightGeometry: THREE.BufferGeometry | null = null;
 let highlightGlowGeometry: THREE.BufferGeometry | null = null;
 let highlightPositions: Float32Array | null = null;
 let highlightGlowPositions: Float32Array | null = null;
+let keyJointLines: THREE.LineSegments | null = null;
+let keyJointGlowLines: THREE.LineSegments | null = null;
+let keyJointGeometry: THREE.BufferGeometry | null = null;
+let keyJointGlowGeometry: THREE.BufferGeometry | null = null;
+let keyJointPositions: Float32Array | null = null;
+let keyJointGlowPositions: Float32Array | null = null;
+let jointGlow: THREE.Points | null = null;
+let jointGlowPositions: Float32Array | null = null;
+let jointGlowGeometry: THREE.BufferGeometry | null = null;
 const sunglassLensMeshes: THREE.Mesh[] = [];
 const sunglassGlassMeshes: THREE.Mesh[] = [];
 let sunglassBridgeMesh: THREE.Mesh | null = null;
@@ -212,6 +224,7 @@ function initScene() {
   resizeRenderer();
   resizeObserver = new ResizeObserver(resizeRenderer);
   resizeObserver.observe(container);
+  if (animationId) { window.cancelAnimationFrame(animationId); }
   animationId = window.requestAnimationFrame(animate);
   setupClickDetection();
 }
@@ -301,6 +314,23 @@ function createParticleSystems() {
   jointParticles = new THREE.Points(jointGeometry, new THREE.PointsMaterial({ color: "#c9f8ff", size: 0.032, transparent: true, opacity: 0.1, depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true }));
   skeletonGroup.add(jointParticles);
 
+  // Large outer glow layer around joints
+  const glowTex = createJointGlowTexture();
+  jointGlowPositions = new Float32Array(33 * 3);
+  jointGlowGeometry = new THREE.BufferGeometry();
+  jointGlowGeometry.setAttribute("position", new THREE.BufferAttribute(jointGlowPositions, 3));
+  const glowColors = new Float32Array(33 * 3);
+  jointGlowGeometry.setAttribute("color", new THREE.BufferAttribute(glowColors, 3));
+  jointGlow = new THREE.Points(
+    jointGlowGeometry,
+    new THREE.PointsMaterial({
+      map: glowTex, size: RING_GLOW_SIZE, transparent: true, opacity: 0.5,
+      depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true,
+      vertexColors: true,
+    }),
+  );
+  skeletonGroup.add(jointGlow);
+
   sunglassLensMeshes.length = 0;
   sunglassGlassMeshes.length = 0;
   const sunglassFrameMaterial = new THREE.MeshBasicMaterial({ color: "#010101", transparent: true, opacity: 0.98, side: THREE.DoubleSide, depthWrite: false, depthTest: true });
@@ -357,6 +387,20 @@ function createParticleSystems() {
   highlightGlowLines.renderOrder = 9;
   skeletonGroup.add(highlightGlowLines);
 
+  // Key joint overlay lines — blue, pulsing, shown when no red highlight covers them
+  keyJointPositions = new Float32Array(SKELETON_BONES.length * 2 * 3);
+  keyJointGlowPositions = new Float32Array(SKELETON_BONES.length * 2 * 3);
+  keyJointGeometry = new THREE.BufferGeometry();
+  keyJointGlowGeometry = new THREE.BufferGeometry();
+  keyJointGeometry.setAttribute("position", new THREE.BufferAttribute(keyJointPositions, 3));
+  keyJointGlowGeometry.setAttribute("position", new THREE.BufferAttribute(keyJointGlowPositions, 3));
+  keyJointLines = new THREE.LineSegments(keyJointGeometry, new THREE.LineBasicMaterial({ color: "#3b9eff", transparent: true, opacity: 0, blending: THREE.AdditiveBlending }));
+  keyJointLines.renderOrder = 8;
+  skeletonGroup.add(keyJointLines);
+  keyJointGlowLines = new THREE.LineSegments(keyJointGlowGeometry, new THREE.LineBasicMaterial({ color: "#3b9eff", transparent: true, opacity: 0, blending: THREE.AdditiveBlending }));
+  keyJointGlowLines.renderOrder = 7;
+  skeletonGroup.add(keyJointGlowLines);
+
   anatomyPositions = new Float32Array(ANATOMY_SEGMENT_COUNT * 2 * 3);
   anatomyGlowPositions = new Float32Array(ANATOMY_SEGMENT_COUNT * 2 * 3);
   anatomyGeometry = new THREE.BufferGeometry();
@@ -367,6 +411,26 @@ function createParticleSystems() {
   skeletonGroup.add(anatomyGlowLines);
   anatomyLines = new THREE.LineSegments(anatomyGeometry, new THREE.LineBasicMaterial({ color: HOLOGRAM_THEME.bodyCore, transparent: true, opacity: 0.48, blending: THREE.AdditiveBlending }));
   skeletonGroup.add(anatomyLines);
+}
+
+function createJointGlowTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d")!;
+  // Ring texture: transparent center → bright ring → fade out
+  const gradient = ctx.createRadialGradient(32, 32, 4, 32, 32, 30);
+  gradient.addColorStop(0, "rgba(255,255,255,0)");
+  gradient.addColorStop(0.12, "rgba(255,255,255,0)");
+  gradient.addColorStop(0.22, "rgba(255,255,255,1)");
+  gradient.addColorStop(0.38, "rgba(255,255,255,1)");
+  gradient.addColorStop(0.50, "rgba(255,255,255,0.2)");
+  gradient.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 64, 64);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
 }
 
 function createBindings() {
@@ -417,6 +481,7 @@ function animate(now: number) {
   animationId = window.requestAnimationFrame(animate);
   updatePlayback(now);
   updateHighlightPulse(now);
+  updateJointGlowPulse(now);
   controls?.update();
   if (floorGlow && !Array.isArray(floorGlow.material)) { floorGlow.material.opacity = 0.34 + Math.sin(now * 0.002) * 0.05; }
   if (renderer && scene && camera) { renderer.render(scene, camera); }
@@ -426,7 +491,7 @@ function updatePlayback(now: number) {
   if (!hasFrames.value) { setVisible(false); lastTick = now; emit("frameChange", null); return; }
   setVisible(true);
   const duration = getDuration();
-  if (props.playing && duration > 0) { const delta = lastTick ? now - lastTick : 0; playbackMs = (playbackMs + delta * props.speed) % duration; emit("update:progress", playbackMs / duration); }
+  if (props.playing && duration > 0) { const delta = lastTick ? Math.min(now - lastTick, 100) : 0; playbackMs = (playbackMs + delta * props.speed) % duration; emit("update:progress", playbackMs / duration); }
   else { playbackMs = props.progress * duration; }
   lastTick = now;
   const frame = getFrameAt(playbackMs);
@@ -543,7 +608,51 @@ function updatePose(frame: PoseReplayFrame | null) {
     for (let i = 0; i < FOOT_PARTICLE_COUNT; i++) { const f = footBindings[footSide * FOOT_PARTICLE_COUNT + i]; const bi = footStart + footSide * FOOT_PARTICLE_COUNT + i; writePoint(bodyBuffer, bi * 3, new THREE.Vector3(anklePoint.x + f.u * 0.1, anklePoint.y + f.v * 0.1 - 0.06, anklePoint.z + f.depth * 0.1)); writePoint(bodyHaloBuffer, bi * 3, new THREE.Vector3(anklePoint.x + f.u * 0.1, anklePoint.y + f.v * 0.1 - 0.06, anklePoint.z + f.depth * 0.1)); }
   });
 
-  frame.landmarks.forEach((landmark, index) => { const offset = index * 3; if (!isVisible(landmark)) { hidePoint(jointBuffer, offset); } else { writePoint(jointBuffer, offset, points[index]); } });
+  frame.landmarks.forEach((landmark, index) => {
+    const offset = index * 3;
+    if (!isVisible(landmark)) {
+      hidePoint(jointBuffer, offset);
+      if (jointGlowPositions) hidePoint(jointGlowPositions, offset);
+    } else {
+      writePoint(jointBuffer, offset, points[index]);
+      // Only glow key joints — also include joints covered by red highlights
+      if (jointGlowPositions) {
+        const isKeyJoint = props.keyJointHighlights && props.keyJointHighlights.some(pair => pair[0] === index || pair[1] === index);
+        const isHighlighted = props.highlightInstructions && props.highlightInstructions.some(instr =>
+          instr.bonePairs.some(pair => pair[0] === index || pair[1] === index)
+        );
+        if (isKeyJoint || isHighlighted) {
+          writePoint(jointGlowPositions, offset, points[index]);
+        } else {
+          hidePoint(jointGlowPositions, offset);
+        }
+      }
+      // Assign per-vertex colors for the glow ring
+      if (jointGlowGeometry) {
+        const colorAttr = jointGlowGeometry.getAttribute("color") as THREE.BufferAttribute | undefined;
+        if (colorAttr) {
+          const arr = colorAttr.array as Float32Array;
+          const hl = props.highlightInstructions;
+          const isHighlighted = hl && hl.some(instr =>
+            instr.bonePairs.some(pair => pair[0] === index || pair[1] === index)
+          );
+          if (isHighlighted && isVisible(landmark)) {
+            const c = hl![0].color;
+            // parse hex
+            const r = parseInt(c.slice(1,3),16)/255;
+            const g = parseInt(c.slice(3,5),16)/255;
+            const b = parseInt(c.slice(5,7),16)/255;
+            arr[offset] = r; arr[offset+1] = g; arr[offset+2] = b;
+          } else if (props.keyJointHighlights && props.keyJointHighlights.some(pair => pair[0] === index || pair[1] === index) && isVisible(landmark)) {
+            arr[offset] = 0.231; arr[offset+1] = 0.608; arr[offset+2] = 1; // #3b9eff
+          } else {
+            arr[offset] = 0; arr[offset+1] = 0; arr[offset+2] = 0;
+          }
+          colorAttr.needsUpdate = true;
+        }
+      }
+    }
+  });
   updateSunglasses(points, frame.landmarks);
 
   SKELETON_BONES.forEach(([from, to], index) => {
@@ -556,7 +665,8 @@ function updatePose(frame: PoseReplayFrame | null) {
   updateDepthParticleColors(bodyBuffer, points, frame.landmarks);
   applyHighlightToParticles();
   updateHighlightOverlay();
-  markNeedsUpdate(particleGeometry); markNeedsUpdate(particleHaloGeometry); markNeedsUpdate(jointGeometry); markNeedsUpdate(lineGeometry); markNeedsUpdate(lineGlowGeometry);
+  updateKeyJointOverlay();
+  markNeedsUpdate(particleGeometry); markNeedsUpdate(particleHaloGeometry); markNeedsUpdate(jointGeometry); markNeedsUpdate(lineGeometry); markNeedsUpdate(lineGlowGeometry); markNeedsUpdate(jointGlowGeometry);
 }
 
 function convertLandmark(point: PoseReplayLandmark): THREE.Vector3 {
@@ -714,12 +824,20 @@ function hideSunglasses() {
 
 function getFrameAt(timeMs: number) {
   if (!props.frames.length) return null;
+  const startTime = getStartTime();
+  const targetTime = startTime + timeMs;
   let frame = props.frames[0];
-  for (const candidate of props.frames) { if (candidate.timestamp_ms > timeMs) break; frame = candidate; }
+  for (const candidate of props.frames) { if (candidate.timestamp_ms > targetTime) break; frame = candidate; }
   return frame;
 }
 
-function getDuration() { return Math.max(1, props.frames[props.frames.length - 1]?.timestamp_ms ?? 1); }
+function getStartTime() { return props.frames[0]?.timestamp_ms ?? 0; }
+function getDuration() {
+  if (!props.frames.length) return 1;
+  const first = props.frames[0]?.timestamp_ms ?? 0;
+  const last = props.frames[props.frames.length - 1]?.timestamp_ms ?? first;
+  return Math.max(1, last - first);
+}
 function isVisible(point?: PoseReplayLandmark) { return Boolean(point && (point.visibility ?? 1) >= 0.35); }
 function writePoint(buffer: Float32Array, offset: number, point: THREE.Vector3) { buffer[offset] = point.x; buffer[offset + 1] = point.y; buffer[offset + 2] = point.z; }
 function writeColor(buffer: Float32Array, index: number, color: THREE.Color) { const off = index * 3; buffer[off] = color.r; buffer[off + 1] = color.g; buffer[off + 2] = color.b; }
@@ -809,6 +927,78 @@ function updateHighlightPulse(now: number) {
   const hlOpacity = 0.4 + 0.5 * pulse; // range 0.4 ~ 0.9
   highlightLines.material.opacity = hlOpacity;
   highlightGlowLines.material.opacity = hlOpacity * 0.6;
+}
+
+/** Compute which SKELETON_BONES indices are key joints for the current exercise. */
+function computeKeyJointBoneIndices(): Set<number> {
+  const set = new Set<number>();
+  const pairs = props.keyJointHighlights;
+  if (!pairs || pairs.length === 0) return set;
+  for (const [from, to] of pairs) {
+    const idx = SKELETON_BONES.findIndex(b => (b[0] === from && b[1] === to) || (b[0] === to && b[1] === from));
+    if (idx >= 0) set.add(idx);
+  }
+  return set;
+}
+
+/** Blue overlay lines for key joints — skips bones already covered by red highlights. */
+function updateKeyJointOverlay() {
+  if (!keyJointPositions || !keyJointGlowPositions || !keyJointLines || !keyJointGlowLines || !linePositions || !lineGlowPositions) return;
+  const hlIndices = highlightedSkeletonIndices;
+  const keyIndices = computeKeyJointBoneIndices();
+  const buffer = keyJointPositions;
+  const glowBuffer = keyJointGlowPositions;
+
+  let anyVisible = false;
+  for (let i = 0; i < SKELETON_BONES.length; i++) {
+    const offset = i * 6;
+    if (keyIndices.has(i) && !hlIndices.has(i)) {
+      buffer[offset] = linePositions[offset];
+      buffer[offset+1] = linePositions[offset+1];
+      buffer[offset+2] = linePositions[offset+2];
+      buffer[offset+3] = linePositions[offset+3];
+      buffer[offset+4] = linePositions[offset+4];
+      buffer[offset+5] = linePositions[offset+5];
+      glowBuffer[offset] = lineGlowPositions[offset];
+      glowBuffer[offset+1] = lineGlowPositions[offset+1];
+      glowBuffer[offset+2] = lineGlowPositions[offset+2];
+      glowBuffer[offset+3] = lineGlowPositions[offset+3];
+      glowBuffer[offset+4] = lineGlowPositions[offset+4];
+      glowBuffer[offset+5] = lineGlowPositions[offset+5];
+      anyVisible = true;
+    } else {
+      buffer[offset] = 9999; buffer[offset+1] = 9999; buffer[offset+2] = 9999;
+      buffer[offset+3] = 9999; buffer[offset+4] = 9999; buffer[offset+5] = 9999;
+      glowBuffer[offset] = 9999; glowBuffer[offset+1] = 9999; glowBuffer[offset+2] = 9999;
+      glowBuffer[offset+3] = 9999; glowBuffer[offset+4] = 9999; glowBuffer[offset+5] = 9999;
+    }
+  }
+  markNeedsUpdate(keyJointGeometry);
+  markNeedsUpdate(keyJointGlowGeometry);
+
+  (keyJointLines.material as THREE.LineBasicMaterial).opacity = anyVisible && keyIndices.size > 0 ? 0.6 : 0;
+  (keyJointGlowLines.material as THREE.LineBasicMaterial).opacity = anyVisible && keyIndices.size > 0 ? 0.25 : 0;
+}
+
+/** Animate the joint glow ring — breath in size and opacity. */
+function updateJointGlowPulse(now: number) {
+  if (!jointGlow || !jointGlowGeometry) return;
+  const mat = jointGlow.material as THREE.PointsMaterial;
+  const breathe = 0.60 + 0.30 * Math.sin(now * 0.002);
+  mat.opacity = Math.max(0, breathe);
+  const sizeScale = 0.8 + 0.2 * Math.sin(now * 0.0018);
+  mat.size = RING_GLOW_SIZE * sizeScale;
+  const a = jointGlowGeometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+  if (a) a.needsUpdate = true;
+
+  // Blue key joint lines gentle pulse
+  const kjMat = keyJointLines?.material as THREE.LineBasicMaterial | undefined;
+  if (kjMat && kjMat.opacity > 0) {
+    const bluePulse = 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(now * 0.002));
+    kjMat.opacity = bluePulse;
+    const kjGlowMat = keyJointGlowLines?.material as THREE.LineBasicMaterial | undefined;
+    if (kjGlowMat) kjGlowMat.opacity = bluePulse * 0.45;
+  }
 }
 
 // Apply highlight color to affected particles (overrides depth coloring)
@@ -926,8 +1116,18 @@ function distToSegmentSq(px: number, py: number, ax: number, ay: number, bx: num
 }
 
 watch(() => props.frames, () => { playbackMs = 0; lastTick = 0; emit("update:progress", 0); _replayPrevPoints = null; _torsoAnchorBaseline = null; void nextTick(() => { updatePose(props.frames[0] ?? null); updateHighlightOverlay(); }); });
-watch(() => props.progress, (value) => { if (!props.playing) { playbackMs = value * getDuration(); updatePose(getFrameAt(playbackMs)); } });
+watch(() => props.progress, (value) => {
+  if (!props.playing) {
+    playbackMs = Math.max(0, Math.min(1, value)) * getDuration();
+    updatePose(getFrameAt(playbackMs));
+  }
+});
 watch(() => props.backgroundImage, (imageUrl) => { updateSceneBackground(imageUrl || ""); });
+watch(() => props.keyJointHighlights, () => {
+  if (hasFrames.value) {
+    updatePose(getFrameAt(playbackMs));
+  }
+}, { deep: true });
 watch(() => props.highlightInstructions, () => {
   if (hasFrames.value) {
     updatePose(getFrameAt(playbackMs));

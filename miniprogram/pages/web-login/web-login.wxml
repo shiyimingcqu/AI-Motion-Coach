@@ -1,0 +1,24 @@
+<view class="wl-page">
+  <block wx:if="{{status === 'processing'}}">
+    <view class="wl-status-box">
+      <view class="wl-spinner"></view>
+      <text class="wl-text">正在验证登录...</text>
+    </view>
+  </block>
+
+  <block wx:if="{{status === 'success'}}">
+    <view class="wl-status-box">
+      <view class="wl-icon success">✓</view>
+      <text class="wl-text">登录成功！</text>
+      <text class="wl-desc">请返回 Web 端</text>
+    </view>
+  </block>
+
+  <block wx:if="{{status === 'fail'}}">
+    <view class="wl-status-box">
+      <view class="wl-icon fail">✕</view>
+      <text class="wl-text">登录失败</text>
+      <text class="wl-desc">{{ message }}</text>
+    </view>
+  </block>
+</view>

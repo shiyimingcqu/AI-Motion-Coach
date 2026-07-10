@@ -5,6 +5,18 @@ const { EXERCISE_CONFIG, getScoreLevel, getApiBaseUrl } = require('../../utils/c
 const AuthManager = require('../../utils/auth');
 const { showToast } = require('../../utils/util');
 
+const KEYPOINT_NAMES = [
+  'nose', 'left_eye_inner', 'left_eye', 'left_eye_outer',
+  'right_eye_inner', 'right_eye', 'right_eye_outer',
+  'left_ear', 'right_ear', 'mouth_left', 'mouth_right',
+  'left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow',
+  'left_wrist', 'right_wrist', 'left_pinky', 'right_pinky',
+  'left_index', 'right_index', 'left_thumb', 'right_thumb',
+  'left_hip', 'right_hip', 'left_knee', 'right_knee',
+  'left_ankle', 'right_ankle', 'left_heel', 'right_heel',
+  'left_foot_index', 'right_foot_index',
+];
+
 const METRIC_CONFIG = {
   squat: [
     { key: 'knee_angle', label: '膝角', aliases: ['knee_angle'] },
@@ -109,6 +121,9 @@ Page({
     debugWsStatus: '未连接',
     debugLastError: '',
     debugFrameSize: '',
+    debugFps: '0.0',
+    debugKeypointCount: 0,
+    debugNoBody: 0,
     showDebug: false,
 
     // 内部
@@ -399,18 +414,23 @@ Page({
         const phaseLabel = phase ? '当前阶段: ' + phase : '';
 
         const newMetrics = this._buildMetricsFromAnalysis(data, this.data.metrics);
+        const debugLastError = data.skip_reason
+          ? `分析跳过: ${String(data.skip_reason).substring(0, 40)}`
+          : this.data.debugLastError;
 
         // 卡路里估算：基于动作次数，假定每次 5.6 kcal（与设计稿 12 次 68kcal 一致）
         const calories = Math.round(totalCount * 5.6);
         let displayScore = this.data.currentScore;
         let scoreColor = this.data.scoreColor;
 
-        this._pendingScore = incomingScore;
-        if (this._shouldCommitScore(repFinished, totalCount, incomingScore) && incomingScore > 0) {
-          const level = getScoreLevel(incomingScore);
+        // Always show server score when available
+        if (incomingScore > 0) {
           displayScore = incomingScore;
+          const level = getScoreLevel(incomingScore);
           scoreColor = level.color;
-          this.data.scoresHistory.push(incomingScore);
+          if (repFinished) {
+            this.data.scoresHistory.push(incomingScore);
+          }
         }
 
         const setDataObj = {
@@ -424,6 +444,7 @@ Page({
           phaseLabel,
           metrics: newMetrics,
           metricCards: this._buildMetricCards(this.data.exerciseKey, newMetrics),
+          debugLastError,
         };
         // 只在有纠错文案时才更新，避免空帧覆盖上一次的建议（"闪一下"问题）
         if (issues.length > 0) {
@@ -491,6 +512,7 @@ Page({
     const now = Date.now();
     if (now - this._lastFrameTime < this._getFrameInterval()) return;
     this._lastFrameTime = now;
+    this._updateFrameRate(now);
 
     if (this._processingFrame) {
       this._pendingFrame = frame;
@@ -532,32 +554,36 @@ Page({
 
       const result = await ApiClient.post('/api/realtime/pose-detect', payload, { timeout: 120000 });
       const totalMs = Date.now() - startedAt;
-      const backendMs = result && result.process_ms != null ? Math.round(result.process_ms) : null;
+      const reqBackendMs = result && result.process_ms != null ? Math.round(result.process_ms) : null;
 
       if (result && result.frames && result.frames.length > 0) {
         const frameData = result.frames[0];
+        const keypoints = this._normalizePoseKeypoints(frameData);
+        const visibleCount = this._countVisibleKeypoints(keypoints, 0.2);
 
           // 更新骨架关键点
-          if (frameData.keypoints && frameData.keypoints.length > 0) {
+          if (visibleCount > 0) {
             let replayFrame = null;
-            const hasVisible = frameData.keypoints.some(kp => kp && kp.visibility > 0.5);
+            const hasVisible = visibleCount >= 2;
             if (hasVisible) {
               const debugOkFrames = this.data.debugOkFrames + 1;
               this.setData({ debugOkFrames });
-              replayFrame = this._captureReplayFrame(frameData.keypoints);
+              replayFrame = this._captureReplayFrame(keypoints);
 
               // 同时通过 setData 和组件方法更新
-              const newMetrics = this._buildMetricsFromKeypoints(frameData.keypoints, frameData.features, this.data.metrics);
+              const features = frameData.features || frameData.metrics || frameData.analysis;
+              const newMetrics = this._buildMetricsFromKeypoints(keypoints, features, this.data.metrics);
               this.setData({
-                currentKeypoints: frameData.keypoints,
+                currentKeypoints: keypoints,
+                debugKeypointCount: visibleCount,
                 metrics: newMetrics,
                 metricCards: this._buildMetricCards(this.data.exerciseKey, newMetrics),
-                debugLastError: backendMs == null ? `延迟 ${totalMs}ms` : `延迟 ${totalMs}ms / 后端 ${backendMs}ms`,
+                debugLastError: `骨架 ${visibleCount}/33 · ${frameData.frame_size || ''} · ${totalMs}ms/${frameData.process_ms != null ? frameData.process_ms + 'ms' : (reqBackendMs != null ? reqBackendMs + 'ms' : '?')}`,
               });
               const skeletonComp = this.selectComponent('#skeleton');
               if (skeletonComp) {
                 try {
-                  skeletonComp.updateKeypoints(frameData.keypoints);
+                  skeletonComp.updateKeypoints(keypoints);
                 } catch (e) {
                   console.warn('[Frame] 骨架绘制失败:', e);
                 }
@@ -567,18 +593,25 @@ Page({
             if (this.data.exerciseKey === 'jumping_jack' && frameData.analysis) {
               this.handleWSMessage({ type: 'analysis', ...frameData.analysis });
             } else if (this._wsReady) {
-              const namedKeypoints = this._convertToNamedKeypoints(frameData.keypoints);
+              const namedKeypoints = this._convertToNamedKeypoints(keypoints);
               if (Object.keys(namedKeypoints).length > 0) {
                 this.sendWS({
                   type: 'frame',
                   exercise: this.data.exerciseKey,
+                  exercise_type: this.data.exerciseKey,
                   keypoints: namedKeypoints,
                   timestamp_ms: replayFrame ? replayFrame.timestamp_ms : undefined,
                   replay_keypoints: replayFrame ? replayFrame.landmarks : undefined,
                 });
               }
+            } else if (this._isHttpMode && this._httpSessionId) {
+              // HTTP 降级模式：通过 /http-analyze 获取完整分析
+              const namedKeypoints = this._convertToNamedKeypoints(keypoints);
+              if (Object.keys(namedKeypoints).length > 0) {
+                this._httpAnalyze(namedKeypoints, replayFrame);
+              }
             } else {
-              this.setData({ debugLastError: 'WS 未连接，分数暂无法更新' });
+              this.setData({ debugLastError: 'WS/HTTP 均未连接，分数暂无法更新' });
             }
           } else if (frameData.error) {
           // 后端返回了错误信息
@@ -586,8 +619,37 @@ Page({
           this.setData({ debugErrors, debugLastError: frameData.error });
           this._showErrorToast(frameData.error.substring(0, 20));
         } else {
-          // 没有关键点也没有错误 — 可能是没检测到人体
-          // 静默，避免刷屏
+          // 没有关键点 — 没检测到人体（利用后端诊断信息显示具体原因）
+          const debugNoBody = (this.data.debugNoBody || 0) + 1;
+          const reason = frameData.reason || 'no_pose';
+          const sizeInfo = frameData.frame_size ? ' · ' + frameData.frame_size : '';
+          const msInfo = frameData.process_ms != null
+            ? ' · 后端' + frameData.process_ms + 'ms'
+            : (reqBackendMs != null ? ' · 后端' + reqBackendMs + 'ms' : '');
+          let hint = '请确保全身入镜';
+          if (reason.indexOf('decode_failed') === 0) {
+            const stage = reason.substring('decode_failed:'.length);
+            if (stage === 'imdecode_none') {
+              hint = '图像数据无效(非JPEG)';
+            } else if (stage === 'b64decode_fail' || stage.indexOf('b64decode_fail') === 0) {
+              hint = 'base64解码失败';
+            } else if (stage === 'empty_b64') {
+              hint = '图像数据为空';
+            } else {
+              hint = '解码失败:' + stage;
+            }
+          } else if (reason === 'empty_image') hint = '图像数据为空';
+          else if (reason.indexOf('infer_error') === 0) hint = reason.substring(12);
+          this.setData({
+            debugKeypointCount: 0,
+            debugNoBody: debugNoBody,
+            debugLastError: '未识别到人体(' + debugNoBody + '次)' + sizeInfo + msInfo + ' - ' + hint,
+          });
+          if (debugNoBody === 1) {
+            this._showErrorToast('未识别到人体，' + hint);
+          } else if (debugNoBody % 10 === 0) {
+            this._showErrorToast('仍未识别到人体(' + debugNoBody + '次)');
+          }
         }
       } else {
         // API 返回空
@@ -644,8 +706,12 @@ Page({
       return '';
     }
 
-    // jpeg 模式下 frame.data 已是 JPEG 二进制，直接转 base64，勿当 RGBA 像素处理
-    if (this._cameraFrameMode === 'jpeg') {
+    // 检测 frame.data 是否真的是 JPEG（FF D8 开头）
+    const _view = new Uint8Array(frame.data);
+    const _isJpeg = _view.length > 2 && _view[0] === 0xFF && _view[1] === 0xD8;
+
+    // jpeg 模式且数据确实是 JPEG：直接转 base64，勿当 RGBA 像素处理
+    if (this._cameraFrameMode === 'jpeg' && _isJpeg) {
       try {
         if (typeof wx.arrayBufferToBase64 === 'function') {
           return wx.arrayBufferToBase64(frame.data);
@@ -653,6 +719,12 @@ Page({
       } catch (e) {
         console.warn('[Camera] jpeg 转 base64 失败:', e);
       }
+    }
+
+    // frame.data 是 RGBA 像素数据（jpeg 模式未生效/回退到 camera 模式），走 canvas 压缩
+    if (!frame.width || !frame.height) {
+      console.warn('[Camera] 无法编码: mode=', this._cameraFrameMode, 'isJpeg=', _isJpeg, 'len=', _view.length, 'wh=', frame.width, 'x', frame.height);
+      return '';
     }
 
     await this._initFrameCanvas();
@@ -730,26 +802,17 @@ Page({
 
   // 将 33 点数组转为命名关键点字典
   _convertToNamedKeypoints(keypointsArray) {
-    const names = [
-      'nose', 'left_eye_inner', 'left_eye', 'left_eye_outer',
-      'right_eye_inner', 'right_eye', 'right_eye_outer',
-      'left_ear', 'right_ear', 'mouth_left', 'mouth_right',
-      'left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow',
-      'left_wrist', 'right_wrist', 'left_pinky', 'right_pinky',
-      'left_index', 'right_index', 'left_thumb', 'right_thumb',
-      'left_hip', 'right_hip', 'left_knee', 'right_knee',
-      'left_ankle', 'right_ankle', 'left_heel', 'right_heel',
-      'left_foot_index', 'right_foot_index',
-    ];
-
     const result = {};
-    for (let i = 0; i < Math.min(names.length, keypointsArray.length); i++) {
+    for (let i = 0; i < Math.min(KEYPOINT_NAMES.length, keypointsArray.length); i++) {
       const kp = keypointsArray[i];
-      if (kp && kp.visibility > 0.3) {
-        result[names[i]] = {
-          x: kp.x,
-          y: kp.y,
-          visibility: kp.visibility
+      const visibility = kp && kp.visibility != null ? Number(kp.visibility) : 1;
+      const x = Number(kp && kp.x);
+      const y = Number(kp && kp.y);
+      if (kp && Number.isFinite(x) && Number.isFinite(y) && visibility >= 0.2) {
+        result[KEYPOINT_NAMES[i]] = {
+          x,
+          y,
+          visibility
         };
       }
     }
@@ -806,28 +869,79 @@ Page({
     }));
   },
 
-  _namedKeypointsToArray(namedKeypoints) {
-    const names = [
-      'nose', 'left_eye_inner', 'left_eye', 'left_eye_outer',
-      'right_eye_inner', 'right_eye', 'right_eye_outer',
-      'left_ear', 'right_ear', 'mouth_left', 'mouth_right',
-      'left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow',
-      'left_wrist', 'right_wrist', 'left_pinky', 'right_pinky',
-      'left_index', 'right_index', 'left_thumb', 'right_thumb',
-      'left_hip', 'right_hip', 'left_knee', 'right_knee',
-      'left_ankle', 'right_ankle', 'left_heel', 'right_heel',
-      'left_foot_index', 'right_foot_index',
-    ];
+  _updateFrameRate(now) {
+    if (!this._fpsWindowStart) {
+      this._fpsWindowStart = now;
+      this._fpsWindowFrames = 0;
+    }
 
-    return names.map((name) => {
-      const kp = namedKeypoints && namedKeypoints[name];
+    this._fpsWindowFrames += 1;
+    const elapsed = now - this._fpsWindowStart;
+    if (elapsed >= 1000) {
+      const fps = (this._fpsWindowFrames * 1000) / elapsed;
+      this._fpsWindowStart = now;
+      this._fpsWindowFrames = 0;
+      this.setData({ debugFps: fps.toFixed(1) });
+    }
+  },
+
+  _namedKeypointsToArray(namedKeypoints) {
+    return KEYPOINT_NAMES.map((name, index) => {
+      const kp = namedKeypoints && (namedKeypoints[name] || namedKeypoints[String(index)] || namedKeypoints[index]);
       return kp ? {
-        x: kp.x,
-        y: kp.y,
-        z: kp.z || 0,
-        visibility: kp.visibility == null ? 1 : kp.visibility,
+        x: Number(kp.x) || 0,
+        y: Number(kp.y) || 0,
+        z: Number(kp.z) || 0,
+        visibility: kp.visibility == null ? 1 : Number(kp.visibility) || 0,
       } : { x: 0, y: 0, z: 0, visibility: 0 };
     });
+  },
+
+  _normalizePoseKeypoints(frameData) {
+    if (!frameData) return [];
+    const raw =
+      frameData.keypoints ||
+      frameData.landmarks ||
+      frameData.pose_landmarks ||
+      frameData.poseLandmarks ||
+      frameData.replay_keypoints;
+
+    if (Array.isArray(raw)) {
+      const normalized = raw.slice(0, 33).map((kp) => {
+        if (!kp) return { x: 0, y: 0, z: 0, visibility: 0 };
+        const x = Number(kp.x);
+        const y = Number(kp.y);
+        const z = Number(kp.z);
+        const hasPoint = Number.isFinite(x) && Number.isFinite(y);
+        const vis = kp.visibility != null ? Number(kp.visibility) : 1;
+        return {
+          x: hasPoint ? x : 0,
+          y: hasPoint ? y : 0,
+          z: Number.isFinite(z) ? z : 0,
+          visibility: hasPoint ? (Number.isFinite(vis) ? vis : 1) : 0,
+        };
+      });
+      while (normalized.length < 33) {
+        normalized.push({ x: 0, y: 0, z: 0, visibility: 0 });
+      }
+      return normalized;
+    }
+
+    if (raw && typeof raw === 'object') {
+      return this._namedKeypointsToArray(raw);
+    }
+
+    return [];
+  },
+
+  _countVisibleKeypoints(keypoints, threshold = 0.2) {
+    if (!Array.isArray(keypoints)) return 0;
+    return keypoints.filter((kp) => {
+      const x = Number(kp && kp.x);
+      const y = Number(kp && kp.y);
+      const visibility = kp && kp.visibility != null ? Number(kp.visibility) : 1;
+      return Number.isFinite(x) && Number.isFinite(y) && visibility >= threshold;
+    }).length;
   },
 
   _getFrameInterval() {
@@ -1084,7 +1198,7 @@ Page({
   },
 
   _isVisible(point) {
-    return !!point && (point.visibility == null || point.visibility > 0.5);
+    return !!point && (point.visibility == null || Number(point.visibility) >= 0.2);
   },
 
   _distance(a, b) {
@@ -1123,7 +1237,16 @@ Page({
     }
 
     this._trainingFinishedCalled = false;
-    this.setData({ debugFrames: 0, debugOkFrames: 0, debugErrors: 0, _errorCountTotal: 0 });
+    this._fpsWindowStart = 0;
+    this._fpsWindowFrames = 0;
+    this.setData({
+      debugFrames: 0,
+      debugOkFrames: 0,
+      debugErrors: 0,
+      debugFps: '0.0',
+      debugKeypointCount: 0,
+      _errorCountTotal: 0,
+    });
 
     wx.showLoading({ title: '准备中...', mask: true });
 
@@ -1131,14 +1254,27 @@ Page({
       if (!this.data.cameraReady) {
         await this.initCamera();
       }
-      await this.connectWebSocket();
     } catch (e) {
       wx.hideLoading();
-      const errMsg = (e && e.message) || '初始化失败';
+      const errMsg = (e && e.message) || '摄像头初始化失败';
       this.setData({ debugLastError: errMsg });
       wx.showModal({
         title: '无法开始训练',
-        content: errMsg + '\n\n请确认已登录、后端已启动，并在开发者工具中开启摄像头模拟。',
+        content: errMsg + '\n\n请检查摄像头权限或在开发者工具中开启摄像头模拟。',
+        showCancel: false,
+      });
+      return;
+    }
+
+    try {
+      await this.connectWebSocket();
+    } catch (wsErr) {
+      wx.hideLoading();
+      const errMsg = 'WebSocket连接失败: ' + ((wsErr && wsErr.message) || wsErr);
+      this.setData({ debugWsStatus: '连接失败', debugLastError: errMsg });
+      wx.showModal({
+        title: '无法开始训练',
+        content: errMsg + '\n\n请确认后端 WebSocket 服务已启动，并且手机能访问后端 IP。',
         showCancel: false,
       });
       return;
@@ -1212,8 +1348,10 @@ Page({
   },
 
   _doFinish() {
+    this._stopSimTest();
     this.setData({ state: 'finished' });
     this._finishNavigated = false;
+
     this.sendWS({ type: 'finish' });
 
     if (this._finishTimer) {
@@ -1229,7 +1367,213 @@ Page({
     }, 5000);
   },
 
-  // ========== 调试功能 ==========
+  // ========== 模拟测试模式（开发者工具中摄像头无人体时使用）==========
+
+  // 用本地图片模拟摄像头帧，在开发者工具中也能看到骨架和评分
+  async startSimTest() {
+    if (this.data.state !== 'ready') return;
+    if (!AuthManager.isLoggedIn()) {
+      showToast('请先登录');
+      wx.navigateTo({ url: '/pages/login/login' });
+      return;
+    }
+
+    // 根据动作选择对应的测试图片
+    const exerciseImages = {
+      squat: '/assets/fitness/exercise-squat.png',
+      push_up: '/assets/fitness/exercise-pushup.png',
+      plank: '/assets/fitness/exercise-plank.png',
+      jumping_jack: '/assets/fitness/exercise-jumping-jack.png',
+    };
+    const imgPath = exerciseImages[this.data.exerciseKey] || exerciseImages.squat;
+
+    wx.showLoading({ title: '加载模拟图片...', mask: true });
+
+    // 读取本地图片为 base64（用 getImageInfo 获取可读路径）
+    let base64Image = '';
+    try {
+      base64Image = await new Promise((resolve, reject) => {
+        wx.getImageInfo({
+          src: imgPath,
+          success: (info) => {
+            try {
+              const fs = wx.getFileSystemManager();
+              const fileData = fs.readFileSync(info.path);
+              resolve(wx.arrayBufferToBase64(fileData));
+            } catch (e) {
+              reject(e);
+            }
+          },
+          fail: (err) => reject(err),
+        });
+      });
+      console.log('[SimTest] 图片读取成功, base64长度:', base64Image.length);
+    } catch (e) {
+      console.error('[SimTest] 读取图片失败:', e);
+      wx.hideLoading();
+      wx.showModal({
+        title: '图片加载失败',
+        content: '无法读取模拟图片: ' + ((e && e.errMsg) || e) + '\n请尝试使用演示模式上传视频。',
+        showCancel: false,
+      });
+      return;
+    }
+
+    // 连接 WebSocket 或 HTTP 降级
+    try {
+      await this.connectWebSocket();
+      this._isHttpMode = false;
+    } catch (wsErr) {
+      console.warn('[SimTest] WS失败，切换HTTP:', wsErr.message || wsErr);
+      try {
+        const res = await ApiClient.post('/api/realtime/http-start', {
+          exercise_type: this.data.exerciseKey,
+        });
+        this._httpSessionId = res.session_id;
+        this._isHttpMode = true;
+        this.setData({ debugWsStatus: 'HTTP降级(模拟)' });
+      } catch (httpErr) {
+        wx.hideLoading();
+        wx.showModal({
+          title: '连接失败',
+          content: '无法连接后端: ' + ((httpErr && httpErr.message) || ''),
+          showCancel: false,
+        });
+        return;
+      }
+    }
+
+    wx.hideLoading();
+    this.setData({ isDemoMode: true, demoVideoSrc: '' });
+
+    // 倒计时后开始模拟
+    this.setData({ state: 'countdown', countdown: 3 });
+    let count = 3;
+    const timer = setInterval(() => {
+      count--;
+      if (count <= 0) {
+        clearInterval(timer);
+        const startedAt = Date.now();
+        const metrics = this._emptyMetricsForExercise(this.data.exerciseKey);
+        this._poseReplayFrames = [];
+        this._poseReplayNodes = [];
+        this._poseReplayStartedAt = startedAt;
+        this._lastReplayNodeCount = 0;
+        this.setData({
+          state: 'running',
+          startTime: startedAt,
+          countdown: 0,
+          currentScore: 0,
+          totalCount: 0,
+          validCount: 0,
+          errorCount: 0,
+          issues: [],
+          feedback: [],
+          metrics,
+          metricCards: this._buildMetricCards(this.data.exerciseKey, metrics),
+          scoresHistory: [],
+        });
+        this._pendingScore = 0;
+        this._lastCommittedScoreCount = 0;
+        this._lastRealtimeScoreCommitTime = 0;
+        this._poseDetectResetPending = true;
+        this._errorHistory = [];
+        this._feedbackHistory = [];
+
+        // 开始模拟帧循环
+        this._simTestBase64 = base64Image;
+        this._simTestRunning = true;
+        this._simTestLoop();
+      } else {
+        this.setData({ countdown: count });
+      }
+    }, 1000);
+  },
+
+  async _simTestLoop() {
+    if (!this._simTestRunning || this.data.state !== 'running') return;
+
+    try {
+      const base64 = this._simTestBase64;
+      if (!base64) return;
+
+      const payload = {
+        exercise_type: this.data.exerciseKey,
+        frames: [{ image: base64 }],
+      };
+      if (this._poseDetectResetPending) {
+        payload.reset_state = true;
+        this._poseDetectResetPending = false;
+      }
+
+      const result = await ApiClient.post('/api/realtime/pose-detect', payload, { timeout: 30000 });
+
+      if (result && result.frames && result.frames.length > 0) {
+        const frameData = result.frames[0];
+        const keypoints = this._normalizePoseKeypoints(frameData);
+        const visibleCount = this._countVisibleKeypoints(keypoints, 0.2);
+
+        if (visibleCount > 0) {
+          const hasVisible = visibleCount >= 2;
+          if (hasVisible) {
+            const debugOkFrames = this.data.debugOkFrames + 1;
+            const debugFrames = this.data.debugFrames + 1;
+            let replayFrame = null;
+            replayFrame = this._captureReplayFrame(keypoints);
+
+            const features = frameData.features || frameData.metrics || frameData.analysis;
+            const newMetrics = this._buildMetricsFromKeypoints(keypoints, features, this.data.metrics);
+            this.setData({
+              debugFrames,
+              debugOkFrames,
+              currentKeypoints: keypoints,
+              debugKeypointCount: visibleCount,
+              metrics: newMetrics,
+              metricCards: this._buildMetricCards(this.data.exerciseKey, newMetrics),
+              debugLastError: `模拟模式: 骨架 ${visibleCount}/33`,
+            });
+
+            const skeletonComp = this.selectComponent('#skeleton');
+            if (skeletonComp) {
+              try { skeletonComp.updateKeypoints(keypoints); } catch (e) {}
+            }
+
+            // 发送给 WS 或 HTTP 分析
+            if (this.data.exerciseKey === 'jumping_jack' && frameData.analysis) {
+              this.handleWSMessage({ type: 'analysis', ...frameData.analysis });
+            } else if (this._wsReady) {
+              const namedKp = this._convertToNamedKeypoints(keypoints);
+              if (Object.keys(namedKp).length > 0) {
+                this.sendWS({
+                  type: 'frame',
+                  exercise: this.data.exerciseKey,
+                  exercise_type: this.data.exerciseKey,
+                  keypoints: namedKp,
+                  timestamp_ms: replayFrame ? replayFrame.timestamp_ms : undefined,
+                  replay_keypoints: replayFrame ? replayFrame.landmarks : undefined,
+                });
+              }
+            }
+          } else {
+            this.setData({ debugLastError: '模拟模式: 未检测到人体(visibility低)' });
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[SimTest] 帧错误:', err);
+      this.setData({ debugLastError: '模拟错误: ' + ((err && err.message) || '').substring(0, 40) });
+    }
+
+    // 每 1.5 秒发一帧（模拟模式不需要太快）
+    if (this._simTestRunning && this.data.state === 'running') {
+      setTimeout(() => this._simTestLoop(), 1500);
+    }
+  },
+
+  _stopSimTest() {
+    this._simTestRunning = false;
+    this._simTestBase64 = '';
+  },
 
   // 拍照测试：拍一张照片发送到后端检测
   startDemoMode() {
@@ -1710,6 +2054,7 @@ Page({
 
   cleanup() {
     this._stopDemoPlayback();
+    this._stopSimTest();
     if (this._wsTask) {
       try { this._wsTask.close(); } catch (e) {}
       this._wsTask = null;

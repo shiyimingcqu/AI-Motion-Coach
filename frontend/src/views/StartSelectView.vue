@@ -48,8 +48,8 @@
       </article>
     </section>
 
-    <section class="ss-flow-section" aria-label="最近训练记录流程">
-      <h2 class="ss-section-title">最近训练记录</h2>
+    <section class="ss-flow-section" aria-label="训练评估流程">
+      <h2 class="ss-section-title">训练评估流程</h2>
       <div class="ss-flow">
         <article v-for="(step, index) in flowSteps" :key="step.title" class="ss-flow-card">
           <img :src="step.image" alt="" />
@@ -70,23 +70,19 @@
 
     <section class="ss-qr-band">
       <div class="ss-qr-code" aria-hidden="true">
-        <svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg">
-          <rect width="96" height="96" rx="10" fill="#fff" />
-          <path
-            fill="#111827"
-            d="M8 8h28v28H8V8Zm8 8v12h12V16H16Zm44-8h28v28H60V8Zm8 8v12h12V16H68ZM8 60h28v28H8V60Zm8 8v12h12V68H16Zm36-26h8v8h-8v-8Zm8 8h8v8h-8v-8Zm-16 8h8v8h-8v-8Zm24 0h8v8h-8v-8Zm12-12h8v8h-8v-8ZM44 72h8v8h-8v-8Zm16 8h8v8h-8v-8Zm20-12h8v20h-8V68ZM44 12h8v8h-8v-8Zm0 16h8v8h-8v-8Zm-8 16h8v8h-8v-8Zm48 16h4v4h-4v-4ZM48 60h8v8h-8v-8Zm12 8h8v8h-8v-8Z"
-          />
-          <circle cx="48" cy="48" r="8" fill="#22c55e" />
-          <circle cx="48" cy="48" r="3" fill="#fff" />
-        </svg>
+        <img v-if="qrDataUrl" :src="qrDataUrl" alt="小程序码" class="ss-qr-img" />
+        <div v-else class="ss-qr-loading">
+          <div class="ss-qr-spinner"></div>
+        </div>
       </div>
       <div class="ss-qr-copy">
         <h2>在手机上开始评估</h2>
         <p>微信扫一扫，打开小程序开始你的姿态评估之旅</p>
+        <small v-if="qrExpiry" class="ss-qr-expiry">有效期至 {{ qrExpiry }}</small>
       </div>
-      <button class="ss-refresh" type="button">
-        <RefreshCw :size="18" />
-        <span>刷新二维码</span>
+      <button class="ss-refresh" type="button" @click="refreshQrCode" :disabled="qrLoading">
+        <RefreshCw :size="18" :class="{ 'ss-spin': qrLoading }" />
+        <span>{{ qrLoading ? '生成中...' : '刷新二维码' }}</span>
       </button>
     </section>
 
@@ -101,7 +97,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import {
   ArrowRight,
@@ -118,7 +114,9 @@ import {
   Smartphone,
   Target,
 } from "lucide-vue-next";
+import QRCode from "qrcode";
 import TrainQRModal from "@/components/TrainQRModal.vue";
+import { useAuthStore } from "@/stores/auth";
 import phoneCameraImg from "@/assets/start-phone-camera.png";
 import tabletReplayImg from "@/assets/start-tablet-replay.png";
 import stepPhoneImg from "@/assets/start-step-phone.png";
@@ -128,7 +126,61 @@ import stepLaptopImg from "@/assets/start-step-laptop.png";
 import stepCoachImg from "@/assets/start-step-coach.png";
 
 const router = useRouter();
+const authStore = useAuthStore();
 const showPhoneQR = ref(false);
+
+// 动态二维码
+const qrDataUrl = ref("");
+const qrLoading = ref(false);
+const qrExpiry = ref("");
+const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
+let qrTimer: ReturnType<typeof setInterval> | null = null;
+
+async function refreshQrCode() {
+  qrLoading.value = true;
+  try {
+    const token = authStore.token || "";
+    // 先尝试后端微信小程序码
+    try {
+      const resp = await fetch(
+        `${API_BASE}/qrcode?exercise=squat&view=front&t=${Date.now()}`,
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+      );
+      if (resp.ok) {
+        const blob = await resp.blob();
+        qrDataUrl.value = URL.createObjectURL(blob);
+      } else {
+        throw new Error("backend qrcode failed");
+      }
+    } catch {
+      // 后端不可用时，前端生成动态二维码（编码当前页面 URL + 时间戳）
+      const ts = Date.now();
+      const targetUrl = `${window.location.origin}/start?t=${ts}`;
+      qrDataUrl.value = await QRCode.toDataURL(targetUrl, {
+        width: 200,
+        margin: 1,
+        color: { dark: "#111827", light: "#ffffff" },
+      });
+    }
+    // 设置5分钟有效期
+    const expiry = new Date(Date.now() + 5 * 60 * 1000);
+    qrExpiry.value = `${expiry.getHours().toString().padStart(2, "0")}:${expiry.getMinutes().toString().padStart(2, "0")}`;
+  } catch (e) {
+    console.error("QR generation failed:", e);
+  } finally {
+    qrLoading.value = false;
+  }
+}
+
+onMounted(() => {
+  refreshQrCode();
+  // 每5分钟自动刷新
+  qrTimer = setInterval(refreshQrCode, 5 * 60 * 1000);
+});
+
+onUnmounted(() => {
+  if (qrTimer) clearInterval(qrTimer);
+});
 
 const phoneFeatures = [
   { title: "实时识别", desc: "智能捕捉骨骼", icon: Smartphone },
@@ -445,13 +497,57 @@ function goToSessions() {
   width: 84px;
   height: 84px;
   flex: 0 0 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.ss-qr-code svg {
+.ss-qr-img {
   display: block;
-  width: 100%;
-  height: 100%;
+  width: 84px;
+  height: 84px;
+  border-radius: 10px;
   box-shadow: 0 8px 18px rgba(38, 48, 69, 0.08);
+  object-fit: contain;
+}
+
+.ss-qr-loading {
+  width: 84px;
+  height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: #f1f5f9;
+}
+
+.ss-qr-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #7c3aed;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.ss-spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.ss-qr-expiry {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.ss-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .ss-qr-copy {

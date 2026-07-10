@@ -8,7 +8,8 @@
     "pages/training/training",
     "pages/result/result",
     "pages/reports/reports",
-    "pages/profile/profile"
+    "pages/profile/profile",
+    "pages/web-login/web-login"
   ],
   "window": {
     "navigationBarBackgroundColor": "#ffffff",
@@ -49,10 +50,6 @@
       }
     ]
   },
-  "permission": {
-    "scope.camera": {
-      "desc": "需要使用摄像头进行姿态检测"
-    }
-  },
+  "permission": {},
   "lazyCodeLoading": "requiredComponents"
 }
